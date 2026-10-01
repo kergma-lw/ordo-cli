@@ -10,14 +10,58 @@ from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_iden
 from connectors.gh.probes.pr import observation_metadata, observe_test_merge, validate_observation_identity
 from connectors.gh.probes.pr._shared import fetch_pull_request
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
 _FAILED_CONCLUSIONS = {"failure", "failed", "error", "cancelled", "timed_out", "action_required", "startup_failure", "stale"}
 _PENDING_STATUSES = {"queued", "in_progress", "pending", "requested", "waiting", "pending_deployment"}
 
 
+HUMAN = declare_human({'title': 'GitHub pr checks',
+  'goal': 'Read the checks attached to one pull request source revision before the workflow decides whether that revision is acceptable.',
+  'summary': 'Observe named check results, their source revision, and whether the observation is complete; the workflow chooses what counts as acceptable.',
+  'sections': [{'heading': 'Use when',
+                'items': ['Provide a pull request number. The normal repository comes from the workflow context; name another repository only when the workflow intentionally targets it.',
+                          'Use head to inspect the pull request source revision. expected_head_sha optionally requires that exact full commit ID, preventing a later source revision from silently replacing the one being assessed.',
+                          "Use complete, statuses_complete, check_runs_complete, head_sha, commit_sha, overall_state, and each check's name, producer, status, conclusion, source revision, and timestamps. Pending, failed, skipped, neutral, unknown, and empty evidence are not success; choose required checks and trusted producers explicitly.",
+                          'When the workflow accepts a source revision for merge, save head_sha and pass that saved value as gh.pr.merge.expected_head_sha. Do not substitute a later source revision.',
+                          'A check can link to a workflow run. When that link is present, gh.actions.run can read the run and gh.actions.run.jobs can read its jobs. A missing link does not decide whether the checks passed.']},
+              {'heading': 'Do not use for',
+                'items': ['Review decisions from people; use connector.gh.pr.reviews when the workflow cares about approvals or requested changes.',
+                          'Do not use this to learn what individual jobs did inside a linked workflow run; use connector.gh.actions.run and connector.gh.actions.run.jobs when that run detail is needed.',
+                          'Branch or headline pull request facts; use connector.gh.pr for the broader snapshot.',
+                          'Protection-rule satisfaction or an atomic view of the target branch and stack. Incomplete or unavailable evidence must not be treated as accepted. This operation neither waits nor submits a merge.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.pr',
+                               'summary': 'Parent PR snapshot that supplies the head SHA and mergeability context'},
+                               {'handle': 'connector.gh.actions.run',
+                                'summary': 'Read the workflow run linked from one check when that link is available'},
+                              {'handle': 'connector.gh.actions.run.jobs',
+                               'summary': 'Complete job collection for that explicit run attempt'},
+                              {'handle': 'connector.gh.pr.reviews',
+                               'summary': 'Sibling probe for human review decisions rather than machine status '
+                                          'results'},
+                              {'handle': 'connector.gh.pr.timeline',
+                               'summary': 'Sibling probe for lifecycle events that can explain why checks changed over '
+                                          'time'},
+                              {'handle': 'connector.gh.pr.merge',
+                               'summary': 'Submit using the head identity retained from accepted CI evidence'},
+                              {'handle': 'connector.gh.pr.merge.request',
+                               'summary': 'Observe the saved merge request, not CI status'}]},
+               {'heading': 'Examples', 'items': ['Use gh.pr.checks with a pull_number and, when pinning a decision, expected_head_sha from the earlier pull request observation.']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.actions.run',
+                         'connector.gh.actions.run.jobs',
+                         'connector.gh.pr.reviews',
+                         'connector.gh.pr.timeline',
+                         'connector.gh.pr',
+                         'connector.gh.pr.merge',
+                         'connector.gh.pr.merge.request']}]})
+
 def info():
     return probe(
         name="pr.checks",
+        human=HUMAN,
         summary="Observe paginated API-attached checks for a PR head or verified test merge; optionally bind expected_head_sha.",
         inputs={**PULL_IDENTITY_INPUTS, "target": "string", "expected_head_sha": "string"},
         outputs={

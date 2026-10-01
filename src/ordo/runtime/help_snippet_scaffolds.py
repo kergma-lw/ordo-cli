@@ -55,6 +55,11 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "workflow.step_forms.profile_switch",
         "routine",
         "connector.fs.file",
+        "connector.compose.project",
+        "connector.compose.service",
+        "connector.compose.start",
+        "connector.compose.stop",
+        "connector.compose.remove",
         "connector.gh.project.issue",
         "connector.gh.project.issue.add",
         "connector.gh.project.issue.field_iteration.set",
@@ -100,7 +105,7 @@ GH_PR_MERGE_TARGETS = ("connector.gh.pr", "connector.gh.pr.checks", "connector.g
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=(*GH_PR_MERGE_TARGETS, *GH_ACTIONS_TARGETS, "connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create", "workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.fs.file", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream", "connector.git.worktrees", "connector.shell.command", "examples.let-bindings", "examples.set-active-task-from-gitx"),
+    supported_targets=(*GH_PR_MERGE_TARGETS, *GH_ACTIONS_TARGETS, "connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create", "workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.fs.file", "connector.compose.project", "connector.compose.service", "connector.compose.start", "connector.compose.stop", "connector.compose.remove", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream", "connector.git.worktrees", "connector.shell.command", "examples.let-bindings", "examples.set-active-task-from-gitx"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -122,21 +127,12 @@ STATE_BUNDLE_CONTRACT = SnippetInsertionContract(
 )
 
 
-SDK_PROBE_FRAGMENT_CONTRACT = SnippetInsertionContract(
-    mode="sdk_probe_fragment",
-    supported_targets=("connector.authoring",),
-    workflow_surface="Python connector handler hosted by a synthetic same-family SDK adapter, not a workflow",
-    summary="Execute exact canonical Python through the real family adapter with fixture bootstrap and a strict read-only dependency body.",
-)
-
-
 INSERTION_CONTRACTS: dict[str, SnippetInsertionContract] = {
     "graph_bundle": SnippetInsertionContract(
         mode="graph_bundle", supported_targets=("state", "command-line.ordo-playbook"),
         workflow_surface="workflow documents or a playbook_text/files bundle with absent state and exact graph expectations",
         summary="Build actual static graph v1 output, including profile/bootstrap playbooks, and assert concrete links, optional structural links with equality requirements, possible-loop components, and exact compact text without state reads or probes.",
     ),
-    SDK_PROBE_FRAGMENT_CONTRACT.mode: SDK_PROBE_FRAGMENT_CONTRACT,
     STATE_BUNDLE_CONTRACT.mode: STATE_BUNDLE_CONTRACT,
     EXPRESSION_VALUE_CONTRACT.mode: EXPRESSION_VALUE_CONTRACT,
     STEP_FIELD_CONTRACT.mode: STEP_FIELD_CONTRACT,
@@ -585,7 +581,9 @@ blocks:
         return f"""version: 0
 workflow: snippet-git-commit
 inputs:
+  operation: {{}}
   commit_message: {{}}
+  strategy: {{}}
   target_commit: {{}}
   target_ref: {{}}
   onto_ref: {{}}
@@ -660,7 +658,7 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
 
     if target in GH_ACTIONS_TARGETS or target in GH_PR_MERGE_TARGETS or target in {"connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create"}:
         return snippet
-    if target == "connector.fs.file":
+    if target in {"connector.fs.file", "connector.compose.project", "connector.compose.service", "connector.compose.start", "connector.compose.stop", "connector.compose.remove"}:
         return f"{snippet}\n"
     if target in {"examples.let-bindings", "examples.set-active-task-from-gitx"}:
         return f"{snippet}\n"

@@ -4,11 +4,52 @@ from __future__ import annotations
 
 from connectors.git.actions._shared import COMMIT_GRAPH_INVALIDATION, current_branch, head_commit, map_nonzero
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git commit amend',
+ 'goal': 'A workflow intentionally needs amend semantics for the current HEAD commit rather than creating another '
+         'follow-up commit.',
+ 'summary': 'Rewrite the current HEAD commit, optionally replacing its message, and return both the new commit id and '
+            'the previous commit id.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow intentionally needs amend semantics for the current HEAD commit rather than '
+                         'creating another follow-up commit.',
+                         'Later logic needs both the rewritten commit id and the previous HEAD id to describe what '
+                         'changed in history.']},
+              {'heading': 'Result and boundary',
+               'items': ['On success, the previous HEAD is replaced by a new revision, and both revisions are available '
+                         'to later steps.',
+                         'With no commit to amend, or when Git blocks the rewrite, the action does not report a replaced '
+                         'HEAD.']},
+              {'heading': 'Do not use for',
+               'items': ['Creating an ordinary new commit from staged changes; use connector.git.commit.create when '
+                         'history should advance without rewriting HEAD.',
+                         'Undoing an older commit through a new compensating commit; use connector.git.commit.revert '
+                         'for that history-preserving action.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.commit.create',
+                               'summary': 'Sibling action for ordinary new commit creation instead of rewriting HEAD'},
+                              {'handle': 'connector.git.commit.revert',
+                               'summary': 'Sibling action for reverting one target commit instead of rewriting the '
+                                          'current one'},
+                              {'handle': 'connector.git.commits',
+                                'summary': 'Read recent commit texts around the commit that was '
+                                          'amended'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current branch context before or after the amend'}]},
+              {'heading': 'Examples',
+               'items': ['git.commit.amend with inputs {"message": "Tighten commit message wording"}',
+                         'git.commit.amend with inputs {"message": null}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.commits', 'connector.git.commit.create', 'connector.git.branch']}]})
 
 def info():
     return action(
         name="commit.amend",
+        human=git_human(HUMAN, provide="`message`: optional; provide it to replace the current message, or omit it or use null to retain the message.", result="Returns commit, previous_commit, and branch. No existing commit or a blocked rewrite has no replaced-head result; rewritten history may require coordination before publication."),
         inputs={"message": "string | null"},
         effects=("rewrite the current HEAD commit",),
         outputs={"commit": "string", "previous_commit": "string", "branch": "string | null"},

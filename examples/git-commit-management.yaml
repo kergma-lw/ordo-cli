@@ -1,6 +1,7 @@
 version: 0
 workflow: manage-git-commits
 inputs:
+  operation: {}
   commit_message: {}
   target_commit: {}
 blocks:
@@ -10,17 +11,20 @@ blocks:
         uses: git.commits
         with:
           limit: 5
-          rev: "HEAD" # Revision or range (e.g. HEAD~10..HEAD), never a Git option.
+          rev: "HEAD"
         register: recent_commits
       - name: create-commit
+        if: inputs.operation == "create"
         uses: git.commit.create
         with:
           message: inputs.commit_message
       - name: amend-head-commit
+        if: inputs.operation == "amend"
         uses: git.commit.amend
         with:
           message: "Tighten commit wording"
       - name: revert-target-commit
+        if: inputs.operation == "revert"
         uses: git.commit.revert
         with:
           commit: inputs.target_commit
@@ -28,4 +32,4 @@ blocks:
         publish:
           recent_count: step.recent_commits.outputs.count
           sampled_rev: step.recent_commits.outputs.rev
-          summary: "Git commit workflow prepared"
+          summary: "Choose exactly one reviewed history change: create, amend, or revert."

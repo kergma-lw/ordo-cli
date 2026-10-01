@@ -11,6 +11,7 @@ from connectors.gh._pr_stack import normalize_pr_stack, valid_pr_identity
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_pull_request, normalize_author
 from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
 
 OBSERVATION_OUTPUTS = {
@@ -30,9 +31,70 @@ OBSERVATION_OUTPUTS = {
 }
 
 
+HUMAN = declare_human({'title': 'GitHub pr',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and workflow logic now needs one '
+         'PR snapshot there by pull number.',
+ 'summary': 'Probe one GitHub pull request as a typed metadata snapshot with head/base identity, a verified test-merge '
+            'candidate, and stack scope. Prefer connector_contexts.gh.repository as the normal repository target; '
+            'review warns when an explicit repository overrides it.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and workflow '
+                         'logic now needs one PR snapshot there by pull number.',
+                         "Workflow logic needs the pull request's current headline facts before deciding which "
+                         'narrower PR surfaces to inspect next.',
+                         'A later step needs branch refs, draft/state flags, review decision, or change totals from '
+                         'one normalized PR snapshot.',
+                         'head_sha and base_sha identify head H and base B with their repositories. '
+                         'test_merge_state=verified means candidate M has the observed parents B then H; '
+                         'test_merge_sha, test_merge_head_sha, and test_merge_base_sha retain that identity. '
+                         'merge_commit_sha is the completed merge result only when merged=true.',
+                         'stack_state is standalone, stacked, or unknown; stack carries the observed stack data. The '
+                         'first-version gh.pr.merge action rejects stacked PRs and unknown scope before submission.']},
+              {'heading': 'Do not use for',
+               'items': ['Discovering candidates before a pull number is known; use gh.pr.list with explicit state '
+                         'filters, then apply workflow-owned identity and history rules.',
+                         'Conversation history, submitted reviews, line comments, checks, or lifecycle events; use the '
+                         'dedicated PR sibling surfaces for those narrower views.',
+                         'Mutating or merging the pull request; this published surface is observation only.',
+                          'A test-merge candidate is not a completed merge. Missing identity stays unavailable, not '
+                          'invented. A snapshot gives no atomic base or stack '
+                         "guarantee; never replace the accepted CI head with this probe's freshly fetched head when "
+                         'authoring expected_head_sha.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh',
+                               'summary': 'Parent GitHub connector family for issue, pull-request, and project '
+                                          'operations'},
+                              {'handle': 'connector.gh.pr.list',
+                               'summary': 'Discover filtered PR candidates; one item does not automatically identify '
+                                          'the correct PR'},
+                              {'handle': 'connector.gh.pr.create',
+                               'summary': 'Create a PR before detailed by-number inspection; existing open identity '
+                                          'refuses creation'},
+                              {'handle': 'connector.gh.pr.diff',
+                               'summary': 'Sibling probe for changed files and patch content rather than PR headline '
+                                          'metadata'},
+                              {'handle': 'connector.gh.pr.reviews',
+                               'summary': 'Sibling probe for submitted review decisions rather than the PR snapshot'},
+                              {'handle': 'connector.gh.pr.checks',
+                               'summary': 'Observe CI attached to head H or verified candidate M'},
+                              {'handle': 'connector.gh.pr.merge',
+                               'summary': 'Submit a merge with expected_head_sha from accepted CI evidence'},
+                              {'handle': 'connector.gh.pr.merge.request',
+                               'summary': 'Observe completion using the saved request UUID'}]},
+              {'heading': 'Examples', 'items': ['gh.pr with inputs {"pull_number": 42}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.pr.diff',
+                         'connector.gh.pr.comments',
+                         'connector.gh.pr.reviews',
+                         'connector.gh.pr.checks',
+                         'connector.gh.pr.merge',
+                         'connector.gh.pr.merge.request']}]})
+
 def info():
     return probe(
         name="pr",
+        human=HUMAN,
         summary="Read normalized metadata from a GitHub pull request.",
         inputs=PULL_IDENTITY_INPUTS,
         outputs={

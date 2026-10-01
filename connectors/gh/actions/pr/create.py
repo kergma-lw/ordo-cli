@@ -13,6 +13,7 @@ import subprocess
 from connectors.gh._pr_create_contract import branch, created_item, matches, repository
 from connectors.gh._repository import resolve_repository_target
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, preflight_observation
+from ordo.model.human import declare_human
 
 
 OUTPUTS = {
@@ -26,9 +27,48 @@ OUTPUTS = {
 _MISSING = object()
 
 
+HUMAN = declare_human({'title': 'GitHub pr create',
+  'goal': 'Create one new GitHub pull request from a known source branch when the workflow has explicitly authorized it.',
+  'summary': 'Create one pull request only when no matching open pull request is already known.',
+  'sections': [{'heading': 'Use when',
+                 'items': ['Supply the source branch, target branch, title, and an explicit draft value. The body is optional and defaults to empty.',
+                           'Use the workflow\'s GitHub repository context or name the target repository explicitly. When the source is a fork or another repository, supply head_repository with that exact source repository; the action does not guess forks. head_owner, when supplied, must name that source repository\'s owner; this prevents a branch owner from being confused with a different fork.',
+                           'Authorize creation and decide any closed-history policy in the workflow before this action. '
+                           'A matching open pull request is refused rather than reused.',
+                           'When creation is confirmed, use the returned pull request number or URL as the new pull request identity. A refused or existing result did not create a new pull request.',
+                           'Creation can race with other actors. When the outcome is unknown, it does not confirm either creation or non-creation and must be inspected by a '
+                            'separate workflow decision, not blindly retried.']},
+               {'heading': 'What to provide',
+                 'items': ['`head`: required; provide the source branch. `base`: required; provide the target branch. `title`: required; provide a non-empty title. `draft`: required; provide an explicit true or false value, not an implied default.',
+                            '`body`: optional; provide it only when the pull request needs body text. `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow\'s playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.',
+                            '`head_repository`: conditional; for a fork or another source repository, provide the exact source repository. `head_owner`: conditional; use it only as the matching owner assertion for that source repository; it cannot identify a fork by itself.']},
+               {'heading': 'Result and boundary',
+                'items': ['A confirmed creation returns `created=true` with `repository`, `pull_number`, `pull_ref`, `url`, `head_repository`, `head_ref`, `head_sha`, `base_repository`, `base_ref`, `base_sha`, `draft`, `state`, `message`, and `errors` for later inspection.',
+                          '`already_exists` returns the matching open pull request facts but does not create or reuse it. A failed precheck submits no creation. `creation_unknown` proves neither creation nor non-creation and must be resolved by a fresh workflow-owned observation.',
+                          'The duplicate check and creation are not atomic: another actor can create a matching pull request between them.']},
+              {'heading': 'Do not use for',
+               'items': ['Find-or-reuse, reopening, or closed-history policy; use a separate gh.pr.list state: all '
+                         'observation and workflow rules.',
+                          'Atomic uniqueness, automatic retry, or automatic reconciliation after an unknown result.',
+                         'Waiting for CI, merging, pushing, forking, branch cleanup, or extra issue/project '
+                         'mutations.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.pr.list',
+                               'summary': 'Full candidate observation and workflow-owned closed-history '
+                                          'classification'},
+                              {'handle': 'connector.gh.pr', 'summary': 'Detailed by-number inspection after creation'},
+                              {'handle': 'connector.gh.pr.merge',
+                               'summary': 'Separate SHA-bound merge action after CI acceptance'},
+                               {'handle': 'connector.authoring',
+                                'summary': 'Guidance for publishing a narrow connector operation'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.pr.list', 'connector.gh.pr', 'connector.gh.pr.merge', 'connector.authoring']}]})
+
 def info():
     return action(
         name="pr.create",
+        human=HUMAN,
         summary="Create one PR with explicit draft and exact source repository after a complete gh.pr.list open guard; creation_unknown must not be blindly retried.",
         inputs={"repository": "string", "head": "string", "base": "string", "title": "string",
                 "body": "string", "draft": "boolean", "head_repository": "string", "head_owner": "string"},

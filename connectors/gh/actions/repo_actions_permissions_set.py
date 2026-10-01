@@ -6,11 +6,47 @@ from connectors.gh._actions_permissions import fetch_actions_permissions
 from connectors.gh._external import fail_github_command
 from connectors.gh._repository import REPOSITORY_INPUTS, resolve_repository_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub repo actions permissions set',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs to '
+         'disable or re-enable hosted GitHub Actions there as an explicit step before later repo-level work.',
+ 'summary': 'Set the GitHub Actions enabled state for one repository and report the resulting enabled flag together '
+            'with whether the repository policy changed. Prefer connector_contexts.gh.repository as the normal '
+            'repository target and use an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'needs to disable or re-enable hosted GitHub Actions there as an explicit step before later '
+                         'repo-level work.',
+                         'The authored intent is one narrow repository Actions policy mutation, not a hidden '
+                         'multi-step sync helper.']},
+              {'heading': 'Do not use for',
+               'items': ['Reading the current repository Actions policy without changing it; use '
+                         'connector.gh.repo.actions.permissions for that probe.',
+                         'Composing a temporary disable-sync-restore sequence inside one action; keep those steps '
+                         'explicit in the workflow instead of hiding orchestration inside this leaf action.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.repo.actions.permissions',
+                               'summary': 'Sibling probe for the current repository Actions policy before or after '
+                                          'mutation'},
+                              {'handle': 'connector.gh.repo.sync',
+                               'summary': 'Sibling repository sync action that can appear between explicit disable and '
+                                          'restore steps'},
+                              {'handle': 'connector.gh.repo',
+                               'summary': 'Sibling repository identity probe for repo-level targeting facts'},
+                              {'handle': 'connector.git.sync.fetch',
+                               'summary': 'Local Git sync action when the real target is a local clone rather than '
+                                          'hosted Actions policy'}]},
+              {'heading': 'Examples', 'items': ['gh.repo.actions.permissions.set with inputs {"enabled": false}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.repo.actions.permissions', 'connector.gh.repo.sync', 'connector.gh.repo']}]})
 
 def info():
     return action(
         name="repo.actions.permissions.set",
+        human=HUMAN,
         summary="Set the GitHub Actions enabled state for one repository.",
         inputs={**REPOSITORY_INPUTS, "enabled": "boolean"},
         effects=("set the GitHub Actions enabled state for one repository",),

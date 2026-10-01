@@ -28,7 +28,7 @@ routines:
     - runtime_unavailable
   audit.pip-audit:
     kind: probe
-    summary: Audit exact installed runtime dependencies through PyPI only with explicit network consent.
+    summary: Look up vulnerabilities for exact installed runtime dependencies through PyPI.
     args:
       allow_network:
         type: boolean

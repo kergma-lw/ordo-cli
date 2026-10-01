@@ -3,13 +3,84 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Literal
 
+from .human import HumanDeclaration, declare_human, human_content, human_mapping
 from .json import JSONObject, JSONValue
 
 OperationKind = Literal["probe", "action"]
 _PLACEHOLDER_PATTERN = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+CONNECTOR_FEATURE_HUMAN = declare_human({
+    "title": "Connectors",
+    "goal": "Choose a published operation when it expresses the intended external-system work.",
+    "summary": "Published operations for observing or changing external systems.",
+    "sections": [],
+})
+
+CONNECTOR_HUMAN: JSONObject = {
+    "feature_clusters": {
+        "connectors": {
+            **human_mapping(CONNECTOR_FEATURE_HUMAN),
+            "summary": "Published operations for observing or changing external systems.",
+            "use_when": ["A published operation expresses the product intent directly."],
+            "avoid_when": ["A missing semantic capability is being hidden in local automation."],
+        },
+    },
+}
+
+CONNECTOR_AUTHORING_HUMAN = declare_human({
+    "title": "Connector authoring",
+    "goal": "Publish a connector operation only when it is the stable, narrow public surface for the work.",
+    "summary": "Use connector authoring to add a clearly bounded operation with a reader-facing guide.",
+    "sections": [
+        {"heading": "Before publishing", "items": [
+            "Prefer an existing operation or a clean composition before adding a new one.",
+            "Keep the operation's purpose, inputs, effects, and failure boundaries explicit.",
+        ]},
+        {"heading": "Start here", "items": [
+            "Browse the existing operations first, then use a routine only for a remaining mechanical project-local gap.",
+            "No checked example is published because connector implementation is not a workflow shape that readers should copy.",
+        ]},
+        {"heading": "Extension compatibility", "items": [
+            "This guide does not provide a public connector-extension dependency contract. The earlier contract has no public successor or workflow-author migration path.",
+            "Use published operations and the narrow local fallback guidance for workflow work. Changes to built-in connector implementation are outside this reader guide and need their own maintained project scope.",
+        ]},
+        {"heading": "Related references", "references": [
+            {"handle": "operations", "summary": "Browse existing public operations first."},
+            {"handle": "workflow-rules", "summary": "Apply the authoring rules when choosing a fallback."},
+        ]},
+    ],
+})
+
+
+OPERATIONS_HUMAN = declare_human({
+    "title": "Published operations",
+    "goal": "Choose the narrowest published operation that expresses the workflow's external work.",
+    "summary": "Browse operations by connector namespace, then inspect a focused operation before using it.",
+    "sections": [
+        {
+            "heading": "Choose an operation",
+            "items": [
+                "A namespace groups operations for one area of work. Start with the namespace that owns the system or local state your workflow needs.",
+                "Use a probe to observe facts that later workflow decisions need. Use an action when the workflow must intentionally change something.",
+                "When a catalog name looks promising, inspect it with `ordo-help operation <namespace.operation>` for its focused reference before adding it to a workflow. Use `ordo-help operation <namespace.operation> --json` when you need the exact machine-readable input and result contract.",
+            ],
+        },
+        {
+            "heading": "Stay on the published path",
+            "items": [
+                "Prefer a published operation when it states the intended work directly. Combine published operations when each part is already available.",
+                "If no published operation or clear composition fits, name the remaining gap. Use a published routine only for a narrow mechanical or intentionally project-local task; if the gap is semantic, clarify it with the user instead of encoding it locally.",
+            ],
+            "references": [
+                {"handle": "workflow-rules.routine.*", "summary": "Apply the routine boundary before adding a project-local helper."},
+            ],
+        },
+    ],
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +166,16 @@ class OperationContract:
     replaced_by: tuple[str, ...] = ()
     invalidates_observations: tuple[str, ...] = ()
     preflight_observations: tuple[PreflightObservation, ...] = ()
+    human: HumanDeclaration | JSONObject | None = None
+
+    def human_declaration(self) -> HumanDeclaration:
+        if not isinstance(self.human, HumanDeclaration):
+            raise ValueError(f"Operation '{self.name}' must declare canonical human content beside its operation declaration")
+        human = self.human.content
+        sections = human.get("sections", [])
+        if len(sections) < 2 or any(not section.get("items") and not section.get("body") for section in sections):
+            raise ValueError(f"Operation '{self.name}' human content must include substantive decision sections")
+        return self.human
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped operation contract."""
@@ -115,6 +196,7 @@ class OperationContract:
             "replaced_by": list(self.replaced_by),
             "invalidates_observations": list(self.invalidates_observations),
             "preflight_observations": [item.to_contract() for item in self.preflight_observations],
+            "human": human_content(self.human_declaration(), owner=self.name),
         }
 
 
@@ -167,3 +249,24 @@ class ConnectorRegistry:
 
     def to_contract(self) -> JSONObject:
         return {"connectors": [connector.to_contract() for connector in self.connectors]}
+
+
+def operations_catalog_human(connectors: list[JSONObject]) -> HumanDeclaration:
+    """Build the reader-facing catalog grouping beside the connector contract."""
+
+    content = deepcopy(OPERATIONS_HUMAN.content)
+    groups = []
+    for connector in connectors:
+        namespace = str(connector["namespace"])
+        operations = connector.get("operations", [])
+        names = []
+        for operation in operations:
+            if not isinstance(operation, dict):
+                continue
+            label = f"{namespace}.{operation['name']} ({operation['kind']})"
+            if namespace == "shell" and operation["name"] == "command":
+                label += " [legacy-only; do not use for new workflows]"
+            names.append(label)
+        groups.append({"heading": namespace, "items": names})
+    content["sections"].append({"heading": "Catalog by namespace", "subsections": groups})
+    return HumanDeclaration(content=content, filename=OPERATIONS_HUMAN.filename)

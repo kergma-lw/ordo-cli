@@ -3,11 +3,49 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git range',
+ 'goal': 'A workflow needs to compare two endpoints such as main and HEAD before deciding whether a branch is ahead, '
+         'behind, or diverged.',
+  'summary': 'Compare two Git revision endpoints and return their resolved object ids, merge '
+            'base, and ahead/behind counts.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to compare two endpoints such as main and HEAD before deciding whether a '
+                         'branch is ahead, behind, or diverged.',
+                         'Later logic needs one merge-base-aware relationship summary instead of a readable commit '
+                         'list or one exact ref lookup.']},
+              {'heading': 'Do not use for',
+               'items': ['Checking only whether one exact ref resolves; use connector.git.ref for the simpler '
+                          'single-ref lookup.',
+                         'Reading commit subjects or bodies across a revision slice; use connector.git.commits when '
+                         'the workflow needs readable history rather than ahead/behind math.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.ref',
+                                'summary': 'Resolve one exact ref instead of comparing two revision '
+                                          'endpoints'},
+                              {'handle': 'connector.git.commits',
+                                'summary': 'Read a commit-history slice after the workflow chooses '
+                                          'a revision scope'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current checkout branch context before choosing base and '
+                                          'head endpoints'},
+                              {'handle': 'connector.git.upstream',
+                                'summary': 'Read upstream-tracking context when the workflow first needs '
+                                          'to choose a comparison target'}]},
+              {'heading': 'Examples',
+               'items': ['git.range with inputs {"base": "main", "head": "HEAD"}',
+                         'git.range with inputs {"base": "origin/main", "head": "feature/demo"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.ref', 'connector.git.commits', 'connector.git.upstream']}]})
 
 def info():
     return probe(
         name="range",
+        human=git_human(HUMAN, provide="`base`: required; provide one revision endpoint. `head`: required; provide the other revision endpoint, such as main and HEAD.", result="Returns base, head, base_oid, head_oid, merge_base_oid when one exists, ahead_count, behind_count, and repository_root. Unresolvable endpoints have no comparison result; counts can become stale when history changes."),
         inputs={"base": "string", "head": "string"},
         outputs={
             "base": "string",

@@ -6,11 +6,60 @@ from connectors.gh.actions._shared import PROJECT_ISSUE_INVALIDATION
 from connectors.gh.actions.project.issue._field_common import build_single_select_mutation, named_id, resolve_issue_and_field, run_field_update
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS
 from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, action, fail, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'Set GitHub Project single-select field',
+ 'goal': 'Assign one visible Project choice to one issue in the workflow\'s normal GitHub repository.',
+ 'summary': "Set one single-select GitHub Project field on one issue's project item by field name and visible option "
+            'name. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit '
+            'repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to assign one selectable project value such as Status or Priority after '
+                         'membership and field-option validation succeed.',
+                          'The caller knows the human-facing option label and does not need to manage a stored '
+                          'selection identity.']},
+               {'heading': 'What to provide',
+                'items': ['Provide the issue number, target Project ID, visible field name, and visible option label.',
+                          'Choose the project by its owner and project number using GitHub\'s published project guide, then obtain that project\'s stable ID with the GitHub project view command. Store that returned ID as workflow input and confirm the selected project title with connector.gh.project before changing an issue.',
+                          'Use the workflow\'s GitHub repository context normally; name another repository only as a '
+                          'deliberate override.']},
+               {'heading': 'Result and boundary',
+                'items': ['Later steps can use the issue identity, Project item identity, selected field and option, and '
+                           'whether the value actually changed. changed=false means the item already held that option; changed=true means this action applied it.',
+                         'The issue must already be in the Project and the requested field and option must exist with the '
+                           'right kind. A concurrent edit can make the returned changed state stale, so observe again before '
+                          'a decision that depends on the current value.']},
+              {'heading': 'Do not use for',
+               'items': ['Writing iteration-backed or numeric project fields; use '
+                         'connector.gh.project.issue.field_iteration.set or '
+                         'connector.gh.project.issue.field_number.set for those different field kinds.',
+                         'Checking whether the requested option exists without mutating anything; use '
+                         'connector.gh.project.field.option when the workflow only needs a yes/no option probe.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.project.issue',
+                               'summary': 'Parent issue-membership probe for reading current project field values '
+                                          'before or after mutation'},
+                              {'handle': 'connector.gh.project.field.option',
+                               'summary': 'Sibling probe for validating one candidate selectable value before '
+                                          'mutation'},
+                              {'handle': 'connector.gh.project.issue.add',
+                               'summary': 'Sibling action for ensuring the issue is a project item before setting a '
+                                          'selectable field'},
+                              {'handle': 'connector.gh.project.issue.field_number.set',
+                               'summary': 'Sibling setter for numeric fields rather than selectable fields'}]},
+               {'heading': 'Examples',
+                'items': ['After a project view has returned and connector.gh.project has confirmed inputs.project_id, set Status to In review for issue 42.']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.project.field.option',
+                         'connector.gh.project.issue',
+                         'connector.gh.project.issue.add']}]})
 
 def info():
     return action(
         name="project.issue.field_single_select.set",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string", "field": "string", "option": "string"},
         effects=("set one GitHub project issue single-select field by field name",),
         outputs={"issue_ref": "string", "project_id": "string", "item_id": "string", "field": "string", "option": "string", "changed": "boolean"},

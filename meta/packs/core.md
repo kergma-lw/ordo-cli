@@ -146,10 +146,10 @@
 - The initial no-follow stat preserves existing missing-path, stat-failure, and nonregular-entry diagnostics; it is not a security barrier.
 - Opening requires nonzero integer `O_NOFOLLOW` and `O_NONBLOCK` capabilities. If either is unavailable, return `content_unavailable` with `probe.fs_file.secure_open_unavailable`; there must be no unsafe fallback.
 - Validate the opened descriptor with `fstat` as a regular file before reading. Content and metadata must come from that same descriptor, not a later pathname lookup.
-- An initial final symlink or other nonregular entry returns `not_a_file`. An opened FIFO or directory also returns `not_a_file`. Open-stage errors including `ELOOP` return `content_unavailable` without guessing entry kind; `ELOOP` can also describe a parent loop.
+- A final path entry that is a symlink is rejected as `not_a_file` rather than followed. An opened FIFO or directory also returns `not_a_file`. Open-stage errors including `ELOOP` return `content_unavailable` without guessing entry kind; `ELOOP` can also describe a parent loop.
 - Descriptor-stat failure returns `probe_failed` with `probe.fs_file.stat_failed`.
 - Same-descriptor observation is not an atomic snapshot under concurrent writes. Relative and absolute textual `Path` projections do not identify the resolved opened object.
-- Parent symlinks and hardlinks remain allowed. This is not workspace confinement, device-open sandboxing, protection against parent mutation, or same-UID isolation.
+- Symlinks in parent directories and hardlinks remain allowed. This is not workspace confinement, device-open sandboxing, protection against parent mutation, or same-UID isolation.
 - POSIX race tests establish only their tested scope; do not claim Windows test coverage or platform guarantees from them.
 
 ## Failure statuses
@@ -6316,45 +6316,6 @@ This verification extension does not change public `check`, `review`, `plan`,
 `run`, `explain`, or `next` semantics. The canonical YAML is exercised through
 those existing surfaces with injected fixtures.
 
-## SDK Python handler fixture execution
-
-`connector.authoring` publishes `sdk_same_family_probe_inputs` in world
-`gh-sdk-probe-call`. Its `python_fragment` form stores source in `python`, not
-`yaml`; text help labels it Python. Insertion mode `sdk_probe_fragment` hosts
-the exact `def run(ctx)` fragment as a synthetic gh-family published action.
-It is connector-author Python, not new workflow YAML syntax. Its nonempty
-`filters` input supplies repository, head, head_owner, base, and state.
-
-The separate `help_sdk_snippet_runner.py` path verifies source, world, handle,
-and insertion mode before compiling the exact trusted repository-owned source.
-This is not a general Python sandbox: changed source is rejected, overrides are
-literal JSON fixture data, and no data can supply code or import targets. The
-runner uses real `_adapt_published_handler` wrappers and `OperationContext.call`
-for both the caller and dependency. The public `gh.pr.list` contract and
-publication are retained; only its handler body is replaced with a strict
-fixture reader using real `ctx.input` calls. A closed synthetic import map
-exposes only that family and its fixture bootstrap. No live API, subprocess,
-action dependency, or arbitrary import fallback exists in this path.
-
-Fully resolved dependency inputs are compared as type-strict JSON. Nonempty
-inputs stay literal and isolated; missing state propagates the real SDK
-`operation.input_missing` diagnostic even though the synthetic workflow has
-conflicting fallback bindings. Dependency failure outcomes propagate without
-retry. A four-call budget includes bootstrap and successful fixture-body calls.
-
-Results report `verification_path=sdk_fixture_execution`, exact `python_text`,
-the actual `operation_result`, and calls. `workflow_text` is empty and
-`runtime_result` is absent because no workflow is executed. Ordinary help display
-publishes source only; repository verification is the execution surface.
-
-This resolves the same-family probe-input snippet support gap through real SDK
-dispatch, not a stub `ctx.call`. It does not prove the actual PR-list handler's
-validation, HTTP filtering, pagination, authentication, or provider failures.
-Local dotted aliases, legacy empty-input lookup, cross-family rejection, and
-probe/action restrictions remain covered by separate SDK unit tests. Public
-workflow `check`, `review`, `plan`, `run`, `explain`, and `next` behavior is not
-changed by this help-verification path.
-
 ## Actions observation fixture execution
 
 The handles `connector.gh.actions.run`, `connector.gh.actions.run.jobs`,
@@ -6702,7 +6663,7 @@ Shared prerequisites should not be duplicated in every operation contract if the
 - File snapshot means one opened regular-file descriptor for both content and `fstat` metadata, not atomic consistency under concurrent writes.
 - The initial no-follow stat retains diagnostics. Nonzero integer `O_NOFOLLOW` and `O_NONBLOCK` are required; missing capabilities fail closed as `content_unavailable` / `probe.fs_file.secure_open_unavailable`.
 - `fstat` must verify regular-file kind before reading the same descriptor. Opened FIFO/directory targets are `not_a_file`; open errors including `ELOOP` are `content_unavailable` without an inferred kind; descriptor-stat errors are `probe_failed` / `probe.fs_file.stat_failed`.
-- Relative/absolute textual `Path` projections remain path-derived, not resolved descriptor identities. Parent symlinks and hardlinks remain allowed, without workspace confinement, device-open sandboxing, or same-UID isolation.
+- A final path entry that is a symlink is rejected rather than followed. Symlinks in parent directories and hardlinks remain allowed, so this is not workspace confinement, device-open sandboxing, or same-UID isolation. Relative/absolute textual `Path` projections remain path-derived, not resolved descriptor identities.
 
 - `basename` is the last path segment from the resolved file path.
 - `filename_without_extension` and `extension` are deterministic projections of `basename` using the last dot only.
@@ -7763,7 +7724,7 @@ When operation-to-operation reuse is allowed, the SDK should prefer an explicit 
 
 The approved surface is `ctx.call(name, *, inputs=None)`. Nonempty inputs are supported for same-family probe dependencies only; full references and family-local dotted names both work. Values are already resolved and must not be reevaluated as workflow expressions. Omitted inputs and `None` preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action-composition capability is introduced. See [the concrete call contract](plugin-sdk-api.md) and the [PR creation consumer](gh-pr-create.md).
 
-Publish this as a connector-author feature through `connector.authoring`, with discoverable boundaries and a verified example. It does not expose workflow orchestration or runtime mode selection to handlers.
+Publish this through `connector.authoring` as reader-facing decision guidance with discoverable boundaries. It intentionally has no checked implementation example and does not expose workflow orchestration or runtime mode selection to handlers.
 
 ## Command helper expectations
 
@@ -7927,9 +7888,7 @@ The first spike should prefer plain, explicit names over abstraction-heavy helpe
 
 Values in the mapping are already resolved by the caller. They are passed as values, without reevaluating workflow expressions or templates. Missing `inputs` and `inputs=None` retain the legacy no-input dependency behavior. A probe cannot invoke an action as a hidden mutation; this extension does not enable action-to-action composition.
 
-For example, `gh.pr.create` delegates its mandatory complete open observation to `gh.pr.list` with resolved repository, head, source owner, base, and `state: open`. The connector consumes the probe outcome explicitly; a failed observation cannot become permission to mutate. This API is published through `connector.authoring` and the feature/discovery surfaces with a verified connector-author example.
-
-The canonical `sdk_same_family_probe_inputs` example is a `python_fragment` with a `python` source field, verified by `sdk_probe_fragment` insertion in the `gh-sdk-probe-call` world. Its bounded runner executes the real family adapter and SDK context with fixture family/bootstrap/probe bodies; it does not replace `ctx.call`. This establishes dependency dispatch, isolated resolved inputs, literal expression-looking values, and failure propagation, not live GitHub API behavior or sandbox isolation. See [snippet worlds](../help/snippet-worlds.md) for the bounded verification contract.
+For example, `gh.pr.create` delegates its mandatory complete open observation to `gh.pr.list` with resolved repository, head, source owner, base, and `state: open`. The connector consumes the probe outcome explicitly; a failed observation cannot become permission to mutate. `connector.authoring` provides reader-facing guidance for deciding when a new connector is warranted, but intentionally publishes no checked implementation example.
 
 ## Command helper
 

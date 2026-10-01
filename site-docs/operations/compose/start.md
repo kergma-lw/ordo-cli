@@ -1,159 +1,105 @@
-# compose.start
+# Start Compose project or service
 
-Bring one Compose project or service into operational running state.
+You need the requested Compose target running before later workflow steps continue.
 
-Use this when a workflow needs this exact operation surface. In practice: bring one Compose project or service into operational running state.
+Request that one Compose project or declared service run, then report the state observed after the request.
 
-- Namespace: `compose`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- A project-wide startup or one declared service must be asked to run before another step.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `service`: optional; omit it to start the project, or provide one declared service name to target only that service.
 
-```json
-{
-  "service": "string | null"
-}
-```
+## Result and boundary
 
-## Outputs
+- After Compose accepts the request, the action observes the target once. A `running` result means that observation found the requested target running; `degraded` means it found only partial operation. Neither result proves application-level readiness for a later step.
+- If the Compose command exits nonzero, the action makes one delayed recovery observation. It can still succeed when that observation finds `running`, `starting`, or `degraded`; it does not keep waiting or repeatedly recheck after reporting the result.
+- For readiness beyond this action, inspect connector.compose.project or connector.compose.service again and continue only when the returned state and health facts meet the downstream step's needs.
+- Later steps can use `target_kind`, `state`, and `changed`: whether the request targeted a project or service, the reported result state, and whether this call changed orchestration state. Service-targeted results also include `target`.
 
-```json
-{
-  "changed": "boolean",
-  "changed_services": "array[string]",
-  "state": "string",
-  "target": "string",
-  "target_kind": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Pure observation; use connector.compose.project or connector.compose.service when you only need state.
+- Removing stopped runtime instances; use connector.compose.remove for that cleanup action.
 
-- bring the requested Compose target into operational running state
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `service_not_declared`
-- `project_invalid`
-- `orchestrator_unavailable`
-- `image_unavailable`
-- `build_failed`
-- `dependency_failed`
-- `runtime_start_failed`
-- `healthcheck_failed`
-- `start_failed`
 
-## Requirements
+- `ordo-help describe connector.compose`: Parent Compose connector family
+- `ordo-help describe connector.compose.project`: Project-level observation that can precede a start decision
+- `ordo-help describe connector.compose.service`: Service-level readiness and health observation after a start
+- `ordo-help describe connector.compose.stop`: Sibling lifecycle action for bringing a running target down
 
-- None
+## Examples
 
-## Preflight observations
+- compose.start with inputs {}
+- compose.start with inputs {"service": "api"}
 
-```json
-[
-  {
-    "probe": "compose.project",
-    "with": {}
-  }
-]
-```
+## Inspect next
 
-## Invalidated observations
+- connector.compose.project
+- connector.compose.service
+- connector.compose.stop
 
-- `compose.*`
+## Exact machine contract
 
-## Example inputs
+Use `ordo-help operation compose.start --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `compose.start`
+## Canonical Examples
 
-```json
-{
-  "service": "string | null"
-}
-```
+### compose_lifecycle_decisions
 
-## Full JSON reference
+Start the configured project only after an explicit decision, register the result, and require `running` before later service work.
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "project_directory",
-      "compose_file",
-      "project_name"
-    ],
-    "prerequisites": [
-      "docker compose available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "compose",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "bring the requested Compose target into operational running state"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "service": "string | null"
-        },
-        "reference": "compose.start"
-      }
-    ],
-    "failure_modes": [
-      "service_not_declared",
-      "project_invalid",
-      "orchestrator_unavailable",
-      "image_unavailable",
-      "build_failed",
-      "dependency_failed",
-      "runtime_start_failed",
-      "healthcheck_failed",
-      "start_failed"
-    ],
-    "inputs": {
-      "service": "string | null"
-    },
-    "invalidates_observations": [
-      "compose.*"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "start",
-    "outputs": {
-      "changed": "boolean",
-      "changed_services": "array[string]",
-      "state": "string",
-      "target": "string",
-      "target_kind": "string"
-    },
-    "preflight_observations": [
-      {
-        "probe": "compose.project",
-        "with": {}
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Bring one Compose project or service into operational running state.",
-    "tags": [
-      "compose",
-      "action"
-    ]
-  },
-  "operation_name": "start",
-  "reference": "compose.start",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: compose-lifecycle-decisions
+inputs:
+  service: {}
+  start_project: {}
+  remove_service: {}
+blocks:
+- steps:
+  - name: inspect-project
+    uses: compose.project
+    register: project
+  - name: require-project-start-decision
+    gate: inputs.start_project and step.project.outputs.state != "running"
+  - name: start-project
+    uses: compose.start
+    register: started
+  - name: require-project-running
+    gate: step.started.outputs.state == "running"
+  - name: inspect-service
+    uses: compose.service
+    with:
+      service: inputs.service
+    register: service_before_cleanup
+  - name: require-service-cleanup-decision
+    gate: inputs.remove_service
+  - name: stop-service
+    uses: compose.stop
+    with:
+      service: inputs.service
+    register: stopped
+  - name: require-service-stopped
+    gate: step.stopped.outputs.state == "stopped"
+  - name: remove-service
+    uses: compose.remove
+    with:
+      service: inputs.service
+    register: removed
+  - name: require-service-absent
+    gate: step.removed.outputs.state == "absent"
+  - name: publish-lifecycle-results
+    publish:
+      project_state_before_start: step.project.outputs.state
+      started_project: step.started.outputs.changed
+      service_state_before_cleanup: step.service_before_cleanup.outputs.state
+      stopped_service: step.stopped.outputs.changed
+      removed_service: step.removed.outputs.changed
 ```

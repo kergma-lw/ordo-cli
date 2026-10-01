@@ -1,57 +1,58 @@
-# gh.project.issue
+# GitHub project issue
 
-Read one issue's membership and field values in a GitHub Project.
+the workflow's GitHub repository context already names the normal repository target and the workflow needs project membership for one issue there.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read one issue's membership and field values in a GitHub Project.
+Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id plus the common project field values that Ordo reads from that membership. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "issue_number": "integer",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "estimate": "number",
-  "exists": "boolean",
-  "item_id": "string",
-  "iteration": "string",
-  "priority": "string",
-  "size": "string",
-  "status": "string",
-  "type": "string"
-}
-```
-
-## Authoring contract
-
-Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id plus the common project field values that Ordo reads from that membership. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs project membership for one issue there.
 - A workflow needs to know whether one issue is already in the target project before deciding to add it or update its project fields.
 - Later logic needs one compact project-membership snapshot such as Status, Type, Priority, Iteration, Size, or Estimate for one issue in one project.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `issue_number`: required.
+- `project_id`: required.
+
+## Result and boundary
+
+- Usable result fact: `exists`.
+- Usable result fact: `item_id`.
+- Usable result fact: `status`.
+- Usable result fact: `type`.
+- Usable result fact: `priority`.
+- Usable result fact: `iteration`.
+- Usable result fact: `size`.
+- Usable result fact: `estimate`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
 
 - Scanning many project items or filtering project membership collections; use connector.gh.project.items or connector.gh.project.items.details for collection-shaped project inspection.
-- Adding the issue to the project or mutating project field values; use connector.gh.project.issue.add or the connector.gh.project.issue.field_* setters for those effectful changes.
+- Adding the issue to the project or mutating project field values; use connector.gh.project.issue.add or connector.gh.project.issue.field_single_select.set, connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set for those effectful changes.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.project`](project.md): Parent project probe for confirming the target project identity before issue-membership inspection
+- [`connector.gh.project.issue.add`](project-issue-add.md): Sibling action for attaching the issue to the project when this probe reports exists=false
+- [`connector.gh.project.items`](project-items.md): Sibling probe for project-wide membership scans instead of one issue-specific membership lookup
+- [`connector.gh.project.issue.field_single_select.set`](project-issue-field-single-select-set.md): Sibling action for mutating one project field after membership inspection confirms the target issue context
+
+## Inspect next
+
+- connector.gh.project.issue.add
+- connector.gh.project.issue.field_single_select.set
+- connector.gh.project.items
+
+## Exact machine contract
+
+Use `ordo-help operation gh.project.issue --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_project_issue_probe_step
 
@@ -66,7 +67,6 @@ Inspect whether one issue is already attached to the target GitHub Project befor
           project_id: inputs.project_id
         register: membership
 ```
-
 ### gh_project_issue_membership_flow
 
 Probe one issue's project membership, attach it if needed, then set representative single-select, number, and iteration fields through typed project issue surfaces.
@@ -120,103 +120,4 @@ blocks:
           project_id: inputs.project_id
           field: "Status"
           option: "In review"
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `issue_not_found`
-- `project_not_found`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.project.issue`
-
-```json
-{
-  "issue_number": "integer",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "issue_number": "integer",
-          "project_id": "string",
-          "repository": "string"
-        },
-        "reference": "gh.project.issue"
-      }
-    ],
-    "failure_modes": [
-      "issue_not_found",
-      "project_not_found",
-      "probe_failed"
-    ],
-    "inputs": {
-      "issue_number": "integer",
-      "project_id": "string",
-      "repository": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project.issue",
-    "outputs": {
-      "estimate": "number",
-      "exists": "boolean",
-      "item_id": "string",
-      "iteration": "string",
-      "priority": "string",
-      "size": "string",
-      "status": "string",
-      "type": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'gh.project.issue'",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "project.issue",
-  "reference": "gh.project.issue",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

@@ -7,6 +7,7 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
 ISSUE_OUTPUTS = {
     "id": "string",
@@ -31,9 +32,48 @@ ISSUE_OUTPUTS = {
 }
 
 
+HUMAN = declare_human({'title': 'GitHub issue',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and workflow logic now needs one '
+         'issue snapshot from that repository by issue number.',
+ 'summary': 'Probe one GitHub issue as a typed snapshot of its current metadata, body, labels, assignees, and '
+            'project-item context. Prefer connector_contexts.gh.repository as the normal repository target and use an '
+            'explicit repository argument only as a one-off override; review warns when it differs from the current gh '
+            'context repository.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and workflow '
+                         'logic now needs one issue snapshot from that repository by issue number.',
+                         'Workflow logic needs to inspect one issue before deciding whether to comment, edit the body, '
+                         'close it, or publish a summary.',
+                         'A guard or later step needs typed issue facts such as state, title, labels, or body rather '
+                         'than a coarse shell response.']},
+              {'heading': 'Do not use for',
+               'items': ["Listing the issue's comment thread only; use connector.gh.issue.comments for that narrower "
+                         'conversation surface.',
+                         'Mutating the issue; use connector.gh.issue.create, connector.gh.issue.comment.add, '
+                         'connector.gh.issue.body.append, connector.gh.issue.body.replace, or connector.gh.issue.close '
+                         'for effectful changes.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh',
+                               'summary': 'Parent GitHub connector family for issue, pull request, and project '
+                                          'operations'},
+                              {'handle': 'connector.gh.issue.comments',
+                               'summary': 'Sibling probe for the issue comment thread rather than the issue snapshot '
+                                          'itself'},
+                              {'handle': 'connector.gh.issue.comment.add',
+                               'summary': 'Action for adding one new issue comment after inspection'},
+                              {'handle': 'connector.gh.issue.close',
+                               'summary': 'Action for closing the issue after inspection or cleanup'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue.comments',
+                         'connector.gh.issue.comment.add',
+                         'connector.gh.issue.body.replace',
+                         'connector.gh.issue.close']}]})
+
 def info():
     return probe(
         name="issue",
+        human=HUMAN,
         inputs=ISSUE_IDENTITY_INPUTS,
         outputs=ISSUE_OUTPUTS,
         failure_modes=("issue_not_found", "probe_failed"),

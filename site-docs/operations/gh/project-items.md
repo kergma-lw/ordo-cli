@@ -1,232 +1,104 @@
-# gh.project.items
+# GitHub project items
 
-Read normalized items from a GitHub Project.
+A workflow needs one project-scoped membership scan across many items rather than one issue-specific membership lookup.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read normalized items from a GitHub Project.
+Probe one GitHub Project as a collection of normalized project items, with optional narrowing by content kind, project field filters, and explicit GitHub content references.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic only needs stable collection facts such as repository, number, title, url, and content kind without loading richer content details like issue state and labels.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `project_id`: required.
+- `content_kind`: optional.
+- `filters`: optional.
+- `content_refs`: optional.
 
-```json
-{
-  "content_kind": "string",
-  "content_refs": [
-    "string"
-  ],
-  "filters": [
-    {
-      "field": "string",
-      "value": "scalar"
-    }
-  ],
-  "project_id": "string"
-}
+## Result and boundary
+
+- Usable result fact: `count`.
+- Usable result fact: `items`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
+
+- Inspecting one specific issue's membership or project field values; use connector.gh.project.issue for the one-issue membership surface.
+- Loading richer content details such as issue state and label_names for the matched items; use connector.gh.project.items.details for that heavier collection probe.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.project`](project.md): Parent project probe for confirming the target project identity before collection scans
+- [`connector.gh.project.items.details`](project-items-details.md): Sibling probe for the same collection scan with richer issue and pull-request details
+- [`connector.gh.project.issue`](project-issue.md): Sibling probe for one issue-specific membership snapshot instead of a collection scan
+- [`connector.gh.project.field`](project-field.md): Sibling probe for one project field definition when the workflow needs field metadata rather than matched items
+
+## Inspect next
+
+- connector.gh.project.items.details
+- connector.gh.project.issue
+- connector.gh.project.field
+
+## Exact machine contract
+
+Use `ordo-help operation gh.project.items --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### gh_project_items_probe_step
+
+Scan one GitHub Project for matching items before branching on collection size or reusing the matched item list later.
+
+```yaml
+      - name: load-ready-items
+        uses: gh.project.items
+        with:
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          filters:
+            - field: "Status"
+              value: "Ready"
+        register: ready_items
 ```
+### gh_project_items_collection_flow
 
-## Outputs
+Load one light project-item collection first, then load richer item details for an explicit matched subset before publishing a compact summary.
 
-```json
-{
-  "count": "integer",
-  "items": [
-    {
-      "content_kind": "string",
-      "item_id": "string",
-      "number": "integer",
-      "repository": "string",
-      "title": "string",
-      "url": "string"
-    }
-  ]
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `project_not_found`
-- `unknown_field`
-- `ambiguous_field`
-- `unsupported_field_type`
-- `invalid_filter_value`
-- `invalid_content_ref`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.project.items`
-
-```json
-{
-  "project_id": "PVT_demo"
-}
-```
-
-### `gh.project.items`
-
-```json
-{
-  "content_kind": "Issue",
-  "filters": [
-    {
-      "field": "Status",
-      "value": "Ready"
-    }
-  ],
-  "project_id": "PVT_demo"
-}
-```
-
-### `gh.project.items`
-
-```json
-{
-  "content_kind": "Issue",
-  "content_refs": [
-    "owner/repo#7",
-    "owner/repo#8"
-  ],
-  "filters": [
-    {
-      "field": "Type",
-      "value": "Task"
-    }
-  ],
-  "project_id": "PVT_demo"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "project_id": "PVT_demo"
-        },
-        "reference": "gh.project.items",
-        "why": "Load normalized project membership facts without mutating project state."
-      },
-      {
-        "inputs": {
-          "content_kind": "Issue",
-          "filters": [
-            {
-              "field": "Status",
-              "value": "Ready"
-            }
-          ],
-          "project_id": "PVT_demo"
-        },
-        "reference": "gh.project.items",
-        "why": "Narrow one project scan to issue-like items whose Status field equals Ready."
-      },
-      {
-        "inputs": {
-          "content_kind": "Issue",
-          "content_refs": [
-            "owner/repo#7",
-            "owner/repo#8"
-          ],
-          "filters": [
-            {
-              "field": "Type",
-              "value": "Task"
-            }
-          ],
-          "project_id": "PVT_demo"
-        },
-        "reference": "gh.project.items",
-        "why": "Intersect one project item query with one explicit set of GitHub content references."
-      }
-    ],
-    "failure_modes": [
-      "project_not_found",
-      "unknown_field",
-      "ambiguous_field",
-      "unsupported_field_type",
-      "invalid_filter_value",
-      "invalid_content_ref",
-      "probe_failed"
-    ],
-    "inputs": {
-      "content_kind": "string",
-      "content_refs": [
-        "string"
-      ],
-      "filters": [
-        {
-          "field": "string",
-          "value": "scalar"
-        }
-      ],
-      "project_id": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project.items",
-    "outputs": {
-      "count": "integer",
-      "items": [
-        {
-          "content_kind": "string",
-          "item_id": "string",
-          "number": "integer",
-          "repository": "string",
-          "title": "string",
-          "url": "string"
-        }
-      ]
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Return normalized GitHub Project items for one project membership scan",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "project.items",
-  "reference": "gh.project.items",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: inspect-project-item-collections
+inputs:
+  project_id: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: load-ready-items
+        uses: gh.project.items
+        with:
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          filters:
+            - field: "Status"
+              value: "Ready"
+        register: ready_items
+      - name: load-ready-item-details
+        uses: gh.project.items.details
+        with:
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          filters:
+            - field: "Status"
+              value: "Ready"
+          content_refs:
+            - "owner/repo#7"
+            - "owner/repo#8"
+        register: ready_item_details
+      - name: publish-summary
+        publish:
+          ready_count: step.ready_items.outputs.count
+          detailed_count: step.ready_item_details.outputs.count
+          summary: "Project item collections loaded"
 ```

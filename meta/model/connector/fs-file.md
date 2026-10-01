@@ -43,7 +43,7 @@
 - File snapshot means one opened regular-file descriptor for both content and `fstat` metadata, not atomic consistency under concurrent writes.
 - The initial no-follow stat retains diagnostics. Nonzero integer `O_NOFOLLOW` and `O_NONBLOCK` are required; missing capabilities fail closed as `content_unavailable` / `probe.fs_file.secure_open_unavailable`.
 - `fstat` must verify regular-file kind before reading the same descriptor. Opened FIFO/directory targets are `not_a_file`; open errors including `ELOOP` are `content_unavailable` without an inferred kind; descriptor-stat errors are `probe_failed` / `probe.fs_file.stat_failed`.
-- Relative/absolute textual `Path` projections remain path-derived, not resolved descriptor identities. Parent symlinks and hardlinks remain allowed, without workspace confinement, device-open sandboxing, or same-UID isolation.
+- A final path entry that is a symlink is rejected rather than followed. Symlinks in parent directories and hardlinks remain allowed, so this is not workspace confinement, device-open sandboxing, or same-UID isolation. Relative/absolute textual `Path` projections remain path-derived, not resolved descriptor identities.
 
 - `basename` is the last path segment from the resolved file path.
 - `filename_without_extension` and `extension` are deterministic projections of `basename` using the last dot only.

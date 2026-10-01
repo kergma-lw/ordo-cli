@@ -6,11 +6,50 @@ from connectors.gh.actions._shared import PROJECT_ISSUE_INVALIDATION
 from connectors.gh.actions.project.issue._field_common import build_number_mutation, resolve_issue_and_field, run_field_update
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS
 from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, action, fail, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub project issue field_number set',
+  'goal': 'Set one numeric GitHub Project field on one issue that is already in that Project.',
+  'summary': "Set one number-valued GitHub Project field on one issue's Project item by field name and numeric value.",
+  'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to set one numeric field, such as Estimate, on a project-backed issue.']},
+               {'heading': 'What to provide',
+                'items': ['Provide the issue number, Project ID, visible field name, and numeric value.',
+                          'Choose the project by its owner and project number using GitHub\'s published project guide, then obtain that project\'s stable ID with the GitHub project view command. Store that returned ID as workflow input and confirm the selected project title with connector.gh.project before changing an issue.',
+                          'Use the workflow\'s GitHub repository context normally. Supply repository only when the issue belongs to a different repository.']},
+              {'heading': 'Result and boundary',
+               'items': ['The result identifies the issue and its Project item, and reports whether the requested value changed. changed=false means the item already held that value; changed=true means this action applied the requested value.',
+                         'The issue must already be in the Project, and the named field must be numeric. Another actor can change the item after this action, so observe again before making a decision that depends on its current value.']},
+               {'heading': 'Do not use for',
+               'items': ['Writing selectable or iteration-backed project fields; use '
+                         'connector.gh.project.issue.field_single_select.set or '
+                         'connector.gh.project.issue.field_iteration.set for those different field kinds.',
+                         'Reading the current field value without changing it; use connector.gh.project.issue when the '
+                         'workflow only needs the observed membership snapshot.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.project.issue',
+                               'summary': 'Parent issue-membership probe for inspecting current project field values '
+                                          'before or after mutation'},
+                              {'handle': 'connector.gh.project.field',
+                               'summary': 'Sibling probe for confirming the target project field exists before '
+                                          'mutation'},
+                              {'handle': 'connector.gh.project.issue.field_single_select.set',
+                               'summary': 'Sibling setter for selectable fields rather than numeric fields'},
+                              {'handle': 'connector.gh.project.issue.field_iteration.set',
+                               'summary': 'Sibling setter for iteration-backed fields rather than numeric fields'}]},
+               {'heading': 'Examples',
+                'items': ['After a project view has returned and connector.gh.project has confirmed inputs.project_id, set Estimate to 3 for issue 42.']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.project.issue',
+                         'connector.gh.project.field',
+                         'connector.gh.project.issue.field_single_select.set']}]})
 
 def info():
     return action(
         name="project.issue.field_number.set",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string", "field": "string", "value": "number"},
         effects=("set one GitHub project issue number field by field name",),
         outputs={"issue_ref": "string", "project_id": "string", "item_id": "string", "field": "string", "value": "number", "changed": "boolean"},

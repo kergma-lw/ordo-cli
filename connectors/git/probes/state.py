@@ -3,11 +3,47 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git state',
+ 'goal': 'A workflow needs one compact readiness snapshot before deciding whether committing, switching, syncing, or '
+         'publishing repository state makes sense.',
+  'summary': 'Read one combined Git repository-state snapshot from current-branch context, worktree '
+             'cleanliness flags, and stash count.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs one compact readiness snapshot before deciding whether committing, '
+                         'switching, syncing, or publishing repository state makes sense.',
+                         'Later logic needs branch, detached, worktree-cleanliness, and stash-count facts together '
+                         'rather than one path-level worktree inventory alone.']},
+              {'heading': 'Do not use for',
+               'items': ['Inspecting the exact dirty path list or keeping staged-versus-unstaged file paths visible; '
+                          'use connector.git.worktree for that narrower path-level check.',
+                         'Listing stash entries themselves or mutating staging state; use connector.git.stash for '
+                         'stash inventory and connector.git.index.add_all for full-worktree staging.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.worktree',
+                                'summary': 'Read path-level worktree details instead of one combined '
+                                          'repository snapshot'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read only the current checkout branch when broader cleanliness '
+                                          'and stash context are unnecessary'},
+                              {'handle': 'connector.git.stash',
+                                'summary': 'List stash entries instead of only the stash '
+                                          'count summary'},
+                              {'handle': 'connector.git.index.add_all',
+                               'summary': 'Sibling action for staging the whole current worktree after this summary '
+                                          'confirms the repository is ready'}]},
+              {'heading': 'Examples', 'items': ['git.state with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.worktree', 'connector.git.index.add_all', 'connector.git.branch']}]})
 
 def info():
     return probe(
         name="state",
+        human=git_human(HUMAN, provide="No inputs are required; run from the checkout whose readiness the workflow must decide.", result="Returns branch, detached, worktree_clean, has_untracked, has_staged_changes, has_unstaged_changes, stash_count, and repository_root. It combines point-in-time observations, so a later action must not assume they remain unchanged."),
         outputs={
             "branch": "string | null",
             "detached": "boolean",

@@ -5,12 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
+from .human import HumanDeclaration, declare_human, human_mapping
 from .json import JSONObject
 
 
 SUPPORTED_SNIPPET_FORMS = {
     "graph_bundle",
-    "python_fragment",
     "value",
     "field_fragment",
     "step_fragment",
@@ -27,7 +27,6 @@ SUPPORTED_SNIPPET_VERIFICATION_KINDS = {
 
 SUPPORTED_SNIPPET_INSERTION_MODES = {
     "graph_bundle",
-    "sdk_probe_fragment",
     "expression_value",
     "step_field",
     "step_fragment",
@@ -37,10 +36,166 @@ SUPPORTED_SNIPPET_INSERTION_MODES = {
 }
 
 
+# Focused GitHub help shows one complete, usable workflow per operation. The
+# other verified variants remain available to maintain their distinct policies.
+_TEXT_CANONICAL_EXAMPLE_NAMES = {
+    "connector.gh.pr": frozenset({"gh_pr_async_merge_head"}),
+    "connector.gh.pr.create": frozenset({"gh_pr_create_new_only"}),
+    "connector.gh.pr.list": frozenset({"gh_pr_list_exactly_one_open"}),
+    "connector.gh.pr.merge": frozenset({"gh_pr_async_merge_head"}),
+    "connector.gh.pr.merge.request": frozenset({"gh_pr_async_merge_head_context"}),
+    "connector.gh.pr.checks": frozenset({"gh_pr_checks_step"}),
+}
+
+
+def text_canonical_examples(handle: str, examples: list[JSONObject]) -> list[JSONObject]:
+    """Return only canonical examples suitable for reader-facing text help."""
+
+    names = _TEXT_CANONICAL_EXAMPLE_NAMES.get(handle)
+    return [example for example in examples if names is None or example["name"] in names]
+
+
+SNIPPET_COVERAGE_HUMAN = declare_human({
+    "title": "Example coverage",
+    "goal": "See which public references have checked examples you can use as a starting point.",
+    "summary": "Coverage reports whether a reference has no checked example, an excerpt checked against a source example, or an example checked by a run. Some conceptual references intentionally have no checked example.",
+    "sections": [],
+})
+
+
+def snippet_coverage_human(handles: list[JSONObject], coverage_counts: dict[str, int]) -> HumanDeclaration:
+    """Return reader-facing coverage guidance beside the snippet registry."""
+
+    content = dict(human_mapping(SNIPPET_COVERAGE_HUMAN))
+    content["sections"] = [
+        {
+            "heading": "Coverage summary",
+            "items": [
+                f"Public references: {len(handles)}.",
+                f"No checked example: {coverage_counts.get('none', 0)}.",
+                f"Excerpt checked against its source: {coverage_counts.get('excerpt_verified', 0)}.",
+                f"Example checked by a run: {coverage_counts.get('runner_verified', 0)}.",
+            ],
+        },
+        {
+            "heading": "When no checked example is listed",
+            "items": [
+                "No checked example can mean the reference is intentionally conceptual or that no small example would teach it honestly; it is not a request to create an example just to raise coverage.",
+                "Start with the related references in `ordo-help describe <handle>`. For an end-to-end workflow shape, inspect the repository examples guide before deciding whether a focused example is useful.",
+            ],
+            "references": [
+                {"handle": "examples", "summary": "Complete repository workflows to use when a focused snippet is not the right teaching form"},
+                {"handle": "workflow.run_contract", "summary": "Run and repeated-work guidance, including the focused fan-out example"},
+            ],
+        },
+        {
+            "heading": "References",
+            "items": [
+                f"{item['handle']}: {item['snippet_coverage'].replace('_', ' ')}."
+                for item in handles
+            ],
+        },
+    ]
+    return declare_human(content)  # type: ignore[arg-type]
+
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+_COMPOSE_LIFECYCLE_WORKFLOW = '''version: 0
+workflow: compose-lifecycle-decisions
+inputs:
+  service: {}
+  start_project: {}
+  remove_service: {}
+blocks:
+- steps:
+  - name: inspect-project
+    uses: compose.project
+    register: project
+  - name: require-project-start-decision
+    gate: inputs.start_project and step.project.outputs.state != "running"
+  - name: start-project
+    uses: compose.start
+    register: started
+  - name: require-project-running
+    gate: step.started.outputs.state == "running"
+  - name: inspect-service
+    uses: compose.service
+    with:
+      service: inputs.service
+    register: service_before_cleanup
+  - name: require-service-cleanup-decision
+    gate: inputs.remove_service
+  - name: stop-service
+    uses: compose.stop
+    with:
+      service: inputs.service
+    register: stopped
+  - name: require-service-stopped
+    gate: step.stopped.outputs.state == "stopped"
+  - name: remove-service
+    uses: compose.remove
+    with:
+      service: inputs.service
+    register: removed
+  - name: require-service-absent
+    gate: step.removed.outputs.state == "absent"
+  - name: publish-lifecycle-results
+    publish:
+      project_state_before_start: step.project.outputs.state
+      started_project: step.started.outputs.changed
+      service_state_before_cleanup: step.service_before_cleanup.outputs.state
+      stopped_service: step.stopped.outputs.changed
+      removed_service: step.removed.outputs.changed'''
+
+
 HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
+    "connector.compose.project": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [{
+            "name": "compose_lifecycle_decisions", "kind": "positive", "form": "workflow_fragment",
+            "summary": "Inspect the configured Compose project, make the start decision explicit, then save and check the action result before moving to service cleanup.",
+            "yaml": _COMPOSE_LIFECYCLE_WORKFLOW,
+            "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.compose.project", "expected_status": "ok"},
+        }],
+    },
+    "connector.compose.service": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [{
+            "name": "compose_lifecycle_decisions", "kind": "positive", "form": "workflow_fragment",
+            "summary": "Inspect the named service before cleanup, save its observed state, and require an explicit cleanup decision before changing it.",
+            "yaml": _COMPOSE_LIFECYCLE_WORKFLOW,
+            "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.compose.service", "expected_status": "ok"},
+        }],
+    },
+    "connector.compose.start": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [{
+            "name": "compose_lifecycle_decisions", "kind": "positive", "form": "workflow_fragment",
+            "summary": "Start the configured project only after an explicit decision, register the result, and require `running` before later service work.",
+            "yaml": _COMPOSE_LIFECYCLE_WORKFLOW,
+            "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.compose.start", "expected_status": "ok"},
+        }],
+    },
+    "connector.compose.stop": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [{
+            "name": "compose_lifecycle_decisions", "kind": "positive", "form": "workflow_fragment",
+            "summary": "Stop one named service only after an explicit cleanup decision, save the result, and require `stopped` before removal.",
+            "yaml": _COMPOSE_LIFECYCLE_WORKFLOW,
+            "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.compose.stop", "expected_status": "ok"},
+        }],
+    },
+    "connector.compose.remove": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [{
+            "name": "compose_lifecycle_decisions", "kind": "positive", "form": "workflow_fragment",
+            "summary": "Remove the named service only after the saved stop result is `stopped`, then save and require the final `absent` result before publishing cleanup facts.",
+            "yaml": _COMPOSE_LIFECYCLE_WORKFLOW,
+            "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.compose.remove", "expected_status": "ok"},
+        }],
+    },
     "connector.fs.file": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
@@ -48,7 +203,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "fs_file_observation_steps",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines. Runner verification validates schema/fixture form only, not file access or race safety.",
+                "summary": "Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines.",
                 "source_example": "fs-file-inspection",
                 "source_excerpt": {"path": "examples/fs-file-inspection.yaml", "start_line": 8, "end_line": 18},
                 "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "step_fragment", "target": "connector.fs.file", "expected_status": "ok"},
@@ -57,7 +212,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "fs_file_observation_workflow",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "A complete observer workflow requires file_path with no real-file default and publishes a summary rather than full content. Content and metadata come from one validated descriptor, not an atomic snapshot. Runner verification checks schema/fixture form without opening files; POSIX race tests are separate evidence.",
+                "summary": "A complete observer workflow requires file_path and publishes a summary rather than full content. Content and metadata come from one observed file, not an atomic snapshot.",
                 "source_example": "fs-file-inspection",
                 "source_excerpt": {"path": "examples/fs-file-inspection.yaml", "start_line": 1, "end_line": 18},
                 "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.fs.file", "expected_status": "ok"},
@@ -127,7 +282,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_read_before_write",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Read the old profile before storing a profile for future runs; reuse the registered old value afterward, not another state alias. Verification checks unbound authored order only, not bound file identity or persistence.",
+                "summary": "Read the old profile before storing a profile for a future run; reuse the registered value afterward.",
                 "yaml": '- name: read-profile\n  value: state.shared_state["active_profile"]\n  register: previous_profile\n- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review\n- name: report-previous-profile\n  publish:\n    previous_profile: step.previous_profile.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
@@ -198,7 +353,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "playbook_workflows_catalog_entry",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Publish one named workflow entry with launch metadata and concrete input bindings. These bindings provide source coverage, so they suppress discovery.workflow.input_source_missing warnings. Plain show retains only caller slots in inputs, omits top-level launch_profile and input caller_slot/sources/coverage, and reports caller-slot obligation in required without adding optional. It adds top-level warnings only for required workflow declarations with coverage missing, omitting warnings when none qualify. --json retains the unchanged full declaration and launch-profile contract. Source presence is not readiness or state analysis. Excerpt verification checks authored source parity, not CLI discovery or activation output.",
+                "summary": "Publish one named workflow entry with a description, selection guidance, fixed inputs, working directory, and state bindings. Use `workflows show` to see the caller-facing interface and `--json` to inspect the complete declaration.",
                 "yaml": 'workflows:\n  remember-profile:\n    file: ./playbook-workflow-target.yaml\n    description: Read one remembered profile from shared state\n    category: inspect\n    when: Use when you need one state-backed profile lookup before choosing the next workflow.\n    with:\n      active_profile_key: active_profile\n      repo_dir: .\n    working_directory: ${inputs.repo_dir}\n    state_bindings:\n      shared_state: shared_state',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
@@ -268,7 +423,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "playbook_workflows_with_entry",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Supply the state key and directory as concrete entry bindings. workflows show --json reports binding, entry_binding in sources, provided coverage, and caller_slot none for each, without exposing profile values. Plain show hides these non-caller inputs and retains inputs: {} when no caller slots exist. These concrete bindings suppress discovery.workflow.input_source_missing warnings: plain top-level warnings appears only for required workflow declarations with coverage missing, and is omitted when none qualify. Existing plain filtering, field omissions, and caller-obligation required remain unchanged; --json keeps all fields unchanged. This describes source presence, not readiness or state analysis. Excerpt verification checks source parity, not CLI output.",
+                "summary": "Supply the state key and directory as fixed values owned by this workflow entry. Use caller placeholders when the value must instead be provided for each run.",
                 "yaml": 'with:\n  active_profile_key: active_profile\n  repo_dir: .',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
@@ -556,7 +711,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "profiles/frontend-launcher.yaml",
                     "start_line": 5,
-                    "end_line": 7
+                    "end_line": 10
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -831,7 +986,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/inspect-issue.yaml",
                     "start_line": 10,
-                    "end_line": 14
+                    "end_line": 15
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -887,7 +1042,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "profile_overrides_block",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Publish one profile-scoped override record with a target, an opaque payload object, and a short reason note.",
+                "summary": "Publish one profile-scoped override record with a named target, structured data, and a short reason note.",
                 "yaml": "overrides:\n  - target: local.issue-triage\n    with:\n      default_label: bug\n      board: intake\n    reason: Share one profile-scoped triage adaptation record.",
                 "source_excerpt": {
                     "path": "examples/profile-overrides.yaml",
@@ -908,7 +1063,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "profile_override_target_field",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Name the consumer-owned target key that this override record is for.",
+                "summary": "Name which integration or local convention should read this override record.",
                 "yaml": "  - target: local.issue-triage",
                 "source_excerpt": {
                     "path": "examples/profile-overrides.yaml",
@@ -929,7 +1084,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "profile_override_with_payload",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Attach one opaque object payload that the named override target may interpret.",
+                "summary": "Attach structured data that the named target may use.",
                 "yaml": "    with:\n      default_label: bug\n      board: intake",
                 "source_excerpt": {
                     "path": "examples/profile-overrides.yaml",
@@ -1458,7 +1613,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_branch_delete_force_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "After independently verifying squash-merge cleanup eligibility, explicitly select git branch -D with force: true. Default and checked-out branch protections still apply. Runner verification checks the authored shape without deleting a branch; synthetic repository tests verify deletion behavior.",
+                "summary": "After independently verifying squash-merge cleanup eligibility, explicitly select git branch -D with force: true. Default and checked-out branch protections still apply.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
                     "path": "examples/git-branch-management.yaml",
@@ -1530,12 +1685,12 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_commit_create_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Create one ordinary Git commit from the current index after the workflow has already decided the staged changes are ready.",
+                "summary": "Create one ordinary Git commit from the current index after the staged changes are ready.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
                     "path": "examples/git-commit-management.yaml",
-                    "start_line": 15,
-                    "end_line": 18
+                    "start_line": 16,
+                    "end_line": 20
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1558,8 +1713,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-commit-management",
                 "source_excerpt": {
                     "path": "examples/git-commit-management.yaml",
-                    "start_line": 19,
-                    "end_line": 22
+                    "start_line": 21,
+                    "end_line": 25
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1582,8 +1737,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-commit-management",
                 "source_excerpt": {
                     "path": "examples/git-commit-management.yaml",
-                    "start_line": 23,
-                    "end_line": 26
+                    "start_line": 26,
+                    "end_line": 30
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1602,12 +1757,12 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_commits_probe_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Read a bounded Git commit-history slice when the workflow needs commit texts instead of diffs or arbitrary git log formatting.",
+                "summary": "Read a bounded Git commit-history slice when the workflow needs commit texts instead of diffs or a history diagram.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
                     "path": "examples/git-commit-management.yaml",
-                    "start_line": 9,
-                    "end_line": 14
+                    "start_line": 10,
+                    "end_line": 15
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1621,12 +1776,12 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_commit_management_flow",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Inspect recent commit texts, then demonstrate ordinary commit creation, amend, and revert as distinct Git commit surfaces in one teaching workflow.",
+                "summary": "Inspect recent commit texts, then choose exactly one deliberate history change: create, amend, or revert.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
                     "path": "examples/git-commit-management.yaml",
                     "start_line": 1,
-                    "end_line": 31
+                    "end_line": 35
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1741,7 +1896,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/git-ref-range-inspection.yaml",
                     "start_line": 15,
-                    "end_line": 20
+                    "end_line": 19
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1803,7 +1958,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_upstream_probe_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Inspect the current branch's exact configured remote, including nested names, and local remote-tracking branch tail without network access.",
+                "summary": "Inspect the current branch's tracked remote and branch names before deciding whether publication is appropriate.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
                     "path": "examples/git-repo-upstream-inspection.yaml",
@@ -1822,7 +1977,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_repo_upstream_flow",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Publish repository context, the original upstream_ref, the exact configured remote, and remote_branch as the local tracking tail, not a source-side branch name.",
+                "summary": "Publish repository context and the current branch's tracked remote and branch relationship for a later decision.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
                     "path": "examples/git-repo-upstream-inspection.yaml",
@@ -1941,8 +2096,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
                     "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 18,
-                    "end_line": 21
+                    "start_line": 19,
+                    "end_line": 23
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1961,7 +2116,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/git-integration-strategies.yaml",
                     "start_line": 1,
-                    "end_line": 40
+                    "end_line": 45
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1984,8 +2139,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
                     "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 22,
-                    "end_line": 25
+                    "start_line": 24,
+                    "end_line": 28
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2008,8 +2163,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
                     "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 26,
-                    "end_line": 29
+                    "start_line": 29,
+                    "end_line": 33
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2032,8 +2187,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
                     "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 30,
-                    "end_line": 35
+                    "start_line": 34,
+                    "end_line": 40
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2071,7 +2226,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_sync_roundtrip_flow",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Fetch from one explicit configured remote name, inspect divergence and upstream context, then push one local branch to that same name; explicit naming keeps the roundtrip target clear, while omitted/null push remote also supports nested upstream names.",
+                "summary": "Fetch from one explicit configured remote name, inspect divergence and upstream context, then push one local branch to that same name; explicit naming keeps the roundtrip target clear.",
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
@@ -2095,7 +2250,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_sync_push_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Publish one local branch to an explicit configured remote name after refresh and inspection. Omitted/null remote instead resolves the matching current branch's exact upstream remote, including nested names; run validates membership before transport.",
+                "summary": "Publish one local branch to an explicit configured remote name after refresh and inspection. Omitted/null remote instead uses the current branch's exact configured upstream remote, including nested names; run validates membership before transport.",
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
@@ -2209,8 +2364,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "shell-command-legacy-compatibility",
                 "source_excerpt": {
                     "path": "examples/shell-command-legacy-compatibility.yaml",
-                    "start_line": 8,
-                    "end_line": 11
+                    "start_line": 6,
+                    "end_line": 10
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -3011,7 +3166,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_set_step_fragment_remembers_profile",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Read before writing the file for future runs, then reuse the registered value, not state through this or another alias. Verification checks unbound authored order only, not bound file identity, profile contexts, or persistence.",
+                "summary": "Read the previously stored profile before replacing it, then reuse the registered value in the result for this run.",
                 "yaml": '- name: read-profile\n  value: state.shared_state["active_profile"]\n  register: previous_profile\n- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review\n- name: report-previous-profile\n  publish:\n    previous_profile: step.previous_profile.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
@@ -3129,7 +3284,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "catch_issue_not_found_with_false_fallback",
                 "kind": "positive",
                 "form": "value",
-                "summary": "Catch one known not-found contract code and substitute one explicit fallback value.",
+                "summary": "Turn one expected missing-issue failure into an explicit false fallback value.",
                 "yaml": 'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found"], false)',
                 "verification": {
                     "kind": "runner_verified",
@@ -3183,11 +3338,11 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
-                "name": "adapter_markdown_section_projection",
+                "name": "adapter_json_value_binding",
                 "kind": "positive",
                 "form": "value",
-                "summary": "Project one markdown section through the published adapter surface instead of hand-rolled parsing.",
-                "yaml": 'inputs.body | markdown["Tasks"]',
+                "summary": "Read one JSON value by explicitly supplying the workflow input that contains the JSON text.",
+                "yaml": "'${json.user.name with{root: inputs.body}}'",
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -3244,7 +3399,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 },
             },
             {
-                "name": "routine_bundle_registry_and_implementation",
+                "name": "Complete routine registry and helper",
                 "kind": "positive",
                 "form": "routine_bundle",
                 "summary": "Publish one honest routine bundle with registry entry, implementation script, and sample execution contract.",
@@ -3261,15 +3416,22 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
     },
 }
 
+# The routine contract guide is the authoring entry point, so show the complete
+# checked bundle there rather than making a new author discover it indirectly.
+HELP_SNIPPET_REGISTRY["routine_contract"] = {
+    "snippet_coverage": "runner_verified",
+    "canonical_examples": [deepcopy(HELP_SNIPPET_REGISTRY["routine"]["canonical_examples"][3])],
+}
+
 
 for _family, _leaf, _name, _summary in (
     (
         "connector.fs", "connector.fs.file", "fs_family_file_observation",
-        "Supply the required file_path with no real-file default. The fs.file probe observes UTF-8 content and metadata; publish returns basename, byte size, line count, and content-derived character count without publishing full content. Relative and absolute paths remain textual projections; parent symlinks and hardlinks are allowed, not workspace confinement or atomic snapshots. This whole source workflow is verified through the existing connector.fs.file workflow host for schema/fixture form only, without file reads or race tests.",
+        "Supply the required file_path with no real-file default. The fs.file probe observes UTF-8 content and metadata; publish returns basename, byte size, line count, and content-derived character count without publishing full content. Relative and absolute paths remain textual projections; parent symlinks and hardlinks are allowed, not workspace confinement or atomic snapshots.",
     ),
     (
         "connector.gh", "connector.gh.project.issue", "gh_family_project_membership",
-        "Supply repository as literal ASCII OWNER/REPO, issue_number, and project_id. The gh.project.issue probe reads membership; gh.project.issue.add conditionally attaches the issue, then the number, iteration, and single-select setters mutate project fields. These actions are not read-only probes, and earlier effects are not rolled back if a later action fails. Context is a default rather than an authorization allowlist; an explicit valid other repository remains allowed with a warning. This whole source workflow is verified through the existing connector.gh.project.issue workflow host for schema/fixture form only, without authentication, API requests, or action execution.",
+        "Supply repository as literal ASCII OWNER/REPO, issue_number, and project_id. The gh.project.issue probe reads membership; gh.project.issue.add conditionally attaches the issue, then the number, iteration, and single-select setters mutate project fields. These actions are not read-only probes, and earlier effects are not rolled back if a later action fails. Context is a default rather than an authorization allowlist; an explicit valid other repository remains allowed with a warning.",
     ),
 ):
     _example = deepcopy(next(
@@ -3457,10 +3619,8 @@ expected_text: |
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
-HELP_SNIPPET_REGISTRY["state"]["canonical_examples"].append(deepcopy(GRAPH_BUNDLE_EXAMPLE))
 HELP_SNIPPET_REGISTRY["command-line.ordo-playbook"] = {
-    "snippet_coverage": "runner_verified", "canonical_examples": [deepcopy(GRAPH_BUNDLE_EXAMPLE)]}
-HELP_SNIPPET_REGISTRY["command-line.ordo-playbook"]["canonical_examples"][0]["verification"]["target"] = "command-line.ordo-playbook"
+    "snippet_coverage": "none", "canonical_examples": []}
 
 GRAPH_PROFILE_EXAMPLE = {
     "name": "static_profiles_and_bootstrap_provenance", "kind": "positive", "form": "graph_bundle",
@@ -3544,11 +3704,6 @@ expected_text: |
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
-for _graph_handle in ("state", "command-line.ordo-playbook"):
-    _graph_example = deepcopy(GRAPH_PROFILE_EXAMPLE)
-    _graph_example["verification"]["target"] = _graph_handle
-    HELP_SNIPPET_REGISTRY[_graph_handle]["canonical_examples"].append(_graph_example)
-
 GRAPH_PARAMETER_EXAMPLE = {
     "name": "state_family_parameter_correspondence", "kind": "positive", "form": "graph_bundle",
     "summary": "Verify a profile-indexed state family without selecting or reading state. The concrete handoff remains possible, while the separate structural link carries shared-origin correspondence and a selector equality requirement. The default tree displays the producer/reader family, not a concrete address or execution guarantee.",
@@ -3635,11 +3790,6 @@ expected_text: |
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
-for _parameter_handle in ("state", "command-line.ordo-playbook"):
-    _parameter_example = deepcopy(GRAPH_PARAMETER_EXAMPLE)
-    _parameter_example["verification"]["target"] = _parameter_handle
-    HELP_SNIPPET_REGISTRY[_parameter_handle]["canonical_examples"].append(_parameter_example)
-
 GRAPH_ALTERNATIVES_EXAMPLE = {
     "name": "alternatives_do_not_select_a_parent", "kind": "positive", "form": "graph_bundle",
     "summary": "Verify alternatives as a standalone row with both source references. Unique data use stays nested and the deletion ends its related section. Free roots retain authored order; categories create no dependencies.",
@@ -3733,11 +3883,6 @@ expected_text: |
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
-for _alternatives_handle in ("state", "command-line.ordo-playbook"):
-    _alternatives_example = deepcopy(GRAPH_ALTERNATIVES_EXAMPLE)
-    _alternatives_example["verification"]["target"] = _alternatives_handle
-    HELP_SNIPPET_REGISTRY[_alternatives_handle]["canonical_examples"].append(_alternatives_example)
-
 GRAPH_ROLES_EXAMPLE = {
     "name": "state_mutation_roles_keep_one_workflow", "kind": "positive", "form": "graph_bundle",
     "summary": "A mutating data user nests beneath its source. One mixed workflow has a terminal deletion role beneath the affected creator and an unsourced write role at root level. Both roles reference one workflow; fields and keys do not create additional logical states.",
@@ -3812,11 +3957,6 @@ expected_text: |
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
-for _role_handle in ("state", "command-line.ordo-playbook"):
-    _role_example = deepcopy(GRAPH_ROLES_EXAMPLE)
-    _role_example["verification"]["target"] = _role_handle
-    HELP_SNIPPET_REGISTRY[_role_handle]["canonical_examples"].append(_role_example)
-
 GRAPH_READING_EXAMPLE = {
     "name": "read_a_state_graph", "kind": "positive", "form": "graph_bundle",
     "display": "verified_graph_output",
@@ -3879,14 +4019,7 @@ expected_text: |
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "command-line.ordo-playbook", "expected_status": "ok"},
 }
-# Keep the technical bundles on state. The launch-command teaching surface shows
-# one small example, with its exact verified output instead of the test fixture.
-HELP_SNIPPET_REGISTRY["command-line.ordo-playbook"]["canonical_examples"] = [deepcopy(GRAPH_READING_EXAMPLE)]
-_state_reference_example = deepcopy(GRAPH_READING_EXAMPLE)
-_state_reference_example["verification"]["target"] = "state"
-HELP_SNIPPET_REGISTRY["state"]["canonical_examples"].append(_state_reference_example)
-
-for _state_handle in ("state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"):
+for _state_handle in ("workflow.state_bindings", "workflow.step.state_delete"):
     HELP_SNIPPET_REGISTRY[_state_handle]["snippet_coverage"] = "runner_verified"
     HELP_SNIPPET_REGISTRY[_state_handle]["canonical_examples"].extend(deepcopy(STATE_BUNDLE_EXAMPLES))
 
@@ -3895,7 +4028,7 @@ def _gh_pr_list_workflow() -> str:
     """One observer document, executed verbatim in every list fixture world."""
     return '''version: 0
 workflow: classify-branch-pull-requests
-# repository is explicit here; gh.pr.list also supports standard gh bootstrap.
+# The explicit repository keeps the target visible in this example.
 inputs:
   repository:
     description: Target OWNER/REPO repository.
@@ -3973,7 +4106,7 @@ HELP_SNIPPET_REGISTRY["connector.gh.pr.list"] = {
         "name": f"gh_pr_list_{case}",
         "kind": "negative" if case == "unknown_metadata" else "positive",
         "form": "workflow_fragment",
-        "summary": "List all matching candidates with head, head_owner, base and state: all; repository is optional through standard gh bootstrap but supplied explicitly here. Reject unknown source identity and head_repository_key before exact repository filtering: compare the probe's lowercase key with inputs.head_repository | lower, retaining raw head_repository and case-sensitive branch names. Owner plus branch is not exact fork identity. Conditional workflow steps publish no PR, one open, ambiguous open, or closed history; nullable merged facts remain unknown. This observer selects no PR number and performs no automatic action. A workflow selecting a number must first gate on exactly one matching open PR. A complete full API traversal is not an atomic snapshot, and an empty list never authorizes creation after concurrent changes. Fixture execution proves this exact YAML's decisions, not live API traversal or bootstrap.",
+        "summary": "List all matching candidates with head, head_owner, base, and state: all. Require complete results and known source identity before comparing the intended repository. The workflow publishes no pull request, exactly one open pull request, ambiguity, or closed history; it does not select a number or take an action automatically. A later workflow decision must require exactly one matching open pull request.",
         "yaml": _gh_pr_list_workflow(),
         "verification": {"kind": "runner_verified", "world": f"gh-pr-list-{case.replace('_', '-')}",
                          "insertion_mode": "workflow_fragment", "target": "connector.gh.pr.list",
@@ -3982,31 +4115,11 @@ HELP_SNIPPET_REGISTRY["connector.gh.pr.list"] = {
 }
 
 
-def _sdk_probe_call_fragment() -> str:
-    """Published Python handler body, admitted verbatim by the SDK verifier."""
-    return """def run(ctx):
-    return ctx.call('gh.pr.list', inputs=ctx.input('filters'))
-"""
-
-
-HELP_SNIPPET_REGISTRY["connector.authoring"] = {
-    "snippet_coverage": "runner_verified",
-    "canonical_examples": [{
-        "name": "sdk_same_family_probe_inputs", "kind": "positive", "form": "python_fragment",
-        "summary": "Python handler fragment for an action published in the gh family, not workflow YAML. The caller's filters input is a nonempty JSON object containing repository, head, head_owner, base, and state (for example state: all). Pass that already-resolved object to the registered gh.pr.list probe and return its OperationOutcome, including failures. Nonempty dependency inputs are isolated: missing keys do not inherit workflow bindings and expression-looking strings stay literal. The bounded verifier compiles only this exact published source, runs the real family adapter and SDK context, and replaces bootstrap and the probe body with strict fixtures. This proves SDK dispatch and input binding, not GitHub API behavior or the actual PR-list handler. Empty-input legacy lookup, local dotted aliases, cross-family rejection, and probe-to-action restrictions have separate SDK tests.",
-        "python": _sdk_probe_call_fragment(),
-        "verification": {"kind": "runner_verified", "world": "gh-sdk-probe-call",
-                         "insertion_mode": "sdk_probe_fragment", "target": "connector.authoring",
-                         "expected_status": "ok"},
-    }],
-}
-
-
 def _gh_pr_create_workflow() -> str:
     """Exact create-only teaching policy; no implicit adoption of existing PRs."""
     return '''version: 0
 workflow: create-new-branch-pull-request
-# Explicit repository is an example choice; the action also supports gh bootstrap.
+# Explicit repository is an example choice; the action can also use the workflow GitHub repository context.
 inputs:
   repository: {}
   head: {}
@@ -4095,7 +4208,7 @@ HELP_SNIPPET_REGISTRY["connector.gh.pr.create"] = {
     "snippet_coverage": "runner_verified",
     "canonical_examples": [{
         "name": "gh_pr_create_new_only", "kind": "positive", "form": "workflow_fragment",
-        "summary": "Explicit authorization defaults false and draft defaults true. Check source owner/repository consistency, list all history, require complete known identities, and compare canonical lowercase repository keys. This example refuses every existing exact-source PR, including closed history; that is workflow policy, not an intrinsic action restriction or automatic adoption. Pass the known optional head_repository for the fork. Repository is explicit here but optional through standard gh bootstrap. Save the create result, require confirmed creation and a nonzero integer number, then observe that actual number once. Fixtures prove this exact workflow and strict input handoff, not the action's internal open-only recheck, SDK dependency reuse, POST behavior, or race atomicity. Action failures stop without retry or publication.",
+        "summary": "Authorization defaults to false and draft defaults to true. Confirm the source repository, refuse existing matching history as this workflow's policy, create the pull request, then inspect the created pull request by its returned number. Action failures stop without retry or publication.",
         "yaml": _gh_pr_create_workflow(),
         "verification": {"kind": "runner_verified", "world": "gh-pr-create-new-only",
                          "insertion_mode": "workflow_fragment", "target": "connector.gh.pr.create",
@@ -4108,7 +4221,7 @@ def _gh_pr_merge_workflow(*, test_merge: bool, context_repository: bool = False)
     """The displayed document is also the fixture executor's complete input."""
 
     target = "test_merge" if test_merge else "head"
-    context = "# Requires runtime connector_contexts.gh.repository = acme/mobile-app.\n# Supply via profile YAML: connectors: {gh: {repository: acme/mobile-app}}\n" if context_repository else ""
+    context = "# Requires the GitHub repository context to be acme/mobile-app.\n# Supply that context through profile YAML: connectors: {gh: {repository: acme/mobile-app}}\n" if context_repository else ""
     repository_guard = """      - name: require-matching-repository
         gate: inputs.repository | eq("acme/mobile-app")
 """ if context_repository else ""
@@ -4216,14 +4329,14 @@ for _merge_handle in ("connector.gh.pr", "connector.gh.pr.checks", "connector.gh
         _merge_entry["canonical_examples"].append({
             "name": "gh_pr_async_merge_head_context" if _context_repository else "gh_pr_async_merge_test_merge" if _test_merge else "gh_pr_async_merge_head",
             "kind": "positive", "form": "workflow_fragment",
-            "summary": "Execute this exact workflow with bounded, injected connector fixtures. Authorization defaults to false; standalone PRs require complete, SHA-pinned successful CI and one explicit unit check from app 15368. Save H for both checks and submission; the test_merge variant additionally binds candidate M to H and base B. API attachment is not proof of a worker checkout. Save the returned UUID, observe it once when present, and publish pending/failed/enqueued honestly. Only a final gh.pr observation confirms merged. Fixtures verify workflow execution and handoff, not live GitHub behavior or atomic CI freshness.",
+            "summary": "Authorize a merge explicitly, save the pull request source revision, and require the workflow's chosen checks for that saved revision before submitting a squash merge. Save the returned request ID, inspect it once when present, and then read the pull request again. Only the final pull request observation confirms whether it merged.",
             "yaml": _gh_pr_merge_workflow(test_merge=_test_merge, context_repository=_context_repository),
             "verification": {"kind": "runner_verified", "world": _merge_world,
                              "insertion_mode": "workflow_fragment", "target": _merge_handle,
                              "expected_status": "ok"},
         })
         if _context_repository:
-            _merge_entry["canonical_examples"][-1]["summary"] += " With connector_contexts.gh.repository available as a literal bootstrap value, merge and request omit repository; explicit repository overrides remain supported. PR reads and checks use an explicit input guarded to match that context. Fixtures check authored omission and context/output consistency, not real handler fallback or authentication."
+            _merge_entry["canonical_examples"][-1]["summary"] += " With the workflow's GitHub repository context available, merge and request omit repository; explicit repository overrides remain supported. Pull-request reads and checks use an explicit input guarded to match that context."
 
 
 def _git_remote_workflow() -> str:
@@ -4267,13 +4380,9 @@ HELP_SNIPPET_REGISTRY["connector.git.remote"] = {
     "canonical_examples": [{
         "name": "git_remote_" + case, "kind": "positive", "form": "workflow_fragment",
         "summary": (
-            "Inspect configured origin locally and publish name, existence, literal fetch/push URLs, and mirror. "
-            "The same standalone workflow gates on existence before publication and dependent URL counts; "
-            "missing facts remain available in analysis and operation results while dependent work is blocked. "
-            "length handles empty lists without indexing. Destination acceptance is workflow-owned policy. "
-            "URLs retain order and duplicates without normalization, trimming, or redaction; mirror is an observed fact. "
-            "Exact source executes in the " + case + " fixture world without live IO. Fixtures verify workflow "
-            "handoff, not Git acquisition, repository lifecycle composition, atomic freshness, or push safety."
+            "Inspect a named remote and publish its name, existence, fetch destinations, push destinations, and mirror state. "
+            "The workflow stops dependent work when the named remote is absent. Destination acceptance remains the "
+            "author's decision; recorded destinations are observations, not proof that a later publication is appropriate."
         ),
         "yaml": _git_remote_workflow(),
         "verification": {"kind": "runner_verified", "world": "git-remote-" + case,
@@ -4360,7 +4469,7 @@ for _actions_handle in GH_ACTIONS_TARGETS:
                 "bridge": "Read complete PR checks, select check runs by explicit check_suite_id (several checks may share a suite), resolve the suite through gh.actions.run, gate on found, and pass registered run_id/run_attempt to complete jobs. No run ID is guessed from a check ID or URL.",
                 "null-suite": "The same bridge gates before run lookup when the suite selector is null. Nullable check_suite_id is normal; it cannot identify an Actions run.",
                 "no-run": "The same bridge stops at the found gate when the suite has no associated Actions run (found=false). Jobs never receives a guessed run or null attempt.",
-            }[_case] + " Exact YAML executes with normalized fixtures only: this verifies workflow handoff, not HTTP source acquisition, GraphQL association, pagination, worker checkout, atomic snapshots, or merge policy.",
+            }[_case] + " The workflow keeps run and attempt identities explicit, requires a complete job collection, and does not establish an atomic snapshot or merge policy.",
             "yaml": _gh_actions_workflow(bridge=_case != "direct"),
             "verification": {"kind": "runner_verified", "world": "gh-actions-" + _case,
                              "insertion_mode": "workflow_fragment", "target": _actions_handle,
@@ -4421,13 +4530,6 @@ def validate_help_snippet_registry(registry: dict[str, JSONObject]) -> None:
             kind = verification.get("kind")
             if kind not in SUPPORTED_SNIPPET_VERIFICATION_KINDS:
                 raise ValueError(f"Unsupported verification kind for {handle}:{example.get('name')}: {kind!r}")
-            if form == "python_fragment":
-                if (not isinstance(example.get("python"), str) or not example["python"].strip()
-                        or "yaml" in example or kind != "runner_verified"
-                        or verification.get("insertion_mode") != "sdk_probe_fragment"):
-                    raise ValueError("Python snippets require Python source and sdk_probe_fragment runner verification")
-            elif verification.get("insertion_mode") == "sdk_probe_fragment":
-                raise ValueError("sdk_probe_fragment requires python_fragment form")
             if kind == "runner_verified":
                 if not isinstance(verification.get("world"), str):
                     raise ValueError(f"runner_verified snippet must declare world for {handle}:{example.get('name')}")

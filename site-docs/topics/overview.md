@@ -1,214 +1,32 @@
 # Overview
 
-Start here for a map of the main Ordo surfaces.
+Find the next public help surface without learning implementation details first.
 
-Use this page first when you need to understand where to look next.
+Use the feature map for authoring choices, then inspect the owning contract or rule.
 
-**CLI purpose:** World map for Ordo discovery and authoring bootstrap
+## Author workflows
 
-## Published topics
 
-- `features`
-- `overview`
-- `model`
-- `workflow-rules`
-- `capabilities`
-- `command-line`
-- `operations`
-- `examples`
-- `snippet-coverage`
-- `operation`
-- `describe`
-- `search`
+- [`features`](features.md): Map a task to an existing authoring surface.
+- [`model`](model.md): Read workflow, playbook, profile, state, and routine contracts.
+- [`workflow-rules`](workflow-rules.md): Apply the preferred workflow design rules.
+- [`capabilities`](capabilities.md): Confirm supported and restricted surfaces.
 
-## Connector namespaces
+## Choose control surfaces
 
-- `runtime` — Runtime compatibility and execution-context operations.
-- `git` — Operations for reading and changing local Git state.
-- `compose` — Operations in the `compose` namespace.
-- `gh` — Operations for reading and changing GitHub state.
-- `shell` — Low-level shell execution surface.
-- `fs` — Operations in the `fs` namespace.
+- Use guards to decide whether a workflow applies and to reject it early.
+- Use gates to decide whether an already-valid path may run.
+- Use if only for optional local behavior inside an already-valid path.
 
-## Execution concepts
+## Validate changes
 
-### Modes
+- Run check to see whether the workflow applies and is ready to execute.
+- Run review to find workflow-quality issues that readiness alone does not answer.
+- Treat check and review as complementary passes after every workflow change.
 
-- `review`
-- `check`
-- `plan`
-- `execute`
-- `explain`
-- `next`
+## Run and inspect
 
-### Statuses
 
-- `ok`
-- `guard_failed`
-- `validation_error`
-- `resolution_error`
-- `execution_error`
-
-## Workflow check/review loop
-
-Use both check and review after adding or changing a workflow; neither replaces the other.
-
-- `ordo-playbook check <workflow>` — Validate workflow applicability and execution readiness
-- `ordo-playbook review <workflow>` — Review workflow authoring-quality findings
-
-## Recommended next calls
-
-- `ordo-help features` — Scan workflow features, named surfaces, and when to use them
-- `ordo-help model` — Learn the main DSL surfaces
-- `ordo-help workflow-rules` — Learn preferred workflow rules, including paired check/review passes
-- `ordo-help capabilities` — Learn capability boundaries
-- `ordo-help command-line` — Inspect public launch commands, flags, and distinct check/review roles
-- `ordo-help operations` — Inspect the public operation catalog
-- `ordo-help examples` — Inspect verified repository examples
-- `ordo-help snippet-coverage` — Inspect which public handles do and do not publish canonical verified snippets
-
-## Full JSON reference
-
-```json
-{
-  "conditional_roles": {
-    "avoid": [
-      "Do not use if as a catch-all control mechanism.",
-      "If a condition is really deciding applicability, admission, or routing, move it into guards, gates, or a higher structural choice instead."
-    ],
-    "rule": "Use each conditional surface for its own job: guards handle applicability and early rejection, gates handle whether a path or step may run at all, and if handles local behavioral variation inside an already-valid path."
-  },
-  "connector_authoring_guidance": "Connector-author SDK: ctx.call(name, *, inputs=None) supports nonempty already-resolved inputs only for same-family probe dependencies. Full references (gh.pr.list) and local dotted names (pr.list) work; values are not reevaluated as expressions or templates. Omitted inputs or None preserve legacy no-input behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring for dependency boundaries and verified examples.",
-  "connector_namespaces": [
-    "runtime",
-    "git",
-    "compose",
-    "gh",
-    "shell",
-    "fs"
-  ],
-  "document_kind": "overview",
-  "document_kinds": [
-    "error_taxonomy",
-    "examples_catalog",
-    "pattern_hints",
-    "playbook",
-    "plugin_surface_contract",
-    "profile",
-    "routine_registry",
-    "state_contract",
-    "workflow"
-  ],
-  "execution_concepts": {
-    "check_unknown": "Inspect allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards. allowed false can mean unknown, not blocked; missing_facts is not inferred from unevaluated expressions.",
-    "modes": [
-      "review",
-      "check",
-      "plan",
-      "execute",
-      "explain",
-      "next"
-    ],
-    "state_boundary": "Nested analysis does not defer state. A reached run/loop after deferral halts with state_deferral_invocation_barrier; profiles cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred.",
-    "state_deferral": "Top-level check defers effectful state writes/deletes after conditions and gates and continues to independent guards, without mutation, simulation, outputs, registers, or reuse. Plan retains ordered non-reusable nodes; run executes admitted mutations once.",
-    "statuses": [
-      "ok",
-      "guard_failed",
-      "validation_error",
-      "resolution_error",
-      "execution_error"
-    ]
-  },
-  "failure_diagnostics": {
-    "external_payload_fields": [
-      "kind",
-      "classification",
-      "tool",
-      "system",
-      "argv_summary",
-      "stderr_excerpt",
-      "suggested_checks"
-    ],
-    "rule": "When runtime has external command or remote-system context, user-facing diagnostics should distinguish that external cause from workflow or engine logic failures."
-  },
-  "gh_pr_create_guidance": "GitHub creation: gh.pr.create requires head, base, title, and an explicit boolean draft; body defaults to empty. repository is optional: valid explicit OWNER/REPO overrides connector_contexts.gh.repository; omitted or null uses context, malformed explicit input fails without fallback. head_repository is a full source OWNER/REPO, default target repository; explicit cross-repository intent requires it, with no fork guessing. head_owner is an optional consistency assertion, otherwise derived from the exact source repository. Same-organization head_repo API argument is derived repository NAME. Reject same-branch/same-repository requests. The action uses ctx.call('gh.pr.list', inputs=...) with resolved repository/head/head_owner/base and state: open; require complete traversal and exact case-insensitive head_repository_key identity. One exact open match including draft returns non-OK already_exists with pull_number, url, created=false and no POST; multiple matches return ambiguous; unknown identity and list failure return precheck_failed. No existing match permits one POST. Only validated HTTP 201 means created=true; malformed 201, timeout, or server failure returns creation_unknown with created=null. HTTP 422 is generic create_refused, not universal duplicate evidence; preserve API errors. No POST retry or automatic readback reconciliation. This is not find-or-reuse or closed-history policy: workflow-owned gh.pr.list state: all classification precedes create's separate open check. Concurrent duplicates can race the check: no atomic uniqueness or exactly-once guarantee. No CI waiting, merge, push, fork, branch cleanup, or extra issue/project operations. Inspect connector.gh.pr.create.",
-  "gh_pr_list_guidance": "GitHub candidate discovery: gh.pr.list observes a full filtered REST pull-request collection, not the search index. repository is optional with the standard connector_contexts.gh.repository default and explicit OWNER/REPO override. state is required: open|closed|all. Prefer state: all for find/create-oriented inspection, optionally narrowed by head/head_owner/base. head_owner is the head repository owner (user or organization), not PR author, and requires head; owner plus branch is not exact repository identity. Compare returned head_repository for exact fork matching. Internal pagination has no public page/cursor/limit; incomplete traversal fails. head with head_owner composes server owner:branch; bare head is matched exactly locally across all state/base pages because GitHub does not guarantee bare-head filtering. Missing head_ref for local filtering fails. The 100-page ceiling applies before local filtering. GitHub.com only, matching bootstrap authentication. Full traversal is not an atomic snapshot or a total remote count guarantee. Empty success means no matches within the supplied filters; one result is a candidate, not automatically the correct PR. Workflow rules classify none, one open, multiple open, and closed history; unknown facts block dependent decisions. Closed/merged history may require additional workflow rules. Listing does not authorize creation, reopening, or merge. gh.pr reads detailed facts by pull_number; gh.pr.create is a separate action with its own mandatory open check. Inspect connector.gh.pr.list for canonical filtered classification fragments.",
-  "gh_pr_merge_guidance": "GitHub async merge: gh.pr observes head/base/test-merge identity and stack_state (standalone/stacked/unknown) plus stack; gh.pr.checks observes CI evidence. gh.pr.merge requires expected_head_sha from the accepted CI head, never a freshly fetched replacement. For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error. For checks on candidate M with verified base B and head H, submit expected_head_sha=H, not M. The first version rejects stacked PRs and unknown scope before submission; there is no atomic base or stack guarantee. Save the action result request_id UUID for gh.pr.merge.request: accepted submission is not completion. Observe pending/merged/failed/enqueued once; unavailable is not failed and enqueued is not merged. Only an exact matching existing request is reusable. No polling, queue administration, or admin bypass is provided. GitHub automatic issue closing and branch configuration effects are outside this action. Inspect connector.gh.pr.merge and connector.gh.pr.merge.request for the verified canonical workflow example.",
-  "graph_context": "Graph does not read saved state, run probes, or recommend what to do next. Use workflows show <workflow> for inputs, check <workflow> to check whether it can run, explain <workflow> to understand why, and next for a recommendation in the current environment.",
-  "graph_guidance": "Show how workflows connect through persistent state. Use ordo-playbook graph to explore related workflows, where they write shared data, and where that data is removed. No active task is required.",
-  "graph_parameters": "parameter stands for a key that has not been selected; the relationship applies to a matching context instance. Use graph --json for detailed dependencies, conditions, and unresolved relationships. Technical reference: docs/static-graph.md and meta/model/runtime/graph-v1.md.",
-  "graph_presentation": "Read +field as a write, −field as a deletion, and ? as a conditional change. A write need not be the first write; −context removes the selected context.",
-  "graph_roles": "↔ marks the same workflow: state/kind identifies another role; (reference) is a leaf sighting, not another execution. A deletion appears near the related data's users; this does not require running every reader before deleting the data.",
-  "graph_source_placement": "Shared context: writers → readers, not execution order. A free reader root is marked (data use; alternative sources) because it uses data without mutating the context. This shows shared data, not a mandatory sequence: guards and check determine applicability, and alternative ends are not sequential steps. Playbook order helps arrange workflows when their relationships leave a choice. Writers and deletions can also be branches. When sources already form a chain, the deepest source is the parent; also reads from keeps other sources visible. Distinct data from incomparable sources is shown under each source: the first source in display order holds the full occurrence, and ↔ (reference) leaves show the same operation without repeating its subtree. Alternative writers of the same data stay together. reads from: name? marks known conditional or fallback data use, separately from +field?. Fallback reads still count as data use. A missing graph edge does not prove independence in external systems.",
-  "published_topics": [
-    "features",
-    "overview",
-    "model",
-    "workflow-rules",
-    "capabilities",
-    "command-line",
-    "operations",
-    "examples",
-    "snippet-coverage",
-    "operation",
-    "describe",
-    "search"
-  ],
-  "purpose": "World map for Ordo discovery and authoring bootstrap",
-  "recommended_next_calls": [
-    {
-      "command": "ordo-help features",
-      "purpose": "Scan workflow features, named surfaces, and when to use them"
-    },
-    {
-      "command": "ordo-help model",
-      "purpose": "Learn the main DSL surfaces"
-    },
-    {
-      "command": "ordo-help workflow-rules",
-      "purpose": "Learn preferred workflow rules, including paired check/review passes"
-    },
-    {
-      "command": "ordo-help capabilities",
-      "purpose": "Learn capability boundaries"
-    },
-    {
-      "command": "ordo-help command-line",
-      "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
-    },
-    {
-      "command": "ordo-help operations",
-      "purpose": "Inspect the public operation catalog"
-    },
-    {
-      "command": "ordo-help examples",
-      "purpose": "Inspect verified repository examples"
-    },
-    {
-      "command": "ordo-help snippet-coverage",
-      "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
-    }
-  ],
-  "snippet_coverage_summary": {
-    "coverage_counts": {
-      "excerpt_verified": 56,
-      "none": 156,
-      "runner_verified": 74
-    },
-    "total_handles": 286
-  },
-  "workflow_check_review_passes": {
-    "passes": [
-      {
-        "command": "ordo-playbook check <workflow>",
-        "purpose": "Validate workflow applicability and execution readiness"
-      },
-      {
-        "command": "ordo-playbook review <workflow>",
-        "purpose": "Review workflow authoring-quality findings"
-      }
-    ],
-    "rule": "Use both check and review after adding or changing a workflow; neither replaces the other."
-  }
-}
-```
+- [`command-line`](command-line.md): Use the public command-line entrypoints.
+- [`operations`](operations.md): Browse published connector operations.
+- [`examples`](examples.md): Inspect verified repository examples.

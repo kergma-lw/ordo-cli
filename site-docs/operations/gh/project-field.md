@@ -1,129 +1,62 @@
-# gh.project.field
+# GitHub project field
 
-Read metadata for a GitHub Project field.
+A workflow needs to confirm that a field such as Status or Priority exists before publishing, validating, or mutating project-backed issue data.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read metadata for a GitHub Project field.
+Probe one named field in one GitHub Project and return whether it exists, what field kind it is, and which selectable option names it exposes when applicable.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs field metadata such as kind or allowed option names instead of only a yes/no answer about one candidate option.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `project_id`: required.
+- `field`: required.
 
-```json
-{
-  "field": "string",
-  "project_id": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- Usable result fact: `exists`.
+- Usable result fact: `name`.
+- Usable result fact: `kind`.
+- Usable result fact: `options`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
 
-```json
-{
-  "exists": "boolean",
-  "kind": "string",
-  "name": "string",
-  "options": [
-    "string"
-  ]
-}
-```
+## Do not use for
 
-## Effects
+- Checking only whether one named allowed value exists; use connector.gh.project.field.option for that narrower yes/no probe.
+- Setting a field value on a project item; use connector.gh.project.issue.field_single_select.set, connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set for the matching field kind rather than this read-only metadata probe.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `project_not_found`
-- `probe_failed`
 
-## Requirements
+- [`connector.gh.project`](project.md): Parent project probe for confirming the project identity before field-specific inspection
+- [`connector.gh.project.field.option`](project-field-option.md): Sibling probe for one candidate selectable value rather than the whole field metadata surface
+- [`connector.gh.project.issue.field_single_select.set`](project-issue-field-single-select-set.md): Action for writing one selectable field value after field inspection confirms the target field
+- [`connector.gh.project.issue.field_number.set`](project-issue-field-number-set.md): Action for writing one numeric field value after field inspection confirms the target field
 
-- None
+## Inspect next
 
-## Example inputs
+- connector.gh.project.field.option
+- connector.gh.project.issue.field_single_select.set
+- connector.gh.project.issue.field_number.set
 
-### `gh.project.field`
+## Exact machine contract
 
-```json
-{
-  "field": "string",
-  "project_id": "string"
-}
-```
+Use `ordo-help operation gh.project.field --json` when you need the exact machine-readable input and result contract for this operation.
 
-## Full JSON reference
+## Canonical Examples
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "field": "string",
-          "project_id": "string"
-        },
-        "reference": "gh.project.field"
-      }
-    ],
-    "failure_modes": [
-      "project_not_found",
-      "probe_failed"
-    ],
-    "inputs": {
-      "field": "string",
-      "project_id": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project.field",
-    "outputs": {
-      "exists": "boolean",
-      "kind": "string",
-      "name": "string",
-      "options": [
-        "string"
-      ]
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'gh.project.field'",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "project.field",
-  "reference": "gh.project.field",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+### gh_project_field_probe_step
+
+Inspect one named GitHub Project field and register its kind and option metadata for later decisions.
+
+```yaml
+      - name: load-status-field
+        uses: gh.project.field
+        with:
+          project_id: inputs.project_id
+          field: "Status"
+        register: status_field
 ```

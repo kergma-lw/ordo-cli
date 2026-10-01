@@ -1,140 +1,52 @@
-# git.integrate.merge_ff_only
+# Git integrate merge-ff-only
 
-Fast-forward merge a Git ref into the current checkout.
+A workflow wants linear-history integration and should fail cleanly rather than synthesize a merge commit for the target ref.
 
-Use this when a workflow needs Git state or Git side effects. In practice: fast-forward merge a Git ref into the current checkout.
+Integrate one target Git ref into the current checkout only if the update can fast-forward, refusing to create a merge commit when histories have diverged.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this specifically to advance the current checkout to one descendant ref, not about copying one commit or rewriting a topic branch range.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the current checkout advances to the target ref without creating a merge commit.
+- When the histories cannot fast-forward, or Git otherwise blocks the update, the action does not report an integration result.
+- Returns merged_ref, head_commit, and branch only after the current checkout advances without a merge commit. A missing ref, non-fast-forward relationship, or block leaves no integration result; use merge when an explicit merge commit is intended.
 
-```json
-{
-  "ref": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `ref`: required; provide the target revision to integrate. Use this only after confirming the current checkout can advance without creating an integration commit.
 
-```json
-{
-  "branch": "string | null",
-  "head_commit": "string",
-  "merged_ref": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Preserving an explicit integration commit even when fast-forward would be possible; use connector.git.integrate.merge for ordinary merge semantics.
+- Branch-range rewrites or single-commit transplants; use connector.git.integrate.rebase_onto or connector.git.integrate.cherry_pick for those rewrite-oriented operations.
 
-- integrate a target ref into the current checkout using fast-forward-only semantics
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `ref_not_found`
-- `non_fast_forward`
-- `merge_blocked`
 
-## Requirements
+- [`connector.git.integrate.merge`](integrate-merge.md): Sibling action for integrating the same target ref through an explicit merge commit instead of fast-forward-only admission
+- [`connector.git.range`](range.md): Compare two endpoints to confirm whether they are already in a fast-forward relationship before this action runs
+- [`connector.git.upstream`](upstream.md): Read current-branch upstream context when the workflow first needs to choose which target ref should fast-forward
+- [`connector.git.integrate.rebase_onto`](integrate-rebase-onto.md): Sibling action for rewriting branch history when linear movement requires replay rather than pure fast-forward integration
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.integrate.merge_ff_only --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_integrate_merge_ff_only_step
 
-### `git.integrate.merge_ff_only`
+Advance the current checkout to one target ref only when the histories already allow a fast-forward update.
 
-```json
-{
-  "ref": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "integrate a target ref into the current checkout using fast-forward-only semantics"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "ref": "string"
-        },
-        "reference": "git.integrate.merge_ff_only"
-      }
-    ],
-    "failure_modes": [
-      "ref_not_found",
-      "non_fast_forward",
-      "merge_blocked"
-    ],
-    "inputs": {
-      "ref": "string"
-    },
-    "invalidates_observations": [
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "integrate.merge_ff_only",
-    "outputs": {
-      "branch": "string | null",
-      "head_commit": "string",
-      "merged_ref": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.integrate.merge_ff_only'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "integrate.merge_ff_only",
-  "reference": "git.integrate.merge_ff_only",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: fast-forward-target-ref
+        if: inputs.strategy == "fast-forward"
+        uses: git.integrate.merge_ff_only
+        with:
+          ref: inputs.target_ref
 ```

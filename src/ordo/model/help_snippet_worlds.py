@@ -52,6 +52,7 @@ DEFAULT_SNIPPET_WORLD = SnippetWorld(
         "issue_number": 42,
         "project_id": "PVT_demo",
         "close_comment": "Ship it",
+        "strategy": "merge",
         "task_key": "task-42",
         "ship": True,
     },
@@ -238,20 +239,6 @@ def _pr_create_world() -> SnippetWorld:
 
 
 _world = _pr_create_world()
-SNIPPET_WORLDS[_world.name] = _world
-
-
-def _sdk_probe_world() -> SnippetWorld:
-    observation = _pr_list_world("exactly-one-open")
-    filters = deepcopy(observation.probes["gh.pr.list"][0].with_)
-    return SnippetWorld(
-        name="gh-sdk-probe-call",
-        summary="Real same-family SDK dispatch and isolated literal inputs; bootstrap and PR-list body are fixtures.",
-        inputs={"filters": filters}, state={}, probes=observation.probes, actions={},
-    )
-
-
-_world = _sdk_probe_world()
 SNIPPET_WORLDS[_world.name] = _world
 
 

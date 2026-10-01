@@ -4,11 +4,57 @@ from __future__ import annotations
 
 from connectors.git.actions._shared import COMMIT_GRAPH_INVALIDATION, current_branch, head_commit, map_nonzero, require_commit
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git integrate rebase_onto',
+ 'goal': 'A workflow needs to move a topic branch onto a new base while preserving only the branch-local commit range '
+         'after one upstream split point.',
+ 'summary': 'Rewrite one non-default Git branch by replaying the commits after one upstream boundary onto a new base '
+            'with rebase --onto semantics.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to move a topic branch onto a new base while preserving only the '
+                          'branch-local commit range after one upstream split point.',
+                          'Use this for branch-range rewriting, not whole-ref integration into the '
+                          'current checkout and not a one-commit transplant.']},
+              {'heading': 'What to provide',
+               'items': ['Provide the branch to rewrite, the upstream boundary after which its commits are selected, '
+                         'and the new base to replay them onto.']},
+              {'heading': 'Result and boundary',
+               'items': ['On success, the branch points to its newly rebased head revision.',
+                         'If replay produces conflicts or Git cannot begin or finish the rebase, the rewrite is blocked '
+                         'rather than reported as complete.']},
+              {'heading': 'Do not use for',
+               'items': ['Integrating a target ref into the current checkout without rewriting branch history; use '
+                         'connector.git.integrate.merge or connector.git.integrate.merge_ff_only for those integration '
+                         'semantics.',
+                          'Rebasing the repository default branch or copying only one selected commit; this operation '
+                         'protects the default branch and is broader than connector.git.integrate.cherry_pick.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.integrate.merge',
+                               'summary': 'Sibling action for integrating by merge instead of rewriting one branch '
+                                          'range onto a new base'},
+                              {'handle': 'connector.git.integrate.cherry_pick',
+                               'summary': 'Sibling action for replaying one chosen commit instead of rebasing an '
+                                          'entire branch-local range'},
+                              {'handle': 'connector.git.range',
+                                'summary': 'Compare base/head relationships before choosing onto '
+                                          'and upstream boundaries'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current checkout branch identity when the workflow first '
+                                          'needs to confirm which branch is being rewritten'}]},
+              {'heading': 'Examples',
+               'items': ['git.integrate.rebase_onto with inputs {"branch": "feature/demo", "onto": "origin/main", '
+                         '"upstream": "main"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.range', 'connector.git.branch', 'connector.git.integrate.cherry_pick']}]})
 
 def info():
     return action(
         name="integrate.rebase_onto",
+        human=git_human(HUMAN, provide="`branch`: required; provide the branch to rewrite. `upstream`: required; provide the upstream boundary. `onto`: required; provide the new base.", result="Checks out (switches to) `branch` before replaying it, then returns branch, onto, and head_commit after replay as the newly rebased head revision. Missing references, protected default branch, conflicts, or blocks do not report a completed rewrite; resolve conflicts before later history actions."),
         inputs={"onto": "string", "upstream": "string", "branch": "string"},
         effects=("rebase a non-default branch range onto a new base using rebase --onto semantics",),
         outputs={"branch": "string", "onto": "string", "head_commit": "string"},

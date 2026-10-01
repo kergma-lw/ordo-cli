@@ -1,0 +1,17 @@
+version: 0
+workflow: inspect-ready-project-items
+inputs:
+  project_id: PVT_DEMO
+  filters:
+  - field: Status
+    value: "Ready"
+let:
+  ready_items: gh.project.items(project_id=inputs.project_id, filters=inputs.filters)
+blocks:
+- guards:
+  - ready_items.count != 0
+- steps:
+  - name: publish-matching-count
+    publish:
+      summary: "Matching project items loaded"
+      count: ready_items.count

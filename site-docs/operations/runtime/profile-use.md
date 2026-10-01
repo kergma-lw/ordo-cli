@@ -1,111 +1,46 @@
-# runtime.profile.use
+# Use declared runtime profile
 
-Switch the runtime execution profile for later work in the current run.
+You are reading or migrating older workflow logic that still invokes runtime.profile.use directly.
 
-Use this for runtime-level compatibility or execution-context work. In practice: switch the runtime execution profile for later work in the current run.
+Legacy runtime action for switching later execution in the current run to another declared profile.
 
-- Namespace: `runtime`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `true`
+## Use when
 
-## Related commands
+- An existing compatibility workflow must switch profiles for later steps before it can be migrated to the workflow-native form.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `profile`: required; provide the name of a profile already declared for this run. This action does not create or discover profiles.
 
-```json
-{
-  "profile": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- Later execution in the current run uses the selected profile and returns it as `profile`.
+- This legacy action changes only later work in the current run. Replace it with the workflow profile-switch form during migration; it does not retroactively change earlier work or a fixed workflow profile.
 
-```json
-{
-  "profile": "string"
-}
-```
+## Do not use for
 
-## Effects
+- New profile-switch authoring; use workflow.step.profile_switch instead of a legacy runtime action call.
+- Declaring a fixed workflow-owned profile binding; use workflow.profile when the subtree should always start under one profile.
 
-- switch runtime profile for later execution in the current run
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `input_error`
-- `execution_error`
 
-## Requirements
+- `ordo-help describe connector.runtime`: Parent runtime connector family
+- `ordo-help describe workflow.step.profile_switch`: Preferred workflow-native step surface that replaces this legacy action
+- `ordo-help describe workflow.profile`: Workflow field for fixed project-local profile binding before guards run
 
-- None
+## Examples
 
-## Example inputs
+- runtime.profile.use with inputs {"profile": "frontend"}
 
-### `runtime.profile.use`
+## Inspect next
 
-```json
-{
-  "profile": "string"
-}
-```
+- workflow.step.profile_switch
+- workflow.profile
+- profile.name
 
-## Full JSON reference
+## Exact machine contract
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [],
-    "prerequisites": []
-  },
-  "document_kind": "operation",
-  "namespace": "runtime",
-  "operation": {
-    "deprecated": true,
-    "effects": [
-      "switch runtime profile for later execution in the current run"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "profile": "string"
-        },
-        "reference": "runtime.profile.use"
-      }
-    ],
-    "failure_modes": [
-      "input_error",
-      "execution_error"
-    ],
-    "inputs": {
-      "profile": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "profile.use",
-    "outputs": {
-      "profile": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [
-      "workflow.step.profile_switch"
-    ],
-    "summary": "Legacy compatibility action for switching runtime execution to another declared profile",
-    "tags": [
-      "runtime",
-      "action"
-    ]
-  },
-  "operation_name": "profile.use",
-  "reference": "runtime.profile.use",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
-```
+Use `ordo-help operation runtime.profile.use --json` when you need the exact machine-readable input and result contract for this operation.

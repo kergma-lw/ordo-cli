@@ -1,112 +1,75 @@
-# git.upstream
+# Git upstream
 
-Read the current branch's exact configured remote, including nested names, and local remote-tracking branch tail, not the source-side branch name.
+A workflow needs to know whether the current branch has a tracked branch before comparing divergence or deciding whether publishing makes sense.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read the current branch's exact configured remote, including nested names, and local remote-tracking branch tail, not the source-side branch name.
+Observe the current branch tracking relationship, including whether one exists and the related remote and branch names.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- A workflow needs to know whether the current branch tracks one upstream before comparing ahead/behind state or deciding whether pushing makes sense.
+- Later logic needs the tracked branch relationship for the current branch rather than a repository-wide inventory.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Reading repository-root or default-branch facts; use connector.git.repo for repository-level context.
+- Comparing current branch divergence against its upstream; use connector.git.range when the workflow needs ahead/behind math after choosing base and head endpoints.
+- Determining destinations, access, or publication safety.
 
-```json
-{}
+## What to provide
+
+- No inputs are required; use the current checkout whose tracked branch relationship matters.
+
+## Result and boundary
+
+- Returns configured, branch, upstream_ref, remote, remote_branch, and repository_root. A detached checkout or branch without tracking is reported with configured=false; unavailable or inconsistent tracking information fails without a guessed result.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.repo`](repo.md): Read repository-level facts before or alongside upstream-tracking inspection
+- [`connector.git.branch`](branch.md): Read current branch identity when the workflow first needs the branch name itself
+- [`connector.git.range`](range.md): Compare ahead/behind and merge-base facts after an upstream target is known
+- [`connector.git.sync.push`](sync-push.md): Push once upstream-tracking context has been confirmed
+
+## Exact machine contract
+
+Use `ordo-help operation git.upstream --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_upstream_probe_step
+
+Inspect the current branch's tracked remote and branch names before deciding whether publication is appropriate.
+
+```yaml
+      - name: inspect-upstream
+        uses: git.upstream
+        register: upstream_info
 ```
+### git_repo_upstream_flow
 
-## Outputs
+Publish repository context and the current branch's tracked remote and branch relationship for a later decision.
 
-```json
-{
-  "branch": "string | null",
-  "configured": "boolean",
-  "remote": "string | null",
-  "remote_branch": "string | null",
-  "repository_root": "string",
-  "upstream_ref": "string | null"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `git.upstream`
-
-```json
-{}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.upstream"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "upstream",
-    "outputs": {
-      "branch": "string | null",
-      "configured": "boolean",
-      "remote": "string | null",
-      "remote_branch": "string | null",
-      "repository_root": "string",
-      "upstream_ref": "string | null"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "upstream",
-  "reference": "git.upstream",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: inspect-git-repo-upstream
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-repo
+        uses: git.repo
+        register: repo_info
+      - name: inspect-upstream
+        uses: git.upstream
+        register: upstream_info
+      - name: publish-summary
+        publish:
+          repo_root: step.repo_info.outputs.root
+          upstream_configured: step.upstream_info.outputs.configured
+          upstream_ref: step.upstream_info.outputs.upstream_ref
+          remote: step.upstream_info.outputs.remote
+          remote_branch: step.upstream_info.outputs.remote_branch
+          summary: "Git repo and upstream workflow prepared"
 ```

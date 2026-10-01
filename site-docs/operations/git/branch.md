@@ -1,108 +1,85 @@
-# git.branch
+# Git branch
 
-Read the current Git branch.
+A workflow needs current checkout context before deciding whether branch-specific actions or branch guards are appropriate.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read the current Git branch.
+Read the currently checked out local Git branch and report whether the repository is on a named branch or in detached HEAD state.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic only needs the current branch name, ref, or detached flag rather than a full branch inventory.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Listing many local and remote branches; use connector.git.branches for the inventory operation.
+- Creating, deleting, or switching branches; use the narrower connector.git.branch.create, connector.git.branch.delete, or connector.git.branch.switch actions for mutation.
 
-```json
-{}
+## What to provide
+
+- No inputs are required; run from the checkout whose current branch later steps depend on.
+
+## Result and boundary
+
+- Returns value, ref, detached, and repository_root. In detached state value and ref are null rather than a branch name; unreadable repository state has no successful result.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.branches`](branches.md): List all branches instead of only the current checkout context
+- [`connector.git.branch.switch`](branch-switch.md): Change the current checkout after confirming the current branch context
+- [`connector.git.repo`](repo.md): Read repository-level facts such as root path and default branch
+- [`connector.git.state`](state.md): Read broader worktree state when branch name alone is not enough
+
+## Exact machine contract
+
+Use `ordo-help operation git.branch --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_branch_probe_step
+
+Read the current checkout branch before making a branch-specific decision or publishing branch context.
+
+```yaml
+      - name: read-current-branch
+        uses: git.branch
+        register: current_branch
 ```
+### git_branch_management_flow
 
-## Outputs
+Read the current branch and branch inventory, create a feature branch, switch to it, then clean up one stale local branch.
 
-```json
-{
-  "detached": "boolean",
-  "ref": "string | null",
-  "repository_root": "string",
-  "value": "string | null"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `git.branch`
-
-```json
-{}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.branch"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "branch",
-    "outputs": {
-      "detached": "boolean",
-      "ref": "string | null",
-      "repository_root": "string",
-      "value": "string | null"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'git.branch'",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "branch",
-  "reference": "git.branch",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: manage-git-branches
+inputs:
+  branch_name: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: read-current-branch
+        uses: git.branch
+        register: current_branch
+      - name: list-branches
+        uses: git.branches
+        register: branches
+      - name: create-feature-branch
+        uses: git.branch.create
+        with:
+          branch: inputs.branch_name
+          start_point: "HEAD"
+      - name: switch-to-feature-branch
+        uses: git.branch.switch
+        with:
+          branch: inputs.branch_name
+      - name: delete-stale-branch
+        uses: git.branch.delete
+        with:
+          branch: "stale/demo"
+      - name: publish-summary
+        publish:
+          current_branch: step.current_branch.outputs.value
+          inventory_count: step.branches.outputs.count
+          summary: "Git branch workflow prepared"
 ```

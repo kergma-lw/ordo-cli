@@ -1,134 +1,50 @@
-# git.tag
+# Git tag
 
-Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.
+A workflow needs to confirm one specific tag such as v1.2.3 before branching on release presence or publishing tag metadata.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.
+Check one named Git tag and report whether it exists, which ref it occupies, and whether the stored object is an annotated tag object or a lightweight commit ref.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs the single-tag existence result plus the raw tag ref and object identity, not a broader tag inventory.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Listing or pattern-matching many tags; use connector.git.tags for the inventory.
+- Inferring the newest tag by version ordering across many candidates; use connector.git.tags and its latest output for that collection-oriented question.
 
-```json
-{
-  "name": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `name`: required; provide the exact tag to inspect in the current repository.
 
-```json
-{
-  "annotated": "boolean | null",
-  "exists": "boolean",
-  "name": "string",
-  "oid": "string | null",
-  "ref": "string",
-  "repository_root": "string"
-}
-```
+## Result and boundary
 
-## Effects
+- Returns name, ref, exists, oid, annotated, and repository_root. A missing tag succeeds with exists=false and unknown object facts; an invalid name or unreadable repository has no partial result.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `probe_failed`
 
-## Requirements
+- [`connector.git.tags`](tags.md): List tags instead of inspecting one named tag lookup
+- [`connector.git.ref`](ref.md): Check refs when the workflow cares about refs broadly rather than Git tag semantics specifically
+- [`connector.git.commits`](commits.md): Read commit history when one tag lookup alone is not enough context
+- [`connector.git.range`](range.md): Compare a revision range when the question is broader than one named tag
 
-- None
+## Exact machine contract
 
-## Example inputs
+Use `ordo-help operation git.tag --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `git.tag`
+## Canonical Examples
 
-```json
-{
-  "name": "v1.2.3"
-}
-```
+### git_tag_probe_step
 
-### `git.tag`
+Inspect one exact Git tag before branching on its existence or publishing its ref and object identity.
 
-```json
-{
-  "name": "release-2026-07"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "name": "v1.2.3"
-        },
-        "reference": "git.tag"
-      },
-      {
-        "inputs": {
-          "name": "release-2026-07"
-        },
-        "reference": "git.tag"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {
-      "name": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "tag",
-    "outputs": {
-      "annotated": "boolean | null",
-      "exists": "boolean",
-      "name": "string",
-      "oid": "string | null",
-      "ref": "string",
-      "repository_root": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "tag",
-  "reference": "git.tag",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: inspect-exact-tag
+        uses: git.tag
+        with:
+          name: inputs.tag_name
+        register: exact_tag
 ```

@@ -1,64 +1,57 @@
-# fs.file
+# Filesystem file
 
-Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.
+You need one file's content and metadata inside workflow logic, guards, or later adapters.
 
-Use this when a workflow needs this exact operation surface. In practice: read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.
+Observe UTF-8 content and metadata from one regular file without publishing its content by default.
 
-- Namespace: `fs`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- `path`: required; supply the regular-file path explicitly. The result preserves the path text you supplied rather than replacing it with a resolved filesystem location. Publish basename, size, or line_count rather than full content by default; later workflow steps and adapters can use the returned content.
+- The final path entry must identify a regular file with readable UTF-8 content. If that final entry is a symlink, the probe rejects it instead of reading its target. Missing, unreadable, non-file, and unsupported-content cases stop the probe without publishing partial content.
+- The observation protects the final file entry while it is opened, but it is not an atomic snapshot of a path that may change concurrently. Symlinks in parent directories may still be traversed.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `path`: required; provide one non-empty path to a readable UTF-8 regular file.
 
-```json
-{
-  "path": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- Later steps can use `path`, `basename`, `filename_without_extension`, `extension`, `exists`, `kind`, `content`, `size`, `owner`, `group`, `permissions`, `modified_at`, and `line_count` from the same opened file.
+- Missing, unreadable, non-file, or non-UTF-8 targets fail without partial content. A final symlink is rejected, while a symlink in a parent directory may be traversed. This is not an atomic snapshot: the path can change concurrently, and hardlinks may still refer to the same file.
 
-```json
-{
-  "basename": "string",
-  "content": "string",
-  "exists": "boolean",
-  "extension": "string",
-  "filename_without_extension": "string",
-  "group": "string",
-  "kind": "string",
-  "line_count": "integer",
-  "modified_at": "string",
-  "owner": "string",
-  "path": "string",
-  "permissions": "string",
-  "size": "integer"
-}
-```
-
-## Authoring contract
-
-Observe UTF-8 content and metadata from the same opened regular file. The initial no-follow stat preserves diagnostics; nonzero O_NOFOLLOW and O_NONBLOCK are required before opening, then fstat verifies a regular file before reading that descriptor.
-
-- You need one file's content and metadata inside workflow logic, guards, or later adapters.
-- Supply a required path explicitly. Relative and absolute textual Path projections are retained, not resolved to the opened object's identity. Publish basename, size, or line_count rather than full content by default; later adapters can consume the registered content.
-- Initial missing paths return path_not_found; initial final symlinks or nonregular entries and opened FIFO/directory objects return not_a_file. Missing secure flags return content_unavailable with probe.fs_file.secure_open_unavailable and no fallback. Open errors including ELOOP return content_unavailable without guessing kind; fstat failure returns probe_failed with probe.fs_file.stat_failed.
-
-### Boundaries
+## Do not use for
 
 - Directory inspection or generic filesystem traversal; this probe requires one regular file path.
 - Binary or non-UTF-8 content when canonical text content cannot be produced reliably.
-- Atomic snapshots under concurrent writes, workspace confinement, device-open sandboxing, or same-UID isolation. Parent symlinks and hardlinks remain allowed; POSIX race tests do not establish Windows support.
+- Atomic snapshots, workspace confinement, or general filesystem security isolation. The final entry cannot be a symlink, but parent-directory symlinks and hardlinks remain allowed.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- `ordo-help describe connector.fs`: Parent filesystem connector family
+- [`operations`](../../topics/operations.md): Catalog of published operations to check for a narrower supported surface
+- `ordo-help describe workflow.local_expression.adapter.key_value`: One downstream adapter family that can project structured values from fs.file content
+
+## Examples
+
+- fs.file with inputs {"path": "/workspace/app.env"}
+
+## Inspect next
+
+- workflow.local_expression.adapter.key_value
+- operations
+
+## Exact machine contract
+
+Use `ordo-help operation fs.file --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### fs_file_observation_steps
 
-Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines. Runner verification validates schema/fixture form only, not file access or race safety.
+Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines.
 
 ```yaml
   - name: inspect-file
@@ -73,10 +66,9 @@ Supply file_path, register the fs.file probe, and publish basename, byte size, l
       line_count: step.inspected.outputs.line_count
       character_count: step.inspected.outputs.content | length
 ```
-
 ### fs_file_observation_workflow
 
-A complete observer workflow requires file_path with no real-file default and publishes a summary rather than full content. Content and metadata come from one validated descriptor, not an atomic snapshot. Runner verification checks schema/fixture form without opening files; POSIX race tests are separate evidence.
+A complete observer workflow requires file_path and publishes a summary rather than full content. Content and metadata come from one observed file, not an atomic snapshot.
 
 ```yaml
 version: 0
@@ -97,96 +89,4 @@ blocks:
       size: step.inspected.outputs.size
       line_count: step.inspected.outputs.line_count
       character_count: step.inspected.outputs.content | length
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `path_not_found`
-- `not_a_file`
-- `content_unavailable`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `fs.file`
-
-```json
-{
-  "path": "/workspace/app.env"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [],
-    "prerequisites": []
-  },
-  "document_kind": "operation",
-  "namespace": "fs",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "path": "/workspace/app.env"
-        },
-        "reference": "fs.file"
-      }
-    ],
-    "failure_modes": [
-      "path_not_found",
-      "not_a_file",
-      "content_unavailable",
-      "probe_failed"
-    ],
-    "inputs": {
-      "path": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "file",
-    "outputs": {
-      "basename": "string",
-      "content": "string",
-      "exists": "boolean",
-      "extension": "string",
-      "filename_without_extension": "string",
-      "group": "string",
-      "kind": "string",
-      "line_count": "integer",
-      "modified_at": "string",
-      "owner": "string",
-      "path": "string",
-      "permissions": "string",
-      "size": "integer"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.",
-    "tags": [
-      "fs",
-      "probe"
-    ]
-  },
-  "operation_name": "file",
-  "reference": "fs.file",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

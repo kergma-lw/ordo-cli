@@ -3,11 +3,47 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git stash',
+ 'goal': 'A workflow needs to know whether stash entries exist before switching branches, cleaning a worktree, or '
+         'deciding whether hidden local work might need recovery.',
+  'summary': 'List current Git stash entries, their selectors, and the '
+            'repository root they belong to.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to know whether stash entries exist before switching branches, cleaning a '
+                         'worktree, or deciding whether hidden local work might need recovery.',
+                         'Later logic needs the explicit stash entry list itself rather than only one coarse '
+                         'repository-state summary flag.']},
+              {'heading': 'Do not use for',
+               'items': ['Reading only one combined repository snapshot with branch and worktree flags; use '
+                         'connector.git.state when stash count is just one part of a broader readiness summary.',
+                         'Inspecting unstaged or staged path details; use connector.git.worktree when the workflow is '
+                         'really about dirty files rather than saved stash entries.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.state',
+                                'summary': 'Read one broader branch-plus-worktree-plus-stash-count summary '
+                                          'instead of the explicit stash entry list'},
+                              {'handle': 'connector.git.worktree',
+                                'summary': 'Read current dirty-path details when the workflow needs live '
+                                          'worktree changes rather than saved stash entries'},
+                              {'handle': 'connector.git.branch.switch',
+                               'summary': 'Sibling action often guarded by stash awareness when the workflow wants to '
+                                          'avoid losing hidden local work during checkout changes'},
+                              {'handle': 'connector.git.repo',
+                                'summary': 'Read repository-level context when the workflow first needs '
+                                          'root and default-branch facts rather than stash inventory'}]},
+              {'heading': 'Examples', 'items': ['git.stash with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.state', 'connector.git.worktree', 'connector.git.branch.switch']}]})
 
 def info():
     return probe(
         name="stash",
+        human=git_human(HUMAN, provide="No inputs are required; use the repository whose saved local work the workflow must assess.", result="Returns count, ordered items with selector and summary, and repository_root. An unavailable repository or unreadable stash inventory produces no partial result; entries can change after this observation."),
         outputs={
             "count": "integer",
             "items": [

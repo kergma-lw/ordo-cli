@@ -7,8 +7,9 @@ blocks:
 - guards:
   - git.worktree.clean
 - steps:
-  - name: inspect-issue
-    uses: gh.issue
-    with:
-      repository: inputs.repository
-      issue_number: inputs.issue_number
+   - name: inspect-issue
+     uses: gh.issue
+     with:
+       repository: inputs.repository
+       issue_number: inputs.issue_number
+     register: issue

@@ -1,0 +1,15 @@
+version: 0
+workflow: guard-expression-blocked
+inputs:
+  repository: kergma-lw/ordo-cli
+  issue_number: 1
+  command: echo proceed
+blocks:
+- guards:
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state
+    not in ["DONE", "CLOSED"]
+- steps:
+  - name: verify-command
+    uses: shell.command
+    with:
+      command: inputs.command

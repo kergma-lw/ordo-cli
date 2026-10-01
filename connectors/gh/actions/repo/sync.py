@@ -5,11 +5,48 @@ from __future__ import annotations
 from connectors.gh._external import fail_github_command
 from connectors.gh._repository import REPOSITORY_INPUTS, fetch_repository_payload, resolve_repository_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub repo sync',
+ 'goal': 'connector_contexts.gh.repository already names the normal fork target and the workflow needs to keep its '
+         'canonical default branch current with the parent repository.',
+ 'summary': "Sync one GitHub fork repository's default branch from its parent repository and return the synced branch "
+            'together with the resolved upstream repository name. Prefer connector_contexts.gh.repository as the '
+            'normal repository target and use an explicit repository argument only as a one-off override; review warns '
+            'when it differs from the current gh context repository.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal fork target and the workflow needs '
+                         'to keep its canonical default branch current with the parent repository.',
+                         'The authored intent is the GitHub-native fork sync operation itself, not a local git '
+                         'fetch/merge sequence or a repository-settings mutation helper.']},
+              {'heading': 'Do not use for',
+               'items': ['Inspecting whether the repository is a fork or what its default branch is; use '
+                         'connector.gh.repo for that read-only fact surface first or separately.',
+                         'Local checkout synchronization or worktree mutation; use connector.git.* when the real '
+                         'target is the local repository rather than GitHub-hosted fork state.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.repo',
+                               'summary': 'Parent repository probe for fork identity and default-branch facts before '
+                                          'or after sync'},
+                              {'handle': 'connector.git.sync.fetch',
+                               'summary': 'Sibling local Git action for fetching refs into a local clone rather than '
+                                          'syncing a hosted GitHub fork'},
+                              {'handle': 'connector.git.repo',
+                               'summary': 'Sibling local Git probe when later workflow logic needs local repository '
+                                          'state after remote fork sync'},
+                              {'handle': 'connector.gh.pr',
+                               'summary': 'Sibling GitHub probe for PR-level follow-up work once repository sync is '
+                                          'complete'}]},
+              {'heading': 'Examples', 'items': ['gh.repo.sync with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.repo', 'connector.git.sync.fetch', 'connector.git.repo']}]})
 
 def info():
     return action(
         name="repo.sync",
+        human=HUMAN,
         summary="Sync one GitHub fork repository default branch from its parent repository.",
         inputs=REPOSITORY_INPUTS,
         effects=("sync one fork repository default branch from its parent repository",),

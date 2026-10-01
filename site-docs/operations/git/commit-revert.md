@@ -1,142 +1,52 @@
-# git.commit.revert
+# Git commit revert
 
-Create a Git commit that reverts another commit.
+A workflow needs to undo one existing commit through an explicit compensating commit instead of rewriting shared history.
 
-Use this when a workflow needs Git state or Git side effects. In practice: create a Git commit that reverts another commit.
+Create one new Git commit that reverts one target commit while preserving history, and return both the reverted commit id and the new revert commit id.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later steps need the new revert commit id and the resolved target commit id for publication or follow-up review.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, history gains one new commit that reverses the selected commit while retaining the original commit in history.
+- Conflicts, unsupported merge commits, or other Git blocks do not produce a completed revert result.
+- Returns reverted_commit, revert_commit, and branch. A missing target, merge commit, conflict, or other block does not produce a completed revert result; resolve any conflict before another history action.
 
-```json
-{
-  "commit": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `commit`: required; identify the non-merge commit to undo. Confirm that reverting this one commit is the intended history change before invoking the action.
 
-```json
-{
-  "branch": "string | null",
-  "revert_commit": "string",
-  "reverted_commit": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Rewriting the current HEAD commit; use connector.git.commit.amend when the real intent is an amend.
+- Creating a normal new commit from currently staged work; use connector.git.commit.create for standard commit creation.
 
-- create a new commit that reverts a target commit
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `commit_not_found`
-- `merge_commit_not_supported`
-- `revert_conflict`
-- `revert_blocked`
 
-## Requirements
+- [`connector.git.commit.create`](commit-create.md): Sibling action for recording staged work instead of undoing an older commit
+- [`connector.git.commit.amend`](commit-amend.md): Sibling action for rewriting HEAD instead of preserving history with a revert commit
+- [`connector.git.commits`](commits.md): Read recent commit texts before choosing one to revert or after recording the revert
+- [`connector.git.ref`](ref.md): Resolve an explicit ref when the workflow needs a narrower commit-ref read path
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.commit.revert --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_commit_revert_step
 
-### `git.commit.revert`
+Create a compensating revert commit for one target commit while preserving visible history.
 
-```json
-{
-  "commit": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "create a new commit that reverts a target commit"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "commit": "string"
-        },
-        "reference": "git.commit.revert"
-      }
-    ],
-    "failure_modes": [
-      "commit_not_found",
-      "merge_commit_not_supported",
-      "revert_conflict",
-      "revert_blocked"
-    ],
-    "inputs": {
-      "commit": "string"
-    },
-    "invalidates_observations": [
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "commit.revert",
-    "outputs": {
-      "branch": "string | null",
-      "revert_commit": "string",
-      "reverted_commit": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.commit.revert'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "commit.revert",
-  "reference": "git.commit.revert",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: revert-target-commit
+        if: inputs.operation == "revert"
+        uses: git.commit.revert
+        with:
+          commit: inputs.target_commit
 ```

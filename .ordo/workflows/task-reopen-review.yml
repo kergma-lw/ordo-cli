@@ -1,0 +1,62 @@
+version: 0
+workflow: task-reopen-review
+inputs:
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
+  reason:
+    description: Concise English reason for invalidating the review.
+state_needs:
+  common_state: {}
+let:
+  stored_issue_number: state.common_state[inputs.repository].issue_number
+  stored_branch: state.common_state[inputs.repository].branch
+  issue: gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number,
+    project_id=inputs.project_id)
+blocks:
+- guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
+  - inputs.reason | is_string
+  - inputs.reason | trim | ne("")
+  - stored_issue_number | is_integer
+  - stored_branch | is_string
+  - git.repo.exists
+  - git.branch.value == stored_branch
+  - git.branch.value != "main"
+  - issue.state == "OPEN"
+  - project_issue.exists
+  - project_issue.type == "Task" or project_issue.type == "Bug"
+  - project_issue.status == "In review"
+  - gh.project.field(project_id=inputs.project_id, field="Status").exists
+  - gh.project.field.option(project_id=inputs.project_id, field="Status", option="In progress").exists
+- steps:
+  - name: Invalidate review status
+    uses: gh.project.issue.field_single_select.set
+    register: progress_update
+    with:
+      repository: inputs.repository
+      issue_number: stored_issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "In progress"
+  - name: Record review invalidation
+    uses: gh.issue.comment.add
+    with:
+      repository: inputs.repository
+      issue_number: stored_issue_number
+      body:
+        format: "Review reopened for follow-up work: {}"
+        args:
+        - inputs.reason
+  - name: Publish reopened task
+    publish:
+      summary: "Task review invalidated and returned to In progress"
+      issue_ref: step.progress_update.outputs.issue_ref
+      issue_number: stored_issue_number
+      branch: stored_branch
+      status: "In progress"

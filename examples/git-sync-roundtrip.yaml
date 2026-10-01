@@ -27,5 +27,5 @@ blocks:
       - name: publish-summary
         publish:
           upstream_ref: step.upstream_info.outputs.upstream_ref
-          ahead: step.branch_range.outputs.ahead
+          ahead: step.branch_range.outputs.ahead_count
           summary: "Git sync workflow prepared"

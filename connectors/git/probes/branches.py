@@ -3,11 +3,45 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git branches',
+ 'goal': 'A workflow needs one branch inventory scan before choosing, creating, deleting, or publishing branch-related '
+         'state.',
+  'summary': 'List local and remote Git branches together with '
+            'the current branch marker.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs one branch inventory scan before choosing, creating, deleting, or '
+                         'publishing branch-related state.',
+                         'Later logic needs to compare the current branch against the available local or remote branch '
+                         'set, not just read one current branch name.']},
+              {'heading': 'Do not use for',
+               'items': ['Reading only the current checkout context; use connector.git.branch for the cheaper '
+                          'current-branch lookup.',
+                         'Mutating branch state; use connector.git.branch.create, connector.git.branch.delete, or '
+                         'connector.git.branch.switch for those actions.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.branch',
+                                'summary': 'Read only the current checkout branch instead of the full '
+                                          'inventory'},
+                              {'handle': 'connector.git.branch.create',
+                               'summary': 'Sibling action for adding one new local branch after inventory review'},
+                              {'handle': 'connector.git.branch.delete',
+                               'summary': 'Sibling action for removing one local branch after inventory review'},
+                              {'handle': 'connector.git.ref',
+                                'summary': 'Check one explicit ref when a full inventory is broader '
+                                          'than needed'}]},
+              {'heading': 'Examples', 'items': ['git.branches with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.branch', 'connector.git.branch.create', 'connector.git.branch.delete']}]})
 
 def info():
     return probe(
         name="branches",
+        human=git_human(HUMAN, provide="No inputs are required; run from the repository whose branch choices the workflow needs.", result="Returns count, current, items with name, ref, kind, and current marker, plus repository_root. The inventory is a point-in-time observation and has no partial result when it is unreadable."),
         outputs={
             "count": "integer",
             "current": "string | null",
@@ -132,4 +166,3 @@ def _classify_ref(ref: str) -> str | None:
     if ref.startswith("refs/remotes/"):
         return "remote"
     return None
-

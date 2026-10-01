@@ -4,11 +4,42 @@ from __future__ import annotations
 
 from connectors.compose._shared import compose_command, map_remove_failure, observe_service
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'Compose remove',
+ 'goal': 'You need cleanup of one stopped service instance after it is no longer needed.',
+ 'summary': 'Remove one stopped materialized Compose service instance.',
+ 'sections': [{'heading': 'Use when',
+                'items': ['You need cleanup of one stopped service instance after it is no longer needed.',
+                          'Provide one non-empty declared service name. This action has no project-wide form.']},
+               {'heading': 'What to provide',
+                'items': ['`service`: required; provide one non-empty declared service name. This action has no project-wide form.']},
+               {'heading': 'Result and boundary',
+                'items': ['Later steps can use `target_kind`, `target`, `state`, and `changed`. Success reports `state=absent`, including an already absent service with `changed=false`; a running, starting, or degraded service is rejected without an implicit stop.']},
+               {'heading': 'Do not use for',
+               'items': ['Stopping a still-running target; use connector.compose.stop first when runtime is still '
+                         'active.',
+                          'Whole-project lifecycle changes; use connector.compose.start or connector.compose.stop when '
+                          'the intent is project/service runtime state rather than removal.',
+                          'Assuming removal stops a service. A running, starting, or degraded service is rejected without '
+                          'an implicit stop; success reports state absent, including an already absent service with '
+                          'changed false.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.compose', 'summary': 'Parent Compose connector family'},
+                              {'handle': 'connector.compose.service',
+                               'summary': 'Service-level observation that can confirm stopped state before removal'},
+                              {'handle': 'connector.compose.stop',
+                               'summary': 'Sibling lifecycle action often needed before removal'}]},
+              {'heading': 'Examples', 'items': ['compose.remove with inputs {"service": "api"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.compose.stop', 'connector.compose.service', 'operations']}]})
 
 def info():
     return action(
         name="remove",
+        human=HUMAN,
         summary="Remove one stopped materialized Compose service instance.",
         inputs={"service": "string"},
         effects=("remove the materialized runtime instance for one Compose service",),

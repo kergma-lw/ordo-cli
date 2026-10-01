@@ -8,11 +8,53 @@ from connectors.gh.actions._shared import PROJECT_ISSUE_INVALIDATION
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub project issue add',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs to ensure '
+         'one issue there becomes a project item.',
+ 'summary': 'Add one GitHub issue to one GitHub Project and return the project item id, while staying idempotent when '
+            'the issue is already attached. Prefer connector_contexts.gh.repository as the normal repository target '
+            'and use an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'needs to ensure one issue there becomes a project item.',
+                         'A workflow has one concrete issue and one target project and needs to ensure that the issue '
+                         'becomes a project item before later project-field updates.',
+                         'The workflow wants one typed membership-creation result instead of shelling out to ad hoc gh '
+                         'project mutations.']},
+              {'heading': 'Do not use for',
+               'items': ['Checking membership without changing anything; use connector.gh.project.issue when the real '
+                         'question is whether the issue is already in the project.',
+                         'Updating Status, Estimate, Iteration, or another project-backed field after membership '
+                          'exists; use connector.gh.project.issue.field_single_select.set, '
+                          'connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set '
+                          'for those follow-up mutations.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.project.issue',
+                               'summary': 'Sibling probe for membership inspection before or after this action'},
+                              {'handle': 'connector.gh.project.issue.field_single_select.set',
+                               'summary': 'Follow-up action for setting one selectable project field after membership '
+                                          'is ensured'},
+                              {'handle': 'connector.gh.project.issue.field_number.set',
+                               'summary': 'Follow-up action for setting one numeric project field after membership is '
+                                          'ensured'},
+                              {'handle': 'connector.gh.project.items',
+                               'summary': 'Project-wide collection probe when the workflow needs many project items '
+                                          'rather than attaching one issue'}]},
+              {'heading': 'Examples',
+               'items': ['gh.project.issue.add with inputs {"issue_number": 42, "project_id": "PVT_kwDOExample"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.project.issue',
+                         'connector.gh.project.issue.field_single_select.set',
+                         'connector.gh.project.issue.field_number.set']}]})
 
 def info():
     return action(
         name="project.issue.add",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string"},
         effects=("add GitHub issue to project",),
         outputs={"issue_ref": "string", "project_id": "string", "item_id": "string", "added": "boolean"},

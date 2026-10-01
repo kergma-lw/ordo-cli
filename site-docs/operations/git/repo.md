@@ -1,118 +1,48 @@
-# git.repo
+# Git repo
 
-Read Git repository metadata.
+A workflow first needs to confirm repository-level context such as root path, bare status, or default branch before making narrower branch or sync decisions.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read Git repository metadata.
+Read the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, and default-branch facts for the repository discovered at the current root.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs stable repository facts without yet asking about one specific ref, one branch inventory, or one upstream relationship.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Reading the current branch's upstream-tracking relationship; use connector.git.upstream for that branch-specific tracking relationship.
+- Inspecting branch inventory or current checkout branch identity; use connector.git.branches or connector.git.branch when the workflow is really about branch-level context.
 
-```json
-{}
-```
+## What to provide
 
-## Outputs
+- No inputs are required; run from the repository whose local context later steps will use.
 
-```json
-{
-  "bare": "boolean",
-  "common_dir": "string",
-  "default_branch": "string | null",
-  "exists": "boolean",
-  "git_dir": "string",
-  "head_ref": "string | null",
-  "inside_work_tree": "boolean",
-  "root": "string",
-  "worktree_path": "string | null"
-}
-```
+## Result and boundary
 
-## Effects
+- Returns exists, root, git_dir, inside_work_tree, bare, head_ref, worktree_path, common_dir, and default_branch. A detached or unborn checkout can leave optional facts unknown; repository context can change after observation.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `probe_failed`
 
-## Requirements
+- [`connector.git.upstream`](upstream.md): Read current-branch upstream tracking after repository context is known
+- [`connector.git.branch`](branch.md): Read current checkout branch identity rather than repository-level facts
+- [`connector.git.worktree`](worktree.md): Read broader worktree cleanliness and file-change context
+- [`connector.git.ref`](ref.md): Check one exact ref instead of repository-wide context
 
-- None
+## Exact machine contract
 
-## Example inputs
+Use `ordo-help operation git.repo --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `git.repo`
+## Canonical Examples
 
-```json
-{}
-```
+### git_repo_probe_step
 
-## Full JSON reference
+Inspect repository-level Git context before making narrower branch, upstream, or worktree decisions.
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.repo"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "repo",
-    "outputs": {
-      "bare": "boolean",
-      "common_dir": "string",
-      "default_branch": "string | null",
-      "exists": "boolean",
-      "git_dir": "string",
-      "head_ref": "string | null",
-      "inside_work_tree": "boolean",
-      "root": "string",
-      "worktree_path": "string | null"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'git.repo'",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "repo",
-  "reference": "git.repo",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: inspect-repo
+        uses: git.repo
+        register: repo_info
 ```

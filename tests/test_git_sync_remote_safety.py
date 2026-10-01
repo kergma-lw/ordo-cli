@@ -122,6 +122,20 @@ class GitSyncRemoteSafetyTest(unittest.TestCase):
             ["git", "remote"], ["git", "push", "origin", "main"],
         ])
 
+    def test_omitted_remote_requires_the_requested_branch_to_match_current_upstream(self):
+        ctx = self.context(branch="topic", remote=None)
+        ctx.call.return_value = ok(outputs={"configured": True, "branch": "main", "remote": "origin"})
+
+        result = push.run(ctx)
+        self.assertIsInstance(result, OperationOutcome)
+        self.assertEqual(result.status, "upstream_remote_missing")
+        self.assertEqual(result.diagnostics[0].code, "action.git.upstream_remote_missing")
+        self.assertEqual(result.raw, {"upstream": {}})
+        ctx.command.assert_called_once_with(
+            ["git", "show-ref", "--verify", "--quiet", "refs/heads/topic"],
+            failures={"os_error": "action_failed", "nonzero": "branch_not_found"},
+        )
+
     def test_omitted_remote_fallback_must_still_be_configured(self):
         ctx = self.context()
         ctx.input.side_effect = ["main", MappedOutcomeError(fail(code="input_error"))]

@@ -6,11 +6,51 @@ from connectors.gh.actions._shared import PROJECT_ISSUE_INVALIDATION
 from connectors.gh.actions.project.issue._field_common import build_iteration_mutation, named_id, resolve_issue_and_field, run_field_update
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS
 from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, action, fail, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub project issue field_iteration set',
+  'goal': 'Move one issue that is already in a GitHub Project into a named iteration.',
+  'summary': "Set one iteration-valued GitHub Project field on one issue's Project item by field name and iteration title.",
+  'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to move one project-backed issue into a named iteration such as Sprint 12.']},
+              {'heading': 'What to provide',
+                'items': ['Provide the issue number, Project ID, visible iteration field name, and iteration title.',
+                          'Choose the project by owner and project number, retrieve its stable Project ID with the GitHub project view command, then confirm the project title with connector.gh.project. Use connector.gh.project.field to confirm the named iteration field and its available iterations before changing an issue.',
+                         'Use the workflow\'s GitHub repository context normally. Supply repository only when the issue belongs to a different repository.']},
+              {'heading': 'Result and boundary',
+               'items': ['The result identifies the issue and its Project item, and reports whether the requested iteration changed. changed=false means the item was already in that iteration.',
+                         'The issue must already be in the Project and the named iteration must exist. Observe again before a decision that depends on the current iteration because another actor can change it.']},
+              {'heading': 'Do not use for',
+               'items': ['Attaching the issue to the project in the first place; use connector.gh.project.issue.add '
+                         'when membership may still be missing.',
+                         'Updating numeric or single-select fields; use connector.gh.project.issue.field_number.set or '
+                         'connector.gh.project.issue.field_single_select.set for those different field kinds.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.project.issue',
+                               'summary': 'Parent issue-membership probe for reading current project field values '
+                                          'before or after mutation'},
+                              {'handle': 'connector.gh.project.field',
+                               'summary': 'Sibling probe for confirming the project field exists and is '
+                                          'iteration-backed before mutation'},
+                              {'handle': 'connector.gh.project.issue.add',
+                               'summary': 'Sibling action for ensuring the issue is a project item before setting '
+                                          'iteration'},
+                              {'handle': 'connector.gh.project.issue.field_single_select.set',
+                               'summary': 'Sibling setter for selectable fields rather than iteration-backed fields'}]},
+              {'heading': 'Examples',
+               'items': ['gh.project.issue.field_iteration.set with inputs {"field": "Iteration", "issue_number": 42, '
+                         '"iteration": "Sprint 12", "project_id": "PVT_kwDOExample"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.project.issue',
+                         'connector.gh.project.field',
+                         'connector.gh.project.issue.add']}]})
 
 def info():
     return action(
         name="project.issue.field_iteration.set",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string", "field": "string", "iteration": "string"},
         effects=("set one GitHub project issue iteration field by field name",),
         outputs={"issue_ref": "string", "project_id": "string", "item_id": "string", "field": "string", "iteration": "string", "changed": "boolean"},

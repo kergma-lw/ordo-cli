@@ -85,9 +85,7 @@ The first spike should prefer plain, explicit names over abstraction-heavy helpe
 
 Values in the mapping are already resolved by the caller. They are passed as values, without reevaluating workflow expressions or templates. Missing `inputs` and `inputs=None` retain the legacy no-input dependency behavior. A probe cannot invoke an action as a hidden mutation; this extension does not enable action-to-action composition.
 
-For example, `gh.pr.create` delegates its mandatory complete open observation to `gh.pr.list` with resolved repository, head, source owner, base, and `state: open`. The connector consumes the probe outcome explicitly; a failed observation cannot become permission to mutate. This API is published through `connector.authoring` and the feature/discovery surfaces with a verified connector-author example.
-
-The canonical `sdk_same_family_probe_inputs` example is a `python_fragment` with a `python` source field, verified by `sdk_probe_fragment` insertion in the `gh-sdk-probe-call` world. Its bounded runner executes the real family adapter and SDK context with fixture family/bootstrap/probe bodies; it does not replace `ctx.call`. This establishes dependency dispatch, isolated resolved inputs, literal expression-looking values, and failure propagation, not live GitHub API behavior or sandbox isolation. See [snippet worlds](../help/snippet-worlds.md) for the bounded verification contract.
+For example, `gh.pr.create` delegates its mandatory complete open observation to `gh.pr.list` with resolved repository, head, source owner, base, and `state: open`. The connector consumes the probe outcome explicitly; a failed observation cannot become permission to mutate. `connector.authoring` provides reader-facing guidance for deciding when a new connector is warranted, but intentionally publishes no checked implementation example.
 
 ## Command helper
 

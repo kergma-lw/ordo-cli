@@ -1,0 +1,12 @@
+version: 0
+workflow: include-args
+inputs:
+  repository:
+    type: string
+  issue_number:
+    type: integer
+blocks:
+- include: fragments/check-issue
+  with:
+    repository: ${inputs.repository}
+    issue_number: ${inputs.issue_number}

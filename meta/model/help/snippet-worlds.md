@@ -275,45 +275,6 @@ This verification extension does not change public `check`, `review`, `plan`,
 `run`, `explain`, or `next` semantics. The canonical YAML is exercised through
 those existing surfaces with injected fixtures.
 
-## SDK Python handler fixture execution
-
-`connector.authoring` publishes `sdk_same_family_probe_inputs` in world
-`gh-sdk-probe-call`. Its `python_fragment` form stores source in `python`, not
-`yaml`; text help labels it Python. Insertion mode `sdk_probe_fragment` hosts
-the exact `def run(ctx)` fragment as a synthetic gh-family published action.
-It is connector-author Python, not new workflow YAML syntax. Its nonempty
-`filters` input supplies repository, head, head_owner, base, and state.
-
-The separate `help_sdk_snippet_runner.py` path verifies source, world, handle,
-and insertion mode before compiling the exact trusted repository-owned source.
-This is not a general Python sandbox: changed source is rejected, overrides are
-literal JSON fixture data, and no data can supply code or import targets. The
-runner uses real `_adapt_published_handler` wrappers and `OperationContext.call`
-for both the caller and dependency. The public `gh.pr.list` contract and
-publication are retained; only its handler body is replaced with a strict
-fixture reader using real `ctx.input` calls. A closed synthetic import map
-exposes only that family and its fixture bootstrap. No live API, subprocess,
-action dependency, or arbitrary import fallback exists in this path.
-
-Fully resolved dependency inputs are compared as type-strict JSON. Nonempty
-inputs stay literal and isolated; missing state propagates the real SDK
-`operation.input_missing` diagnostic even though the synthetic workflow has
-conflicting fallback bindings. Dependency failure outcomes propagate without
-retry. A four-call budget includes bootstrap and successful fixture-body calls.
-
-Results report `verification_path=sdk_fixture_execution`, exact `python_text`,
-the actual `operation_result`, and calls. `workflow_text` is empty and
-`runtime_result` is absent because no workflow is executed. Ordinary help display
-publishes source only; repository verification is the execution surface.
-
-This resolves the same-family probe-input snippet support gap through real SDK
-dispatch, not a stub `ctx.call`. It does not prove the actual PR-list handler's
-validation, HTTP filtering, pagination, authentication, or provider failures.
-Local dotted aliases, legacy empty-input lookup, cross-family rejection, and
-probe/action restrictions remain covered by separate SDK unit tests. Public
-workflow `check`, `review`, `plan`, `run`, `explain`, and `next` behavior is not
-changed by this help-verification path.
-
 ## Actions observation fixture execution
 
 The handles `connector.gh.actions.run`, `connector.gh.actions.run.jobs`,

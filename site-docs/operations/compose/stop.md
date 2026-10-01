@@ -1,153 +1,102 @@
-# compose.stop
+# Compose stop
 
-Stop one Compose project or service.
+You need a running Compose target quiesced before cleanup, mutation, or another orchestration phase.
 
-Use this when a workflow needs this exact operation surface. In practice: stop one Compose project or service.
+Stop one Compose project or one declared Compose service.
 
-- Namespace: `compose`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Omit service to stop the whole project, or provide one declared service name to stop only that service.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `service`: optional; omit it to stop the project, or provide one declared service name to stop only that service.
 
-```json
-{
-  "service": "string | null"
-}
-```
+## Result and boundary
 
-## Outputs
+- Later steps can use `target_kind`, `state`, and `changed`. A successful stop reports `state=stopped`; an already stopped or down target reports `changed=false`, while a partial stop reports `state=degraded`. Service-targeted results also include `target`. A failure does not prove that the target stopped.
 
-```json
-{
-  "changed": "boolean",
-  "changed_services": "array[string]",
-  "state": "string",
-  "target": "string",
-  "target_kind": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Removing stopped runtime instances; use connector.compose.remove when the intent is cleanup rather than stop.
+- Pure observation; use connector.compose.project or connector.compose.service when you only need state.
+- Assuming stop removes a service instance. A successful stop reports state stopped; an already stopped or down target reports changed false, while a partial stop reports degraded.
 
-- stop the requested Compose target
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `service_not_declared`
-- `project_invalid`
-- `orchestrator_unavailable`
-- `dependency_stop_blocked`
-- `runtime_stop_failed`
-- `stop_failed`
 
-## Requirements
+- `ordo-help describe connector.compose`: Parent Compose connector family
+- `ordo-help describe connector.compose.start`: Sibling lifecycle action for bringing a target up
+- `ordo-help describe connector.compose.remove`: Cleanup action that often follows a successful stop
 
-- None
+## Examples
 
-## Preflight observations
+- compose.stop with inputs {}
+- compose.stop with inputs {"service": "api"}
 
-```json
-[
-  {
-    "probe": "compose.project",
-    "with": {}
-  }
-]
-```
+## Inspect next
 
-## Invalidated observations
+- connector.compose.remove
+- connector.compose.start
+- connector.compose.service
 
-- `compose.*`
+## Exact machine contract
 
-## Example inputs
+Use `ordo-help operation compose.stop --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `compose.stop`
+## Canonical Examples
 
-```json
-{
-  "service": "string | null"
-}
-```
+### compose_lifecycle_decisions
 
-## Full JSON reference
+Stop one named service only after an explicit cleanup decision, save the result, and require `stopped` before removal.
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "project_directory",
-      "compose_file",
-      "project_name"
-    ],
-    "prerequisites": [
-      "docker compose available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "compose",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "stop the requested Compose target"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "service": "string | null"
-        },
-        "reference": "compose.stop"
-      }
-    ],
-    "failure_modes": [
-      "service_not_declared",
-      "project_invalid",
-      "orchestrator_unavailable",
-      "dependency_stop_blocked",
-      "runtime_stop_failed",
-      "stop_failed"
-    ],
-    "inputs": {
-      "service": "string | null"
-    },
-    "invalidates_observations": [
-      "compose.*"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "stop",
-    "outputs": {
-      "changed": "boolean",
-      "changed_services": "array[string]",
-      "state": "string",
-      "target": "string",
-      "target_kind": "string"
-    },
-    "preflight_observations": [
-      {
-        "probe": "compose.project",
-        "with": {}
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Stop one Compose project or service.",
-    "tags": [
-      "compose",
-      "action"
-    ]
-  },
-  "operation_name": "stop",
-  "reference": "compose.stop",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: compose-lifecycle-decisions
+inputs:
+  service: {}
+  start_project: {}
+  remove_service: {}
+blocks:
+- steps:
+  - name: inspect-project
+    uses: compose.project
+    register: project
+  - name: require-project-start-decision
+    gate: inputs.start_project and step.project.outputs.state != "running"
+  - name: start-project
+    uses: compose.start
+    register: started
+  - name: require-project-running
+    gate: step.started.outputs.state == "running"
+  - name: inspect-service
+    uses: compose.service
+    with:
+      service: inputs.service
+    register: service_before_cleanup
+  - name: require-service-cleanup-decision
+    gate: inputs.remove_service
+  - name: stop-service
+    uses: compose.stop
+    with:
+      service: inputs.service
+    register: stopped
+  - name: require-service-stopped
+    gate: step.stopped.outputs.state == "stopped"
+  - name: remove-service
+    uses: compose.remove
+    with:
+      service: inputs.service
+    register: removed
+  - name: require-service-absent
+    gate: step.removed.outputs.state == "absent"
+  - name: publish-lifecycle-results
+    publish:
+      project_state_before_start: step.project.outputs.state
+      started_project: step.started.outputs.changed
+      service_state_before_cleanup: step.service_before_cleanup.outputs.state
+      stopped_service: step.stopped.outputs.changed
+      removed_service: step.removed.outputs.changed
 ```

@@ -1,0 +1,155 @@
+version: 0
+workflow: set-active-task
+inputs:
+  repository: {}
+  project_id: {}
+  issue_number: 16
+  task_key: sample-task-16
+  issue_title: Keep issue workflow in sync
+  issue_type: Task
+  remote: origin
+  base_branch: main
+  allow_backlog: false
+  allowed_issue_types: {default: [Task, Bug]}
+  post_open_command: ""
+  repository_kind: backend
+state_needs:
+  task_memory: {}
+blocks:
+- guards:
+  - inputs.allow_backlog | is_boolean
+  - git.worktrees.count == 1
+  - git.state.worktree_clean
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state
+    == "OPEN"
+- steps:
+  - name: add-issue-to-project
+    uses: gh.project.issue.add
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+  # Observe after adding; policy must not use a pre-add membership snapshot.
+  - name: load-project-policy
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+    register: project
+  - name: require-project-membership
+    gate: step.project.outputs.exists
+  - name: require-project-type-string
+    gate: step.project.outputs.type | is_string
+  - name: require-allowed-project-type
+    gate: step.project.outputs.type | in(inputs.allowed_issue_types)
+  - name: block-done
+    gate: step.project.outputs.status != "Done"
+  - name: block-in-review
+    gate: step.project.outputs.status != "In review"
+  - name: require-backlog-permission
+    gate: step.project.outputs.status != "Backlog" or inputs.allow_backlog
+  - name: move-issue-to-in-progress
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "In progress"
+  - name: compute-branch
+    value:
+      format: "{}/{}-{}"
+      args:
+      - inputs.issue_type | lower
+      - inputs.issue_number
+      - inputs.issue_title | trim | slug
+    register: branch
+  - name: probe-local-base
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/heads/{}"
+        args: [inputs.base_branch]
+    register: local_base
+  - name: fetch-remote
+    uses: git.sync.fetch
+    with:
+      remote: inputs.remote
+  - name: probe-remote-base
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/remotes/{}/{}"
+        args: [inputs.remote, inputs.base_branch]
+    register: remote_base
+  - name: require-remote-base
+    gate: step.remote_base.outputs.exists
+  - name: switch-base
+    if: step.local_base.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: inputs.base_branch
+  - name: merge-base-ff-only
+    if: step.local_base.outputs.exists
+    uses: git.integrate.merge_ff_only
+    with:
+      ref:
+        format: "refs/remotes/{}/{}"
+        args: [inputs.remote, inputs.base_branch]
+  # Keep this snapshot stable across branch creation.
+  - name: probe-target-branch
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/heads/{}"
+        args: [step.branch.outputs.value]
+    register: target_branch
+  - name: switch-existing-target
+    if: step.target_branch.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: step.branch.outputs.value
+  - name: create-local-target
+    if: not step.target_branch.outputs.exists and step.local_base.outputs.exists
+    uses: git.branch.create
+    with:
+      branch: step.branch.outputs.value
+      start_point:
+        format: "refs/heads/{}"
+        args: [inputs.base_branch]
+  - name: create-remote-target
+    if: not step.target_branch.outputs.exists and not step.local_base.outputs.exists
+    uses: git.branch.create
+    with:
+      branch: step.branch.outputs.value
+      start_point:
+        format: "refs/remotes/{}/{}"
+        args: [inputs.remote, inputs.base_branch]
+  # Creation is not rolled back if switching fails; the new branch can remain.
+  - name: switch-created-target
+    if: not step.target_branch.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: step.branch.outputs.value
+  - name: remember-issue-number
+    state_set:
+      state.task_memory[inputs.task_key].issue_number: ${inputs.issue_number}
+  - name: remember-issue-type
+    state_set:
+      state.task_memory[inputs.task_key].issue_type: ${inputs.issue_type}
+  - name: remember-issue-title
+    state_set:
+      state.task_memory[inputs.task_key].issue_title: ${inputs.issue_title}
+  - name: remember-branch
+    state_set:
+      state.task_memory[inputs.task_key].branch: ${step.branch.outputs.value}
+  - name: remember-repository-kind
+    state_set:
+      state.task_memory[inputs.task_key].repository_kind: ${inputs.repository_kind}
+  # Trusted code hook: only supply intentional executable code, never interpolate ordinary data.
+  - name: run-post-open-command
+    if: inputs.post_open_command != ""
+    uses: shell.command
+    with:
+      command: inputs.post_open_command

@@ -1,213 +1,68 @@
-# gh.project.items.details
+# GitHub project items details
 
-Return normalized GitHub Project items with stable content details
+A workflow needs project-scoped item matching plus richer content details that are not present on connector.gh.project.items alone.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: return normalized GitHub Project items with stable content details.
+Probe one GitHub Project as a normalized item collection with stable content details such as issue state and label names in addition to the base membership facts.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later branching or publishing depends on issue or pull-request state, or on label_names for the matched project-backed content.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `project_id`: required.
+- `content_kind`: optional.
+- `filters`: optional.
+- `content_refs`: optional.
 
-```json
-{
-  "content_kind": "string",
-  "content_refs": [
-    "string"
-  ],
-  "filters": [
-    {
-      "field": "string",
-      "value": "scalar"
-    }
-  ],
-  "project_id": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- Usable result fact: `count`.
+- Usable result fact: `items`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
 
-```json
-{
-  "count": "integer",
-  "items": [
-    {
-      "content_kind": "string",
-      "item_id": "string",
-      "label_names": [
-        "string"
-      ],
-      "number": "integer",
-      "repository": "string",
-      "state": "string",
-      "title": "string",
-      "url": "string"
-    }
-  ]
-}
-```
+## Do not use for
 
-## Effects
+- Cheap project membership scans where repository, number, title, and url are already enough; use connector.gh.project.items for the lighter collection probe.
+- Checking or mutating one specific issue membership; use connector.gh.project.issue or connector.gh.project.issue.* for the one-item membership family.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `project_not_found`
-- `unknown_field`
-- `ambiguous_field`
-- `unsupported_field_type`
-- `invalid_filter_value`
-- `invalid_content_ref`
-- `probe_failed`
 
-## Requirements
+- [`connector.gh.project.items`](project-items.md): Parent collection probe for lighter normalized project items without extra content details
+- [`connector.gh.project.issue`](project-issue.md): Sibling probe for one issue-specific membership snapshot instead of a collection result set
+- [`connector.gh.issue`](issue.md): Sibling probe for one repository issue snapshot outside the project-collection context
+- [`connector.gh.project.field`](project-field.md): Sibling probe for project field metadata rather than matched item details
 
-- None
+## Inspect next
 
-## Example inputs
+- connector.gh.project.items
+- connector.gh.project.issue
+- connector.gh.issue
 
-### `gh.project.items.details`
+## Exact machine contract
 
-```json
-{
-  "content_kind": "Issue",
-  "project_id": "PVT_demo"
-}
-```
+Use `ordo-help operation gh.project.items.details --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `gh.project.items.details`
+## Canonical Examples
 
-```json
-{
-  "content_kind": "Issue",
-  "content_refs": [
-    "owner/repo#7",
-    "owner/repo#8"
-  ],
-  "filters": [
-    {
-      "field": "Type",
-      "value": "Task"
-    }
-  ],
-  "project_id": "PVT_demo"
-}
-```
+### gh_project_items_details_probe_step
 
-## Full JSON reference
+Load richer project-backed content details such as state and label_names for a previously narrowed project item subset.
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "content_kind": "Issue",
-          "project_id": "PVT_demo"
-        },
-        "reference": "gh.project.items.details",
-        "why": "Load project-scoped issue details including state and labels."
-      },
-      {
-        "inputs": {
-          "content_kind": "Issue",
-          "content_refs": [
-            "owner/repo#7",
-            "owner/repo#8"
-          ],
-          "filters": [
-            {
-              "field": "Type",
-              "value": "Task"
-            }
-          ],
-          "project_id": "PVT_demo"
-        },
-        "reference": "gh.project.items.details",
-        "why": "Load detailed facts for one explicit subset of project-backed GitHub content."
-      }
-    ],
-    "failure_modes": [
-      "project_not_found",
-      "unknown_field",
-      "ambiguous_field",
-      "unsupported_field_type",
-      "invalid_filter_value",
-      "invalid_content_ref",
-      "probe_failed"
-    ],
-    "inputs": {
-      "content_kind": "string",
-      "content_refs": [
-        "string"
-      ],
-      "filters": [
-        {
-          "field": "string",
-          "value": "scalar"
-        }
-      ],
-      "project_id": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project.items.details",
-    "outputs": {
-      "count": "integer",
-      "items": [
-        {
-          "content_kind": "string",
-          "item_id": "string",
-          "label_names": [
-            "string"
-          ],
-          "number": "integer",
-          "repository": "string",
-          "state": "string",
-          "title": "string",
-          "url": "string"
-        }
-      ]
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Return normalized GitHub Project items with stable content details",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "project.items.details",
-  "reference": "gh.project.items.details",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: load-ready-item-details
+        uses: gh.project.items.details
+        with:
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          filters:
+            - field: "Status"
+              value: "Ready"
+          content_refs:
+            - "owner/repo#7"
+            - "owner/repo#8"
+        register: ready_item_details
 ```

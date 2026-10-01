@@ -3,11 +3,47 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git tag',
+ 'goal': 'A workflow needs to confirm one specific tag such as v1.2.3 before branching on release presence or '
+         'publishing tag metadata.',
+  'summary': 'Check one named Git tag and report whether it exists, which ref it occupies, and whether the stored '
+            'object is an annotated tag object or a lightweight commit ref.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to confirm one specific tag such as v1.2.3 before branching on release '
+                         'presence or publishing tag metadata.',
+                         'Later logic needs the single-tag existence result plus the raw tag ref and object identity, '
+                         'not a broader tag inventory.']},
+              {'heading': 'Do not use for',
+                'items': ['Listing or pattern-matching many tags; use connector.git.tags for the inventory.',
+                         'Inferring the newest tag by version ordering across many candidates; use connector.git.tags '
+                         'and its latest output for that collection-oriented question.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.tags',
+                                'summary': 'List tags instead of inspecting one named tag '
+                                          'lookup'},
+                              {'handle': 'connector.git.ref',
+                                'summary': 'Check refs when the workflow cares '
+                                          'about refs broadly rather than Git tag semantics specifically'},
+                              {'handle': 'connector.git.commits',
+                                'summary': 'Read commit history when one tag lookup alone is not '
+                                          'enough context'},
+                              {'handle': 'connector.git.range',
+                                'summary': 'Compare a revision range when the question is broader '
+                                          'than one named tag'}]},
+              {'heading': 'Examples',
+               'items': ['git.tag with inputs {"name": "v1.2.3"}', 'git.tag with inputs {"name": "release-2026-07"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.tags', 'connector.git.ref', 'connector.git.commits']}]})
 
 def info():
     return probe(
         name="tag",
+        human=git_human(HUMAN, provide="`name`: required; provide the exact tag to inspect in the current repository.", result="Returns name, ref, exists, oid, annotated, and repository_root. A missing tag succeeds with exists=false and unknown object facts; an invalid name or unreadable repository has no partial result."),
         summary=(
             "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; "
             "for annotated tags this is the tag object's oid rather than the peeled target commit oid."

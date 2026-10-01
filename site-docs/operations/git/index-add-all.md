@@ -1,112 +1,50 @@
-# git.index.add_all
+# Git index add-all
 
-Stage all current worktree changes.
+A workflow has already decided that the whole current worktree batch should be staged before one later commit or review step.
 
-Use this when a workflow needs Git state or Git side effects. In practice: stage all current worktree changes.
+Stage every currently changed, deleted, and untracked path from the current Git worktree into the index as one all-in staging action.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this to stage the whole worktree, not for selective per-path staging or read-only inspection.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Inspecting which paths are dirty or whether the worktree is clean; use connector.git.worktree or connector.git.state for those read-only checks.
+- Selecting only some paths for staging; this operation intentionally stages the whole current worktree batch at once.
 
-```json
-{}
-```
+## What to provide
 
-## Outputs
+- No inputs are required; use only after deciding that every current worktree change belongs together.
 
-```json
-{
-  "staged": "boolean"
-}
-```
+## Result and boundary
 
-## Effects
+- On success, every current changed, deleted, and untracked path is staged for a later commit.
+- If staging is blocked, the action does not report that the worktree batch is ready to commit.
+- Returns staged=true only after all current changes are staged. A block has no ready-to-commit result, and later worktree changes are outside this action.
 
-- stage all current worktree changes into the index
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `stage_blocked`
 
-## Requirements
+- [`connector.git.worktree`](worktree.md): Read the path-level dirty-worktree view before or after staging
+- [`connector.git.state`](state.md): Read a broader branch-plus-worktree-plus-stash summary after staging decisions
+- [`connector.git.commit.create`](commit-create.md): Typical follow-up action for recording the newly staged index as one ordinary commit
+- [`connector.git.commit.amend`](commit-amend.md): Sibling follow-up action when the staged batch should rewrite HEAD instead of creating a new commit
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.index.add_all --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.worktree`
-- `git.state`
+## Canonical Examples
 
-## Example inputs
+### git_index_add_all_step
 
-### `git.index.add_all`
+Stage the whole current Git worktree once the workflow has already decided that every pending change belongs in the next staging batch.
 
-```json
-{}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "stage all current worktree changes into the index"
-    ],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.index.add_all"
-      }
-    ],
-    "failure_modes": [
-      "stage_blocked"
-    ],
-    "inputs": {},
-    "invalidates_observations": [
-      "git.worktree",
-      "git.state"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "index.add_all",
-    "outputs": {
-      "staged": "boolean"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.index.add_all'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "index.add_all",
-  "reference": "git.index.add_all",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: stage-all-worktree-changes
+        uses: git.index.add_all
+        register: stage_all
 ```

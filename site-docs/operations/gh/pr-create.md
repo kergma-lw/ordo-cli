@@ -1,81 +1,67 @@
-# gh.pr.create
+# GitHub pr create
 
-Create one PR with explicit draft and exact source repository after a complete gh.pr.list open guard; creation_unknown must not be blindly retried.
+Create one new GitHub pull request from a known source branch when the workflow has explicitly authorized it.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: create one PR with explicit draft and exact source repository after a complete gh.pr.list open guard; creation_unknown must not be blindly retried.
+Create one pull request only when no matching open pull request is already known.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Supply the source branch, target branch, title, and an explicit draft value. The body is optional and defaults to empty.
+- Use the workflow's GitHub repository context or name the target repository explicitly. When the source is a fork or another repository, supply head_repository with that exact source repository; the action does not guess forks. head_owner, when supplied, must name that source repository's owner; this prevents a branch owner from being confused with a different fork.
+- Authorize creation and decide any closed-history policy in the workflow before this action. A matching open pull request is refused rather than reused.
+- When creation is confirmed, use the returned pull request number or URL as the new pull request identity. A refused or existing result did not create a new pull request.
+- Creation can race with other actors. When the outcome is unknown, it does not confirm either creation or non-creation and must be inspected by a separate workflow decision, not blindly retried.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `head`: required; provide the source branch. `base`: required; provide the target branch. `title`: required; provide a non-empty title. `draft`: required; provide an explicit true or false value, not an implied default.
+- `body`: optional; provide it only when the pull request needs body text. `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `head_repository`: conditional; for a fork or another source repository, provide the exact source repository. `head_owner`: conditional; use it only as the matching owner assertion for that source repository; it cannot identify a fork by itself.
 
-```json
-{
-  "base": "string",
-  "body": "string",
-  "draft": "boolean",
-  "head": "string",
-  "head_owner": "string",
-  "head_repository": "string",
-  "repository": "string",
-  "title": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- A confirmed creation returns `created=true` with `repository`, `pull_number`, `pull_ref`, `url`, `head_repository`, `head_ref`, `head_sha`, `base_repository`, `base_ref`, `base_sha`, `draft`, `state`, `message`, and `errors` for later inspection.
+- `already_exists` returns the matching open pull request facts but does not create or reuse it. A failed precheck submits no creation. `creation_unknown` proves neither creation nor non-creation and must be resolved by a fresh workflow-owned observation.
+- The duplicate check and creation are not atomic: another actor can create a matching pull request between them.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails. Required preflight facts must be established before the change is submitted.
 
-```json
-{
-  "base_ref": "string | null",
-  "base_repository": "string | null",
-  "base_sha": "string | null",
-  "created": "boolean | null",
-  "draft": "boolean | null",
-  "errors": "array | object | string | null",
-  "head_ref": "string | null",
-  "head_repository": "string | null",
-  "head_sha": "string | null",
-  "http_status": "integer | null",
-  "message": "string | null",
-  "pull_number": "integer | null",
-  "pull_ref": "string | null",
-  "repository": "string | null",
-  "state": "string | null",
-  "url": "string | null"
-}
-```
-
-## Authoring contract
-
-Create one GitHub pull request after a mandatory complete exact-identity open-duplicate precheck.
-
-- GitHub creation: gh.pr.create requires head, base, title, and an explicit boolean draft; body defaults to empty. repository is optional: valid explicit OWNER/REPO overrides connector_contexts.gh.repository; omitted or null uses context, malformed explicit input fails without fallback. head_repository is a full source OWNER/REPO, default target repository; explicit cross-repository intent requires it, with no fork guessing. head_owner is an optional consistency assertion, otherwise derived from the exact source repository. Same-organization head_repo API argument is derived repository NAME. Reject same-branch/same-repository requests. The action uses ctx.call('gh.pr.list', inputs=...) with resolved repository/head/head_owner/base and state: open; require complete traversal and exact case-insensitive head_repository_key identity. One exact open match including draft returns non-OK already_exists with pull_number, url, created=false and no POST; multiple matches return ambiguous; unknown identity and list failure return precheck_failed. No existing match permits one POST. Only validated HTTP 201 means created=true; malformed 201, timeout, or server failure returns creation_unknown with created=null. HTTP 422 is generic create_refused, not universal duplicate evidence; preserve API errors. No POST retry or automatic readback reconciliation. This is not find-or-reuse or closed-history policy: workflow-owned gh.pr.list state: all classification precedes create's separate open check. Concurrent duplicates can race the check: no atomic uniqueness or exactly-once guarantee. No CI waiting, merge, push, fork, branch cleanup, or extra issue/project operations. Inspect connector.gh.pr.create.
-- Workflow policy has authorized creation, including any closed-history decision. Register the action result and distinguish runtime status, diagnostic code, pull_number/url identity, and tri-state created; already_exists is non-OK rather than reuse.
-- Outputs are repository, pull_number, pull_ref, url, created, head_repository, head_ref, head_sha, base_repository, base_ref, base_sha, draft, state, http_status, message, and errors. Unknown identity/response facts stay null. Failure statuses are input_error, precheck_failed, ambiguous, already_exists, api_failed, create_refused, and creation_unknown; validated creation is ok.
-- check, review, plan, explain, and next retain action non-execution; run executes the admitted action. The internal probe does not make creation read-only or authorize POST in analysis modes.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
-
-### Boundaries
+## Do not use for
 
 - Find-or-reuse, reopening, or closed-history policy; use a separate gh.pr.list state: all observation and workflow rules.
-- Atomic uniqueness, exactly-once effects, automatic retry or readback reconciliation after unknown creation results.
+- Atomic uniqueness, automatic retry, or automatic reconciliation after an unknown result.
 - Waiting for CI, merging, pushing, forking, branch cleanup, or extra issue/project mutations.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.pr.list`](pr-list.md): Full candidate observation and workflow-owned closed-history classification
+- [`connector.gh.pr`](pr.md): Detailed by-number inspection after creation
+- [`connector.gh.pr.merge`](pr-merge.md): Separate SHA-bound merge action after CI acceptance
+- `ordo-help describe connector.authoring`: Guidance for publishing a narrow connector operation
+
+## Inspect next
+
+- connector.gh.pr.list
+- connector.gh.pr
+- connector.gh.pr.merge
+- connector.authoring
+
+## Exact machine contract
+
+Use `ordo-help operation gh.pr.create --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_pr_create_new_only
 
-Explicit authorization defaults false and draft defaults true. Check source owner/repository consistency, list all history, require complete known identities, and compare canonical lowercase repository keys. This example refuses every existing exact-source PR, including closed history; that is workflow policy, not an intrinsic action restriction or automatic adoption. Pass the known optional head_repository for the fork. Repository is explicit here but optional through standard gh bootstrap. Save the create result, require confirmed creation and a nonzero integer number, then observe that actual number once. Fixtures prove this exact workflow and strict input handoff, not the action's internal open-only recheck, SDK dependency reuse, POST behavior, or race atomicity. Action failures stop without retry or publication.
+Authorization defaults to false and draft defaults to true. Confirm the source repository, refuse existing matching history as this workflow's policy, create the pull request, then inspect the created pull request by its returned number. Action failures stop without retry or publication.
 
 ```yaml
 version: 0
 workflow: create-new-branch-pull-request
-# Explicit repository is an example choice; the action also supports gh bootstrap.
+# Explicit repository is an example choice; the action can also use the workflow GitHub repository context.
 inputs:
   repository: {}
   head: {}
@@ -158,178 +144,4 @@ blocks:
           created: step.creation.outputs.created
           state: step.final_pr.outputs.state
 
-```
-
-## Effects
-
-- create one GitHub pull request after a non-atomic open duplicate precheck
-
-## Failure modes
-
-- `input_error`
-- `precheck_failed`
-- `ambiguous`
-- `already_exists`
-- `api_failed`
-- `create_refused`
-- `creation_unknown`
-
-## Requirements
-
-- None
-
-## Preflight observations
-
-```json
-[
-  {
-    "fields": [
-      "items",
-      "count",
-      "complete"
-    ],
-    "probe": "gh.pr.list",
-    "with": {
-      "base": "{base}",
-      "head": "{head}",
-      "repository": "{repository}",
-      "state": "open"
-    }
-  }
-]
-```
-
-## Invalidated observations
-
-- `gh.*`
-
-## Example inputs
-
-### `gh.pr.create`
-
-```json
-{
-  "base": "string",
-  "body": "string",
-  "draft": "boolean",
-  "head": "string",
-  "head_owner": "string",
-  "head_repository": "string",
-  "repository": "string",
-  "title": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "create one GitHub pull request after a non-atomic open duplicate precheck"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "base": "string",
-          "body": "string",
-          "draft": "boolean",
-          "head": "string",
-          "head_owner": "string",
-          "head_repository": "string",
-          "repository": "string",
-          "title": "string"
-        },
-        "reference": "gh.pr.create"
-      }
-    ],
-    "failure_modes": [
-      "input_error",
-      "precheck_failed",
-      "ambiguous",
-      "already_exists",
-      "api_failed",
-      "create_refused",
-      "creation_unknown"
-    ],
-    "inputs": {
-      "base": "string",
-      "body": "string",
-      "draft": "boolean",
-      "head": "string",
-      "head_owner": "string",
-      "head_repository": "string",
-      "repository": "string",
-      "title": "string"
-    },
-    "invalidates_observations": [
-      "gh.*"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "pr.create",
-    "outputs": {
-      "base_ref": "string | null",
-      "base_repository": "string | null",
-      "base_sha": "string | null",
-      "created": "boolean | null",
-      "draft": "boolean | null",
-      "errors": "array | object | string | null",
-      "head_ref": "string | null",
-      "head_repository": "string | null",
-      "head_sha": "string | null",
-      "http_status": "integer | null",
-      "message": "string | null",
-      "pull_number": "integer | null",
-      "pull_ref": "string | null",
-      "repository": "string | null",
-      "state": "string | null",
-      "url": "string | null"
-    },
-    "preflight_observations": [
-      {
-        "fields": [
-          "items",
-          "count",
-          "complete"
-        ],
-        "probe": "gh.pr.list",
-        "with": {
-          "base": "{base}",
-          "head": "{head}",
-          "repository": "{repository}",
-          "state": "open"
-        }
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Create one PR with explicit draft and exact source repository after a complete gh.pr.list open guard; creation_unknown must not be blindly retried.",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "pr.create",
-  "reference": "gh.pr.create",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

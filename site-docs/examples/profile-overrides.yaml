@@ -1,0 +1,7 @@
+name: review-context
+overrides:
+  - target: local.issue-triage
+    with:
+      default_label: bug
+      board: intake
+    reason: Share one profile-scoped triage adaptation record.

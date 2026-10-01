@@ -1,50 +1,51 @@
-# gh.repo.actions.permissions.set
+# GitHub repo actions permissions set
 
-Set the GitHub Actions enabled state for one repository.
+the workflow's GitHub repository context already names the normal repository target and the workflow needs to disable or re-enable hosted GitHub Actions there as an explicit step before later repo-level work.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: set the GitHub Actions enabled state for one repository.
+Set the GitHub Actions enabled state for one repository and report the resulting enabled flag together with whether the repository policy changed. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "enabled": "boolean",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "changed": "boolean",
-  "enabled": "boolean",
-  "repository": "string"
-}
-```
-
-## Authoring contract
-
-Set the GitHub Actions enabled state for one repository and report the resulting enabled flag together with whether the repository policy changed. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs to disable or re-enable hosted GitHub Actions there as an explicit step before later repo-level work.
 - The authored intent is one narrow repository Actions policy mutation, not a hidden multi-step sync helper.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `enabled`: required.
+
+## Result and boundary
+
+- Usable result fact: `repository`.
+- Usable result fact: `enabled`.
+- Usable result fact: `changed`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails. Required preflight facts must be established before the change is submitted.
+
+## Do not use for
 
 - Reading the current repository Actions policy without changing it; use connector.gh.repo.actions.permissions for that probe.
 - Composing a temporary disable-sync-restore sequence inside one action; keep those steps explicit in the workflow instead of hiding orchestration inside this leaf action.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.repo.actions.permissions`](repo-actions-permissions.md): Sibling probe for the current repository Actions policy before or after mutation
+- [`connector.gh.repo.sync`](repo-sync.md): Sibling repository sync action that can appear between explicit disable and restore steps
+- [`connector.gh.repo`](repo.md): Sibling repository identity probe for repo-level targeting facts
+- [`connector.git.sync.fetch`](../git/sync-fetch.md): Local Git sync action when the real target is a local clone rather than hosted Actions policy
+
+## Inspect next
+
+- connector.gh.repo.actions.permissions
+- connector.gh.repo.sync
+- connector.gh.repo
+
+## Exact machine contract
+
+Use `ordo-help operation gh.repo.actions.permissions.set --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_repo_actions_permissions_set_step
 
@@ -56,115 +57,4 @@ Set one repository's GitHub Actions enabled flag as an explicit leaf mutation st
     with:
       enabled: false
     register: disabled
-```
-
-## Effects
-
-- set the GitHub Actions enabled state for one repository
-
-## Failure modes
-
-- `repository_not_found`
-- `set_blocked`
-
-## Requirements
-
-- None
-
-## Preflight observations
-
-```json
-[
-  {
-    "fields": [
-      "enabled"
-    ],
-    "probe": "gh.repo.actions.permissions",
-    "with": {}
-  }
-]
-```
-
-## Example inputs
-
-### `gh.repo.actions.permissions.set`
-
-```json
-{
-  "enabled": false
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "set the GitHub Actions enabled state for one repository"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "enabled": false
-        },
-        "reference": "gh.repo.actions.permissions.set"
-      }
-    ],
-    "failure_modes": [
-      "repository_not_found",
-      "set_blocked"
-    ],
-    "inputs": {
-      "enabled": "boolean",
-      "repository": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "repo.actions.permissions.set",
-    "outputs": {
-      "changed": "boolean",
-      "enabled": "boolean",
-      "repository": "string"
-    },
-    "preflight_observations": [
-      {
-        "fields": [
-          "enabled"
-        ],
-        "probe": "gh.repo.actions.permissions",
-        "with": {}
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Set the GitHub Actions enabled state for one repository.",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "repo.actions.permissions.set",
-  "reference": "gh.repo.actions.permissions.set",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

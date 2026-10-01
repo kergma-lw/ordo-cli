@@ -1,154 +1,92 @@
-# git.commits
+# Git commits
 
-Read a bounded list of Git commits.
+A workflow needs a short reviewable commit-history slice for prompting, decision-making, or publication without diff text or graph decoration.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read a bounded list of Git commits.
+Read a bounded, reviewable slice of Git commit history from one revision scope.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs subjects, bodies, authors, and commit times from one bounded revision scope rather than arbitrary history presentation.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Loading patch text, changed files, diff statistics, or a history diagram; this operation is for concise commit context.
+- Mutating history through creation, amend, or revert actions; use connector.git.commit.create, connector.git.commit.amend, or connector.git.commit.revert for those effectful steps.
 
-```json
-{
-  "limit": "integer",
-  "rev": "string"
-}
+## What to provide
+
+- `limit`: required; provide an integer greater than zero. `rev`: required; name the revision or range to review, such as HEAD or HEAD~10..HEAD.
+
+## Result and boundary
+
+- Returns count, rev, items with commit, subject, body, text, author_name, and committed_at, plus repository_root. An unreadable revision or invalid input fails without partial history; the bounded result can become stale as history changes.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.commit.create`](commit-create.md): Sibling action for recording a new commit after or before reading commit history
+- [`connector.git.commit.amend`](commit-amend.md): Sibling action for rewriting HEAD when the workflow needs mutation instead of history inspection
+- [`connector.git.commit.revert`](commit-revert.md): Sibling action for undoing one commit with a new revert commit
+- [`connector.git.range`](range.md): Compare a narrower revision range when one readable commit-text list is broader than needed
+
+## Exact machine contract
+
+Use `ordo-help operation git.commits --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_commits_probe_step
+
+Read a bounded Git commit-history slice when the workflow needs commit texts instead of diffs or a history diagram.
+
+```yaml
+      - name: read-recent-commits
+        uses: git.commits
+        with:
+          limit: 5
+          rev: "HEAD"
+        register: recent_commits
 ```
+### git_commit_management_flow
 
-## Outputs
+Inspect recent commit texts, then choose exactly one deliberate history change: create, amend, or revert.
 
-```json
-{
-  "count": "integer",
-  "items": [
-    {
-      "author_name": "string",
-      "body": "string",
-      "commit": "string",
-      "committed_at": "string",
-      "subject": "string",
-      "text": "string"
-    }
-  ],
-  "repository_root": "string",
-  "rev": "string"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `git.commits`
-
-```json
-{
-  "limit": 5,
-  "rev": "HEAD"
-}
-```
-
-### `git.commits`
-
-```json
-{
-  "limit": 3,
-  "rev": "HEAD~10..HEAD"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "limit": 5,
-          "rev": "HEAD"
-        },
-        "reference": "git.commits"
-      },
-      {
-        "inputs": {
-          "limit": 3,
-          "rev": "HEAD~10..HEAD"
-        },
-        "reference": "git.commits"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {
-      "limit": "integer",
-      "rev": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "commits",
-    "outputs": {
-      "count": "integer",
-      "items": [
-        {
-          "author_name": "string",
-          "body": "string",
-          "commit": "string",
-          "committed_at": "string",
-          "subject": "string",
-          "text": "string"
-        }
-      ],
-      "repository_root": "string",
-      "rev": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "commits",
-  "reference": "git.commits",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: manage-git-commits
+inputs:
+  operation: {}
+  commit_message: {}
+  target_commit: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: read-recent-commits
+        uses: git.commits
+        with:
+          limit: 5
+          rev: "HEAD"
+        register: recent_commits
+      - name: create-commit
+        if: inputs.operation == "create"
+        uses: git.commit.create
+        with:
+          message: inputs.commit_message
+      - name: amend-head-commit
+        if: inputs.operation == "amend"
+        uses: git.commit.amend
+        with:
+          message: "Tighten commit wording"
+      - name: revert-target-commit
+        if: inputs.operation == "revert"
+        uses: git.commit.revert
+        with:
+          commit: inputs.target_commit
+      - name: publish-summary
+        publish:
+          recent_count: step.recent_commits.outputs.count
+          sampled_rev: step.recent_commits.outputs.rev
+          summary: "Choose exactly one reviewed history change: create, amend, or revert."
 ```

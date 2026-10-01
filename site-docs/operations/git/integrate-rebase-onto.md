@@ -1,154 +1,54 @@
-# git.integrate.rebase_onto
+# Git integrate rebase-onto
 
-Rebase a Git branch range onto a new base.
+A workflow needs to move a topic branch onto a new base while preserving only the branch-local commit range after one upstream split point.
 
-Use this when a workflow needs Git state or Git side effects. In practice: rebase a Git branch range onto a new base.
+Rewrite one non-default Git branch by replaying the commits after one upstream boundary onto a new base with rebase --onto semantics.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this for branch-range rewriting, not whole-ref integration into the current checkout and not a one-commit transplant.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the branch points to its newly rebased head revision.
+- If replay produces conflicts or Git cannot begin or finish the rebase, the rewrite is blocked rather than reported as complete.
+- Checks out (switches to) `branch` before replaying it, then returns branch, onto, and head_commit after replay as the newly rebased head revision. Missing references, protected default branch, conflicts, or blocks do not report a completed rewrite; resolve conflicts before later history actions.
 
-```json
-{
-  "branch": "string",
-  "onto": "string",
-  "upstream": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `branch`: required; provide the branch to rewrite. `upstream`: required; provide the upstream boundary. `onto`: required; provide the new base.
 
-```json
-{
-  "branch": "string",
-  "head_commit": "string",
-  "onto": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Integrating a target ref into the current checkout without rewriting branch history; use connector.git.integrate.merge or connector.git.integrate.merge_ff_only for those integration semantics.
+- Rebasing the repository default branch or copying only one selected commit; this operation protects the default branch and is broader than connector.git.integrate.cherry_pick.
 
-- rebase a non-default branch range onto a new base using rebase --onto semantics
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `onto_not_found`
-- `upstream_not_found`
-- `branch_not_found`
-- `default_branch_protected`
-- `rebase_conflict`
-- `rebase_blocked`
 
-## Requirements
+- [`connector.git.integrate.merge`](integrate-merge.md): Sibling action for integrating by merge instead of rewriting one branch range onto a new base
+- [`connector.git.integrate.cherry_pick`](integrate-cherry-pick.md): Sibling action for replaying one chosen commit instead of rebasing an entire branch-local range
+- [`connector.git.range`](range.md): Compare base/head relationships before choosing onto and upstream boundaries
+- [`connector.git.branch`](branch.md): Read current checkout branch identity when the workflow first needs to confirm which branch is being rewritten
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.integrate.rebase_onto --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_integrate_rebase_onto_step
 
-### `git.integrate.rebase_onto`
+Rewrite one topic branch onto a new base when the workflow intentionally wants branch-range replay rather than merge-based integration.
 
-```json
-{
-  "branch": "string",
-  "onto": "string",
-  "upstream": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "rebase a non-default branch range onto a new base using rebase --onto semantics"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "branch": "string",
-          "onto": "string",
-          "upstream": "string"
-        },
-        "reference": "git.integrate.rebase_onto"
-      }
-    ],
-    "failure_modes": [
-      "onto_not_found",
-      "upstream_not_found",
-      "branch_not_found",
-      "default_branch_protected",
-      "rebase_conflict",
-      "rebase_blocked"
-    ],
-    "inputs": {
-      "branch": "string",
-      "onto": "string",
-      "upstream": "string"
-    },
-    "invalidates_observations": [
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "integrate.rebase_onto",
-    "outputs": {
-      "branch": "string",
-      "head_commit": "string",
-      "onto": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.integrate.rebase_onto'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "integrate.rebase_onto",
-  "reference": "git.integrate.rebase_onto",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: rebase-branch-onto-new-base
+        if: inputs.strategy == "rebase"
+        uses: git.integrate.rebase_onto
+        with:
+          onto: inputs.onto_ref
+          upstream: inputs.upstream_ref
+          branch: inputs.branch_name
 ```

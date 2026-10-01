@@ -34,6 +34,7 @@
   - `project_name: string` optional
 - Bootstrap may validate and normalize that raw family input into connector-local shared context.
 - Later operations should consume connector-local shared context rather than raw playbook or profile data directly.
+- `compose.project` has no operation-local target input. It uses the Compose directory, file, and project name selected by the workflow's playbook or profile settings; use different settings to inspect another project.
 
 ## `compose.project` output shape
 

@@ -102,7 +102,7 @@ class HelpSnippetRegistryTest(unittest.TestCase):
                 if verification["kind"] != "runner_verified":
                     continue
                 result = verify_help_snippet(
-                    snippet=example["python"] if example["form"] == "python_fragment" else example["yaml"],
+                    snippet=example["yaml"],
                     world=verification["world"],
                     insertion_mode=verification["insertion_mode"],
                     target=verification["target"],
@@ -132,6 +132,7 @@ class HelpSnippetRegistryTest(unittest.TestCase):
         self.assertEqual(registry["profile.overrides"]["canonical_examples"][0]["form"], "field_fragment")
         self.assertEqual(registry["local-expressions"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["adapters"]["canonical_examples"][0]["form"], "value")
+        self.assertEqual(registry["adapters"]["canonical_examples"][0]["yaml"], "'${json.user.name with{root: inputs.body}}'")
         self.assertEqual(registry["routine"]["canonical_examples"][0]["form"], "step_fragment")
         self.assertEqual(registry["routine"]["canonical_examples"][3]["form"], "routine_bundle")
 

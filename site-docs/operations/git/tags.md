@@ -1,160 +1,80 @@
-# git.tags
+# Git tags
 
-Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.
+A workflow needs to inspect several tags at once, optionally narrowing them by release naming conventions such as v* or one semantic-version regex.
 
-Use this when a workflow needs Git state or Git side effects. In practice: inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.
+List Git tags as a version-sorted collection, optionally narrowed by glob or regex matching, and return matching tags plus the first match as latest in that sorted order.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs both the full matching tag list and the first version-sorted match, not just one named tag existence check.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Checking only one specific tag by exact name; use connector.git.tag for that simpler single-tag lookup.
+- Treating latest as newest by creation date; this operation orders by descending version refname, not by tag creation time.
 
-```json
-{
-  "match": "string | null",
-  "match_kind": "'glob' | 'regex' | null"
-}
+## What to provide
+
+- `match`: optional; provide it to narrow tags. `match_kind`: conditional; when `match` is supplied, provide `glob` or `regex`. Omit both to inspect all tags.
+
+## Result and boundary
+
+- Returns count, matching items, latest, and repository_root. latest is the first matching tag in descending version order, or null when no tag matches; it is not based on creation time. Invalid matching input or unreadable tags has no partial result.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.tag`](tag.md): Check one exact tag instead of listing the inventory
+- [`connector.git.range`](range.md): Compare a revision range when tag inventory is broader than needed
+- [`connector.git.commits`](commits.md): Read commit history after a tag inventory decision chooses a revision scope
+- [`connector.git.ref`](ref.md): Check explicit refs when the workflow does not need tag-specific inventory semantics
+
+## Exact machine contract
+
+Use `ordo-help operation git.tags --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_tags_probe_step
+
+Inspect a version-sorted Git tag inventory when the workflow needs more than one exact tag lookup.
+
+```yaml
+      - name: inspect-release-tags
+        uses: git.tags
+        with:
+          match: "v*"
+          match_kind: "glob"
+        register: release_tags
 ```
+### git_tag_inventory_flow
 
-## Outputs
+Inspect one exact tag and one matching tag inventory together so a workflow can compare single-tag existence with broader release-tag discovery.
 
-```json
-{
-  "count": "integer",
-  "items": [
-    {
-      "annotated": "boolean",
-      "name": "string",
-      "oid": "string",
-      "ref": "string"
-    }
-  ],
-  "latest": {
-    "annotated": "boolean",
-    "name": "string",
-    "oid": "string",
-    "ref": "string"
-  },
-  "repository_root": "string"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `git.tags`
-
-```json
-{
-  "match": "v*",
-  "match_kind": "glob"
-}
-```
-
-### `git.tags`
-
-```json
-{
-  "match": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$",
-  "match_kind": "regex"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "match": "v*",
-          "match_kind": "glob"
-        },
-        "reference": "git.tags"
-      },
-      {
-        "inputs": {
-          "match": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$",
-          "match_kind": "regex"
-        },
-        "reference": "git.tags"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {
-      "match": "string | null",
-      "match_kind": "'glob' | 'regex' | null"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "tags",
-    "outputs": {
-      "count": "integer",
-      "items": [
-        {
-          "annotated": "boolean",
-          "name": "string",
-          "oid": "string",
-          "ref": "string"
-        }
-      ],
-      "latest": {
-        "annotated": "boolean",
-        "name": "string",
-        "oid": "string",
-        "ref": "string"
-      },
-      "repository_root": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "tags",
-  "reference": "git.tags",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: inspect-git-tags
+inputs:
+  tag_name: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-exact-tag
+        uses: git.tag
+        with:
+          name: inputs.tag_name
+        register: exact_tag
+      - name: inspect-release-tags
+        uses: git.tags
+        with:
+          match: "v*"
+          match_kind: "glob"
+        register: release_tags
+      - name: publish-summary
+        publish:
+          tag_exists: step.exact_tag.outputs.exists
+          release_tag_count: step.release_tags.outputs.count
+          summary: "Git tag workflow prepared"
 ```

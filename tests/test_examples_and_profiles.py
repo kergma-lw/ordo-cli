@@ -251,6 +251,14 @@ class ExampleSurfaceTest(unittest.TestCase):
         workflow = load_workflow_file(Path("examples/git-commit-management.yaml"))
 
         self.assertEqual(workflow.workflow, "manage-git-commits")
+        steps = workflow.blocks[1].steps
+        self.assertEqual([step.if_ for step in steps[:4]], [None, 'inputs.operation == "create"', 'inputs.operation == "amend"', 'inputs.operation == "revert"'])
+
+    def test_git_sync_roundtrip_publishes_git_range_ahead_count(self) -> None:
+        workflow = load_workflow_file(Path("examples/git-sync-roundtrip.yaml"))
+
+        published = workflow.blocks[1].steps[-1].publish
+        self.assertEqual(published["ahead"], "step.branch_range.outputs.ahead_count")
 
     def test_git_tag_inspection_example_loads(self) -> None:
         workflow = load_workflow_file(Path("examples/git-tag-inspection.yaml"))
