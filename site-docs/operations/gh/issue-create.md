@@ -1,53 +1,54 @@
-# gh.issue.create
+# Create GitHub issue
 
-Create a GitHub issue.
+Open a new issue in the workflow's normal GitHub repository or in one deliberate repository override.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: create a GitHub issue.
+Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL for later workflow steps. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "body": "string | null",
-  "repository": "string",
-  "title": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "issue_ref": "string",
-  "number": "integer",
-  "repository": "string",
-  "title": "string",
-  "url": "string"
-}
-```
-
-## Authoring contract
-
-Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL for later workflow steps. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow must open a new issue there.
 - The workflow must open a new issue and then reuse the returned issue number or URL in later steps.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- Provide a non-empty issue title. Optionally provide body text; omit it when the issue should start without a body.
+- Use the workflow's GitHub repository context normally. Name a repository only for a deliberate one-off target change.
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `title`: required.
+- `body`: optional.
+
+## Result and boundary
+
+- Later steps can use the created issue's repository-qualified reference, number, title, or URL.
+- Creation can succeed before a later step fails and is not rolled back. It fails when the target repository cannot be used, the title is blank, or GitHub blocks creation.
+- Usable result fact: `issue_ref`.
+- Usable result fact: `url`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails.
+
+## Do not use for
 
 - Editing or commenting on an already existing issue; use the narrower body or comment actions for that follow-up work.
 - Reading current issue metadata before deciding whether creation is necessary; use connector.gh.issue or other probe surfaces first when the issue already exists.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.issue`](issue.md): Probe the created issue later when you need its full current snapshot
+- [`connector.gh.issue.comment.add`](issue-comment-add.md): Add a follow-up comment to an existing issue instead of creating a new one
+- [`connector.gh.issue.body.replace`](issue-body-replace.md): Rewrite the body of an existing issue instead of creating a fresh issue
+
+## Inspect next
+
+- connector.gh.issue
+- connector.gh.issue.comment.add
+- connector.gh.issue.body.append
+
+## Exact machine contract
+
+Use `ordo-help operation gh.issue.create --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_issue_create_step
 
@@ -61,108 +62,4 @@ Create one new GitHub issue and register its returned reference for later steps.
       title: inputs.title
       body: inputs.initial_body
     register: created_issue
-```
-
-## Effects
-
-- create GitHub issue
-
-## Failure modes
-
-- `repository_not_found`
-- `title_invalid`
-- `create_blocked`
-
-## Requirements
-
-- None
-
-## Invalidated observations
-
-- `gh.issue`
-
-## Example inputs
-
-### `gh.issue.create`
-
-```json
-{
-  "body": "string | null",
-  "repository": "string",
-  "title": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "create GitHub issue"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "body": "string | null",
-          "repository": "string",
-          "title": "string"
-        },
-        "reference": "gh.issue.create"
-      }
-    ],
-    "failure_modes": [
-      "repository_not_found",
-      "title_invalid",
-      "create_blocked"
-    ],
-    "inputs": {
-      "body": "string | null",
-      "repository": "string",
-      "title": "string"
-    },
-    "invalidates_observations": [
-      "gh.issue"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "issue.create",
-    "outputs": {
-      "issue_ref": "string",
-      "number": "integer",
-      "repository": "string",
-      "title": "string",
-      "url": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'gh.issue.create'",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "issue.create",
-  "reference": "gh.issue.create",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

@@ -5,6 +5,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+import venv
 from pathlib import Path
 
 from ordo.help_cli import build_command_line_response
@@ -27,6 +28,43 @@ class OrdoHelpCliTest(unittest.TestCase):
             env=os.environ.copy(),
             check=False,
         )
+
+    def test_editable_install_publishes_ordo_help_without_pythonpath(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            environment = os.environ.copy()
+            environment.pop("PYTHONPATH", None)
+
+            venv.create(temp_root / "venv", with_pip=True)
+            python = temp_root / "venv" / "bin" / "python"
+            install = subprocess.run(
+                [str(python), "-m", "pip", "install", "--editable", str(ROOT)],
+                cwd=str(temp_root),
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            self.assertEqual(install.returncode, 0, install.stderr)
+
+            result = subprocess.run(
+                [str(temp_root / "venv" / "bin" / "ordo-help"), "--json"],
+                cwd=str(temp_root),
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["tool_name"], "ordo-help")
+
+    def assert_reader_first_describe(self, result: subprocess.CompletedProcess[str], target: str, summary: str) -> None:
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith(f"{target}\n"), result.stdout)
+        self.assertIn(summary, result.stdout)
+        self.assertNotIn("metadata:", result.stdout)
+        self.assertNotIn("nearest surfaces:", result.stdout)
 
     def test_workflow_show_caller_interface_command_help_contract(self) -> None:
         command = next(item for item in build_command_line_response()["commands"] if item["name"] == "ordo-playbook")
@@ -71,42 +109,34 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_workflow_show_input_contract_discovery_parity(self) -> None:
         for args in (("command-line",), ("describe", "command-line.ordo-playbook")):
-            for json_args in ((), ("--json",)):
-                with self.subTest(args=args, json_args=json_args):
-                    result = self.run_help(*args, *json_args)
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    for term in (
-                        "complete", "inputs mapping", "normalized required",
-                        "caller_slot", "workflow_default", "launch_profile", "entry_binding",
-                        "explicit_cli", "both null", "default appears only when declared",
-                        "Selected profile values are never exposed", "source-presence rule",
-                        "required caller slots still require explicit caller input",
-                        "--input-file", "runtime profile switches", "top_findings", "all available findings",
-                        "main caller interface", "JSON-shaped serialized envelope",
-                        "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
-                        "--json retains the unchanged complete declared inputs mapping",
-                        "Plain output omits top-level launch_profile entirely",
-                        "removes caller_slot, sources, and coverage from retained inputs",
-                        "other record fields are preserved except required",
-                        "true for a required slot, false for an optional slot",
-                        "not workflow declaration requiredness", "No optional field is added",
-                        "original normalized required and caller_slot",
-                        "initial activation name and source, not the final bound workflow profile",
-                    ):
-                        self.assertIn(term, result.stdout)
-                    self.assertNotIn("--json also includes declared workflow inputs", result.stdout)
+            with self.subTest(args=args):
+                result = self.run_help(*args, "--json")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                for term in (
+                    "complete", "inputs mapping", "normalized required",
+                    "caller_slot", "workflow_default", "launch_profile", "entry_binding",
+                    "explicit_cli", "both null", "default appears only when declared",
+                    "Selected profile values are never exposed", "source-presence rule",
+                    "required caller slots still require explicit caller input",
+                    "--input-file", "runtime profile switches", "top_findings", "all available findings",
+                    "main caller interface", "JSON-shaped serialized envelope",
+                    "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
+                    "--json retains the unchanged complete declared inputs mapping",
+                    "Plain output omits top-level launch_profile entirely",
+                    "removes caller_slot, sources, and coverage from retained inputs",
+                    "other record fields are preserved except required",
+                    "true for a required slot, false for an optional slot",
+                    "not workflow declaration requiredness", "No optional field is added",
+                    "original normalized required and caller_slot",
+                    "initial activation name and source, not the final bound workflow profile",
+                ):
+                    self.assertIn(term, result.stdout)
+                self.assertNotIn("--json also includes declared workflow inputs", result.stdout)
 
         features = self.run_help("features")
         self.assertEqual(features.returncode, 0, features.stderr)
-        self.assertIn("workflows show <workflow>", features.stdout)
-        self.assertIn("source presence, not execution readiness", features.stdout)
-        self.assertIn("main caller interface", features.stdout)
-        self.assertIn("inputs: {}", features.stdout)
-        self.assertIn("omits top-level launch_profile entirely", features.stdout)
-        self.assertIn("removes caller_slot, sources, and coverage from retained inputs", features.stdout)
-        self.assertIn("true for a required slot, false for an optional slot", features.stdout)
-        self.assertIn("not workflow declaration requiredness", features.stdout)
-        self.assertIn("No optional field is added", features.stdout)
+        self.assertIn("Workflow-authoring feature map", features.stdout)
+        self.assertNotIn("JSON-shaped serialized envelope", features.stdout)
 
         command = self.run_help("describe", "command-line.ordo-playbook", "--json")
         self.assertIn("cannot validate CLI activation examples", command.stdout)
@@ -114,28 +144,10 @@ class OrdoHelpCliTest(unittest.TestCase):
             with self.subTest(handle=handle):
                 result = self.run_help("describe", handle)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("workflows show", result.stdout)
-                self.assertIn("snippet coverage: excerpt_verified", result.stdout)
-                self.assertIn("source parity", result.stdout)
+                self.assertTrue(result.stdout.startswith(f"{handle}\n"), result.stdout)
+                self.assertNotIn("snippet coverage:", result.stdout)
                 self.assertIn("canonical examples:", result.stdout)
-                for term in (
-                    "main caller interface", "JSON-shaped serialized envelope",
-                    "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
-                    "Plain output omits top-level launch_profile entirely",
-                    "removes caller_slot, sources, and coverage from retained inputs",
-                    "other record fields are preserved except required",
-                    "true for a required slot, false for an optional slot",
-                    "not workflow declaration requiredness", "No optional field is added",
-                    "original normalized required and caller_slot" if handle == "playbook.workflows"
-                    else "original normalized required, caller_slot",
-                    "omits top-level launch_profile and input caller_slot/sources/coverage",
-                    "discovery.workflow.input_source_missing",
-                    "Optional missing declarations do not warn",
-                    "warnings is omitted when none qualify",
-                    "initial activation name and source, not the final bound workflow profile",
-                    "--json retains the unchanged full declaration contract" if handle != "workflow.inputs"
-                    else "Use --json for the unchanged full declaration contract",
-                ):
+                for term in ("canonical examples:",):
                     self.assertIn(term, result.stdout)
                 for stale_promise in (
                     "same inputs mapping in plain and --json",
@@ -153,8 +165,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = self.run_help()
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("ordo-help", result.stdout)
-        self.assertIn("Recommended first calls:", result.stdout)
+        self.assertIn("Ordo help", result.stdout)
+        self.assertIn("recommended first calls:", result.stdout)
         self.assertIn("overview", result.stdout)
         self.assertEqual(result.stderr, "")
 
@@ -164,7 +176,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
         expected = json.loads((GOLDEN_DIR / "ordo_help_root.json").read_text(encoding="utf-8"))
-        self.assertEqual(actual, expected)
+        self.assertEqual({key: value for key, value in actual.items() if key != "human"}, expected)
+        self.assertIn("human", actual)
 
     def test_overview_json_matches_golden(self) -> None:
         result = self.run_help("overview", "--json")
@@ -172,7 +185,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
         expected = json.loads((GOLDEN_DIR / "ordo_help_overview.json").read_text(encoding="utf-8"))
-        self.assertEqual(actual, expected)
+        self.assertEqual({key: value for key, value in actual.items() if key != "human"}, expected)
+        self.assertIn("human", actual)
         self.assertIn("conditional_roles", actual)
         self.assertIn("guards handle applicability", actual["conditional_roles"]["rule"])
 
@@ -182,7 +196,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
         expected = json.loads((GOLDEN_DIR / "ordo_help_features.json").read_text(encoding="utf-8"))
-        self.assertEqual(actual, expected)
+        self.assertEqual({key: value for key, value in actual.items() if key != "human"}, expected)
+        self.assertIn("human", actual)
 
     def test_workflow_rules_json_matches_golden(self) -> None:
         result = self.run_help("workflow-rules", "--json")
@@ -190,7 +205,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
         expected = json.loads((GOLDEN_DIR / "ordo_help_workflow_rules.json").read_text(encoding="utf-8"))
-        self.assertEqual(actual, expected)
+        self.assertEqual({key: value for key, value in actual.items() if key != "human"}, expected)
+        self.assertIn("human", actual)
 
     def test_examples_json_matches_golden(self) -> None:
         result = self.run_help("examples", "--json")
@@ -198,7 +214,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
         expected = json.loads((GOLDEN_DIR / "ordo_help_examples.json").read_text(encoding="utf-8"))
-        self.assertEqual(actual, expected)
+        self.assertEqual({key: value for key, value in actual.items() if key != "human"}, expected)
+        self.assertIn("human", actual)
 
     def test_command_line_json_matches_golden(self) -> None:
         result = self.run_help("command-line", "--json")
@@ -206,7 +223,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
         expected = json.loads((GOLDEN_DIR / "ordo_help_command_line.json").read_text(encoding="utf-8"))
-        self.assertEqual(actual, expected)
+        self.assertEqual({key: value for key, value in actual.items() if key != "human"}, expected)
+        self.assertIn("human", actual)
 
     def test_bootstrap_flow_commands_succeed(self) -> None:
         root = json.loads(self.run_help("--json").stdout)
@@ -265,8 +283,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
         self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in override_result["facts"]))
-        self.assertTrue(any(item["kind"] == "example" and item["name"] == "set-active-task-from-gitx" for item in example_result["facts"]))
-        self.assertTrue(any(item["kind"] == "command_line_field" and item["name"] == "command-line.ordo-playbook.flag.input_file" for item in input_file_result["facts"]))
+        self.assertTrue(any(item["kind"] == "example" and item["name"] == "examples.set-active-task-from-gitx" for item in example_result["facts"]))
+        self.assertTrue(any(item["kind"] == "command_line_field" and item["name"] == "command-line.ordo-playbook.flag.input" for item in input_file_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.working_directory" for item in working_directory_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.category" for item in category_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "profile.launchers" for item in launcher_result["facts"]))
@@ -283,7 +301,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("routine_contract", model)
         self.assertTrue(model["routine_contract"]["workflow_call_surface"]["env_scalar_only"])
         self.assertEqual(model["routine_contract"]["workflow_call_surface"]["generated_env_name_examples"]["inputs.profile"], "ORDO_INPUTS_PROFILE")
-        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "routine_contract.workflow_call_surface" for item in env_result["facts"]))
+        self.assertEqual(env_result["facts"], [])
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "routine_contract.workflow_call_surface" for item in mapping_result["facts"]))
 
     def test_workflow_rules_publishes_routine_env_examples_and_anti_examples(self) -> None:
@@ -523,16 +541,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         builtin_overview = self.run_help("describe", "workflow.local_expression.builtin")
 
         self.assertEqual(filter_overview.returncode, 0)
-        self.assertIn("Overview of pipeline-style local-expression filters", filter_overview.stdout)
+        self.assert_reader_first_describe(filter_overview, "workflow.local_expression.filter", "Pipeline helpers that transform")
         self.assertIn("workflow.local_expression.builtin", filter_overview.stdout)
-        self.assertIn("pipeline filters:", filter_overview.stdout)
-        self.assertIn("- lookup (in=json, out=json, args=1)", filter_overview.stdout)
+        self.assertIn("workflow.local_expression.filter.lookup", filter_overview.stdout)
+        self.assertIn("`lower`, `trim`, and `slug`", filter_overview.stdout)
+        self.assertIn("`catch(codes, fallback)`", filter_overview.stdout)
 
         self.assertEqual(builtin_overview.returncode, 0)
-        self.assertIn("Overview of function-style local-expression builtins", builtin_overview.stdout)
+        self.assert_reader_first_describe(builtin_overview, "workflow.local_expression.builtin", "Call-style expression helpers")
         self.assertIn("workflow.local_expression.filter", builtin_overview.stdout)
-        self.assertIn("builtins:", builtin_overview.stdout)
-        self.assertIn("- is_present: Published local-expression builtin for inline workflow expressions.", builtin_overview.stdout)
+        self.assertIn("`format(template, values...)`", builtin_overview.stdout)
 
     def test_text_describe_local_expression_leaf_nodes_are_teaching_ready(self) -> None:
         lookup_filter = self.run_help("describe", "workflow.local_expression.filter.lookup")
@@ -542,29 +560,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         is_present_builtin = self.run_help("describe", "workflow.local_expression.builtin.is_present")
 
         self.assertEqual(lookup_filter.returncode, 0)
-        self.assertIn("Pipeline-style local-expression filter `lookup`", lookup_filter.stdout)
-        self.assertIn("expression contract:", lookup_filter.stdout)
-        self.assertIn("- input type: json", lookup_filter.stdout)
-        self.assertIn("- output type: json", lookup_filter.stdout)
+        self.assert_reader_first_describe(lookup_filter, "workflow.local_expression.filter.lookup", "Pipeline filter `lookup(key)`")
+        self.assertIn("Input: an object or mapping. Result: the selected value.", lookup_filter.stdout)
+        self.assertIn('inputs.labels | lookup("ready")', lookup_filter.stdout)
         self.assertIn("example_for: value", lookup_filter.stdout)
 
         self.assertEqual(only_filter.returncode, 0)
-        self.assertIn("Pipeline-style local-expression filter `only`", only_filter.stdout)
-        self.assertIn("- authored form: only(field=value) / only(field!=value)", only_filter.stdout)
-        self.assertIn("workflow.local_expression.filter", only_filter.stdout)
+        self.assert_reader_first_describe(only_filter, "workflow.local_expression.filter.only", "Pipeline filter `only(field=value)`")
+        self.assertIn("Only `field=value` and `field!=value` predicates are supported", only_filter.stdout)
 
         self.assertEqual(catch_filter.returncode, 0)
-        self.assertIn("Pipeline-style local-expression filter `catch(...)`", catch_filter.stdout)
-        self.assertIn("workflow.local_expression.filter.not_found", catch_filter.stdout)
+        self.assert_reader_first_describe(catch_filter, "workflow.local_expression.filter.catch", "Fallback filter for an expected expression failure")
+        self.assertIn("catch(codes, fallback)", catch_filter.stdout)
+        self.assertIn('catch(["issue_not_found"], false)', catch_filter.stdout)
 
         self.assertEqual(not_found_filter.returncode, 0)
-        self.assertIn("Pipeline-style local-expression filter `not_found`", not_found_filter.stdout)
-        self.assertIn("workflow.step.if", not_found_filter.stdout)
+        self.assert_reader_first_describe(not_found_filter, "workflow.local_expression.filter.not_found", "Pipeline filter `not_found`")
+        self.assertIn("turning a missing lookup into an absence decision", not_found_filter.stdout)
 
         self.assertEqual(is_present_builtin.returncode, 0)
-        self.assertIn("Function-style local-expression builtin `is_present(...)`", is_present_builtin.stdout)
-        self.assertIn("- allowed roots: args, inputs, probe, state, step", is_present_builtin.stdout)
-        self.assertIn("workflow.local_expression.builtin", is_present_builtin.stdout)
+        self.assert_reader_first_describe(is_present_builtin, "workflow.local_expression.builtin.is_present", "Call-style builtin `is_present(value)`")
+        self.assertIn("returns true for a present value", is_present_builtin.stdout)
 
     def test_text_describe_local_expression_adapter_group_is_teaching_ready(self) -> None:
         adapters = self.run_help("describe", "workflow.local_expression.adapter")
@@ -575,29 +591,30 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(adapters.returncode, 0)
         self.assertIn("Workflow capability for representation-adapter families", adapters.stdout)
-        self.assertIn("related surfaces:", adapters.stdout)
-        self.assertIn("workflow.local_expression.adapter.markdown", adapters.stdout)
+        self.assertIn("Transform a value through its published representation.", adapters.stdout)
+        self.assertIn("json, yaml, markdown, text, or key-value data", adapters.stdout)
+        self.assertIn("key-value adapter for key-value text", adapters.stdout)
+        self.assertIn("workflow.local_expression.adapter_binding", adapters.stdout)
+        self.assertIn("json.user.name with{root: inputs.body}", adapters.stdout)
 
         self.assertEqual(binding.returncode, 0)
-        self.assertIn("Outer adapter-binding form for passing host workflow references", binding.stdout)
-        self.assertIn("adapter seam:", binding.stdout)
-        self.assertIn("- outer binding form:  with{...}", binding.stdout)
+        self.assertIn("Form for explicitly passing workflow values into an adapter expression with with{...}.", binding.stdout)
+        self.assertIn("workflow.local_expression.adapter_seam", binding.stdout)
+        self.assertIn("Writing bare workflow references inside adapter syntax", binding.stdout)
 
         self.assertEqual(seam.returncode, 0)
-        self.assertIn("Shared adapter seam that separates host workflow references", seam.stdout)
-        self.assertIn("- family-owned body: yes", seam.stdout)
-        self.assertIn("- read path returns: returns selected_or_derived_value", seam.stdout)
+        self.assertIn("Shared authoring rules for supplying workflow values", seam.stdout)
+        self.assertIn("whether it reads or changes the represented value", seam.stdout)
+        self.assertIn("workflow-rules.representation_adapters", seam.stdout)
 
         self.assertEqual(markdown.returncode, 0)
-        self.assertIn("Representation-adapter family for selecting or transforming markdown sections", markdown.stdout)
-        self.assertIn("selectors:", markdown.stdout)
-        self.assertIn("shortcuts:", markdown.stdout)
-        self.assertIn("- task_list", markdown.stdout)
+        self.assertIn("Adapter family for selecting or changing Markdown sections", markdown.stdout)
+        self.assertIn("heading, block, list, or task-list meaning", markdown.stdout)
 
         self.assertEqual(json_family.returncode, 0)
-        self.assertIn("Representation-adapter family for selecting or updating strict JSON text", json_family.stdout)
-        self.assertIn("actions:", json_family.stdout)
-        self.assertIn("- set", json_family.stdout)
+        self.assertIn("Adapter family for selecting or updating JSON text by structure.", json_family.stdout)
+        self.assertIn("structural selection or updates", json_family.stdout)
+        self.assertIn("json.user.name with{root: inputs.body}", json_family.stdout)
 
     def test_text_describe_workflow_local_expressions_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "workflow.local_expressions")
@@ -606,10 +623,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Workflow capability for short inline local expressions", result.stdout)
         self.assertIn("use when:", result.stdout)
         self.assertIn("do not use for:", result.stdout)
-        self.assertIn("related surfaces:", result.stdout)
-        self.assertIn("workflow.local_expression.filter", result.stdout)
-        self.assertIn("workflow.local_expression.builtin", result.stdout)
-        self.assertIn("workflow.local_expression.adapter", result.stdout)
+        self.assertIn("Use a small inline expression without hiding workflow behavior.", result.stdout)
+        self.assertIn("pipeline filters, call-style built-in helpers, and representation adapters", result.stdout)
+        self.assertIn("call-style built-in helpers", result.stdout)
+        self.assertIn("representation adapters", result.stdout)
 
     def test_text_describe_workflow_include_group_is_teaching_ready(self) -> None:
         include_capability = self.run_help("describe", "workflow.include_fragments")
@@ -622,51 +639,60 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(include_capability.returncode, 0)
         self.assertIn("Workflow capability for source-time fragment reuse through include expansion", include_capability.stdout)
         self.assertIn("do not use for:", include_capability.stdout)
-        self.assertIn("workflow.include_contract", include_capability.stdout)
+        self.assertIn("source-time assembly", include_capability.stdout)
 
         self.assertEqual(include_contract.returncode, 0)
-        self.assertIn("Workflow include contract for resolving fragment files", include_contract.stdout)
-        self.assertIn("required fields:", include_contract.stdout)
-        self.assertIn("- include", include_contract.stdout)
-        self.assertIn("optional fields:", include_contract.stdout)
-        self.assertIn("- with", include_contract.stdout)
+        self.assertIn("Source-time reuse contract", include_contract.stdout)
+        self.assertIn("assembled workflow is validated or run", include_contract.stdout)
+        self.assertIn("workflow.include.include", include_contract.stdout)
+        self.assertIn("workflow.include.with", include_contract.stdout)
+        self.assertIn("Source-time reuse contract", include_contract.stdout)
+        self.assertIn("examples.include-args", include_contract.stdout)
 
         self.assertEqual(include_field.returncode, 0)
-        self.assertIn("Included-fragment call field that names the fragment file", include_field.stdout)
+        self.assertIn("Field that names a fragment file to insert before checking the workflow.", include_field.stdout)
         self.assertIn("workflow.include.with", include_field.stdout)
-        self.assertIn("workflow.include.include(include=fragments/check_issue.yaml)", include_field.stdout)
+        self.assertIn("reusable fragment content", include_field.stdout)
 
         self.assertEqual(include_with.returncode, 0)
-        self.assertIn("Included-fragment call field for binding fragment-local args", include_with.stdout)
+        self.assertIn("Field for supplying declared fragment arguments while the fragment is included.", include_with.stdout)
         self.assertIn("workflow.fragment.args", include_with.stdout)
         self.assertIn("workflow.run.with", include_with.stdout)
 
         self.assertEqual(fragment_args.returncode, 0)
-        self.assertIn("Included-fragment metadata field that declares fragment-local args", fragment_args.stdout)
+        self.assertIn("Fragment metadata that declares local arguments available as args.name", fragment_args.stdout)
         self.assertIn("workflow.inputs", fragment_args.stdout)
 
         self.assertEqual(fragment_description.returncode, 0)
-        self.assertIn("Included-fragment metadata field for documenting the reusable fragment's purpose", fragment_description.stdout)
+        self.assertIn("Fragment metadata for a short explanation of the fragment's purpose.", fragment_description.stdout)
         self.assertIn("examples.include-plain", fragment_description.stdout)
+
+    def test_text_describe_workflow_run_contract_teaches_runtime_decisions(self) -> None:
+        result = self.run_help("describe", "workflow.run_contract")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Run-time invocation contract", result.stdout)
+        self.assertIn("after the workflow has passed validation and started", result.stdout)
+        self.assertIn("`with` inputs", result.stdout)
+        self.assertIn("`if` behavior", result.stdout)
+        self.assertIn("`gate`", result.stdout)
+        self.assertIn("`register`", result.stdout)
+        self.assertIn("`for_each`", result.stdout)
+        self.assertIn("inline `steps` body", result.stdout)
+        self.assertIn("examples.run-fan-out", result.stdout)
 
     def test_text_describe_workflow_inputs_group_is_teaching_ready(self) -> None:
         inputs_field = self.run_help("describe", "workflow.inputs")
         inputs_contract = self.run_help("describe", "workflow.inputs_contract")
 
         self.assertEqual(inputs_field.returncode, 0)
-        self.assertIn("Top-level workflow field for declaring the named activation inputs", inputs_field.stdout)
+        self.assert_reader_first_describe(inputs_field, "workflow.inputs", "Top-level field that declares the activation inputs")
         self.assertIn("workflow.inputs_contract", inputs_field.stdout)
         self.assertIn("playbook.workflows.with", inputs_field.stdout)
         self.assertIn("command-line.ordo-playbook.flag.input", inputs_field.stdout)
 
         self.assertEqual(inputs_contract.returncode, 0)
-        self.assertIn("Workflow activation-input contract for how inputs are declared", inputs_contract.stdout)
-        self.assertIn("activation contract:", inputs_contract.stdout)
-        self.assertIn("- declaration shape: mapping", inputs_contract.stdout)
-        self.assertIn("- access surface: inputs.name", inputs_contract.stdout)
-        self.assertIn("- rejects unknown activation inputs: yes", inputs_contract.stdout)
-        self.assertIn("declaration fields:", inputs_contract.stdout)
-        self.assertIn("- description (type=string, required=no, role=input_meaning)", inputs_contract.stdout)
+        self.assert_reader_first_describe(inputs_contract, "workflow.inputs_contract", "Rules for declaring, accessing, validating")
         self.assertIn("workflow-rules.input_validation_default", inputs_contract.stdout)
 
     def test_text_describe_routine_workflow_call_group_is_teaching_ready(self) -> None:
@@ -675,22 +701,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         call_env = self.run_help("describe", "routine_contract.workflow_call.env")
 
         self.assertEqual(call_surface.returncode, 0)
-        self.assertIn("Routine workflow-call surface for passing declared business args", call_surface.stdout)
-        self.assertIn("fields:", call_surface.stdout)
-        self.assertIn("- args (type=object, required=no, role=declared_business_arguments)", call_surface.stdout)
-        self.assertIn("env forwarding contract:", call_surface.stdout)
-        self.assertIn("- automatic input env projection: no", call_surface.stdout)
-        self.assertIn("- generated env examples:", call_surface.stdout)
+        self.assertIn("Routine call settings for passing declared values", call_surface.stdout)
+        self.assert_reader_first_describe(call_surface, "routine_contract.workflow_call_surface", "Routine call settings for passing declared values")
 
         self.assertEqual(call_args.returncode, 0)
-        self.assertIn("Routine workflow-call field for business arguments", call_args.stdout)
+        self.assertIn("Routine call field for values", call_args.stdout)
         self.assertIn("routine_contract.entry.args", call_args.stdout)
-        self.assertIn("related examples:", call_args.stdout)
+        self.assertIn("related surfaces:", call_args.stdout)
 
         self.assertEqual(call_env.returncode, 0)
         self.assertIn("Routine workflow-call field for forwarding a short explicit list of scalar caller references", call_env.stdout)
         self.assertIn("workflow-rules.routine.*", call_env.stdout)
-        self.assertIn("related examples:", call_env.stdout)
+        self.assertIn("related surfaces:", call_env.stdout)
 
     def test_text_describe_routine_entry_core_group_is_teaching_ready(self) -> None:
         entry_args = self.run_help("describe", "routine_contract.entry.args")
@@ -699,24 +721,52 @@ class OrdoHelpCliTest(unittest.TestCase):
         failure_modes = self.run_help("describe", "routine_contract.entry.failure_modes")
 
         self.assertEqual(entry_args.returncode, 0)
-        self.assertIn("Routine registry-entry field for declaring which business arguments a routine accepts", entry_args.stdout)
+        self.assertIn("Routine declaration field for listing the values a routine accepts", entry_args.stdout)
         self.assertIn("routine_contract.workflow_call.args", entry_args.stdout)
-        self.assertIn("related examples:", entry_args.stdout)
+        self.assertIn("related surfaces:", entry_args.stdout)
 
         self.assertEqual(entry_implementation.returncode, 0)
-        self.assertIn("Routine registry-entry field for the bounded execution envelope", entry_implementation.stdout)
+        self.assertIn("Routine declaration field for the command that runs the project-local helper", entry_implementation.stdout)
         self.assertIn("routine_contract.implementation.argv", entry_implementation.stdout)
-        self.assertIn("related examples:", entry_implementation.stdout)
+        self.assertIn("related surfaces:", entry_implementation.stdout)
 
         self.assertEqual(implementation_argv.returncode, 0)
-        self.assertIn("Routine implementation field for the bounded argv vector", implementation_argv.stdout)
+        self.assertIn("Routine implementation field for the command argument list that launches the local helper", implementation_argv.stdout)
         self.assertIn("workflow-rules.routine.*", implementation_argv.stdout)
-        self.assertIn("related examples:", implementation_argv.stdout)
+        self.assertIn("related surfaces:", implementation_argv.stdout)
+        self.assertIn('argv: [.ordo/scripts/demo-check, "{target}"]', implementation_argv.stdout)
+        self.assertIn("A whole argv item written as `{argument_name}` is replaced", implementation_argv.stdout)
 
         self.assertEqual(failure_modes.returncode, 0)
-        self.assertIn("Routine registry-entry field for declaring the expected named failure classes", failure_modes.stdout)
+        self.assertIn("Routine declaration field for naming the expected failure outcomes", failure_modes.stdout)
         self.assertIn("workflow-rules.routine.*", failure_modes.stdout)
-        self.assertIn("related examples:", failure_modes.stdout)
+        self.assertIn("related surfaces:", failure_modes.stdout)
+
+    def test_text_describe_routine_contract_starts_a_new_author_honestly(self) -> None:
+        routine = self.run_help("describe", "routine_contract")
+        entry_args = self.run_help("describe", "routine_contract.entry.args")
+        implementation = self.run_help("describe", "routine_contract.entry.implementation")
+        argv = self.run_help("describe", "routine_contract.implementation.argv")
+
+        self.assertEqual(routine.returncode, 0)
+        for text in (
+            "limited project-local helper",
+            "narrow, reviewable local automation boundary",
+            "Do not hide an unclear product or workflow decision inside a routine.",
+            '"{target}"',
+            "failure_modes",
+            "Run `ordo-help describe routine_contract` to inspect the checked complete routine example.",
+            "Complete routine registry and helper",
+        ):
+            self.assertIn(text, routine.stdout)
+        self.assertNotIn("routine_bundle_registry_and_implementation", routine.stdout)
+        self.assertIn("routine_contract.entry.implementation", entry_args.stdout)
+        self.assertIn("routine_contract.entry.args", implementation.stdout)
+        self.assertIn("routine_contract.entry.implementation", argv.stdout)
+        for text in (routine.stdout, entry_args.stdout, implementation.stdout, argv.stdout):
+            self.assertNotIn("registry-entry", text)
+            self.assertNotIn("business semantics", text)
+            self.assertNotIn("payload", text)
 
     def test_text_describe_routine_metadata_tail_group_is_teaching_ready(self) -> None:
         entry_kind = self.run_help("describe", "routine_contract.entry.kind")
@@ -727,27 +777,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         version_field = self.run_help("describe", "routine_contract.version")
 
         self.assertEqual(entry_kind.returncode, 0)
-        self.assertIn("Routine registry-entry field for the narrow classification", entry_kind.stdout)
+        self.assertIn("Routine declaration field for the required kind marker", entry_kind.stdout)
         self.assertIn("workflow-rules.routine.*", entry_kind.stdout)
 
         self.assertEqual(entry_summary.returncode, 0)
-        self.assertIn("Routine registry-entry field for the short human-facing purpose statement", entry_summary.stdout)
+        self.assertIn("Routine declaration field for the short purpose statement", entry_summary.stdout)
         self.assertIn("routine_contract.entry.outputs", entry_summary.stdout)
 
         self.assertEqual(entry_outputs.returncode, 0)
-        self.assertIn("Routine registry-entry field for declaring the successful outward result shape", entry_outputs.stdout)
+        self.assertIn("Routine declaration field for describing the successful result", entry_outputs.stdout)
         self.assertIn("routine_contract.workflow_call_surface", entry_outputs.stdout)
 
         self.assertEqual(entry_log_hints.returncode, 0)
-        self.assertIn("Routine registry-entry field for optional logging and observability hints", entry_log_hints.stdout)
+        self.assertIn("Routine declaration field for optional logging hints", entry_log_hints.stdout)
         self.assertIn("routine_contract.entry.failure_modes", entry_log_hints.stdout)
 
         self.assertEqual(routines_field.returncode, 0)
-        self.assertIn("Routine-registry top-level field that contains the declared set of named routine entries", routines_field.stdout)
+        self.assertIn("Top-level field that contains this project's named routine declarations", routines_field.stdout)
         self.assertIn("workflow-rules.routine.*", routines_field.stdout)
 
         self.assertEqual(version_field.returncode, 0)
-        self.assertIn("Routine-registry top-level field for the schema version", version_field.stdout)
+        self.assertIn("Top-level field for the format version", version_field.stdout)
         self.assertIn("routine_contract.routines", version_field.stdout)
 
     def test_text_describe_state_set_group_is_teaching_ready(self) -> None:
@@ -759,11 +809,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_capability.returncode, 0)
         self.assertIn("Workflow step capability for writing one explicit value into one bound state target", step_capability.stdout)
         self.assertIn("each state_set step writes exactly one resolved target entry", step_capability.stdout)
+        self.assertIn("different roles, profiles, keys, or fields", step_capability.stdout)
         self.assertIn("example_for: field_fragment", step_capability.stdout)
         self.assertIn("example_for: step_fragment", step_capability.stdout)
+        self.assertIn("workflow.state_needs", step_capability.stdout)
+        self.assertIn("workflow.state_bindings", step_capability.stdout)
+        self.assertIn("state.shared_state", step_capability.stdout)
 
         self.assertEqual(step_form.returncode, 0)
-        self.assertIn("Workflow step form for one named state-write checkpoint", step_form.stdout)
+        self.assertIn("Named step form that stores one value", step_form.stdout)
         self.assertIn("state.workflow_surface.step_state_set_field", step_form.stdout)
         self.assertIn("state_set.single_target_entry", step_form.stdout)
 
@@ -772,9 +826,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.step.state_set", state_field.stdout)
 
         self.assertEqual(single_target.returncode, 0)
-        self.assertIn("state_set must contain exactly one target entry", single_target.stdout)
-        self.assertIn("reason:", single_target.stdout)
-        self.assertIn("related codes:", single_target.stdout)
+        self.assertIn("published write form is `state_set` with one target entry", single_target.stdout)
+        self.assertIn("ordering, review, and failure reporting remain unambiguous", single_target.stdout)
+        self.assertIn("Split independent writes into separate steps", single_target.stdout)
 
     def test_text_describe_state_delete_group_is_teaching_ready(self) -> None:
         step_capability = self.run_help("describe", "workflow.step.state_delete")
@@ -782,14 +836,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         state_field = self.run_help("describe", "state.workflow_surface.step_state_delete_field")
 
         self.assertEqual(step_capability.returncode, 0)
-        self.assertIn("Workflow step capability for deleting one explicit bound state target", step_capability.stdout)
-        self.assertIn("use when:", step_capability.stdout)
+        self.assertIn("Author `state_delete` with one bound state path", step_capability.stdout)
+        self.assertIn("before deleting:", step_capability.stdout)
+        self.assertIn("ordering and failures:", step_capability.stdout)
+        self.assertIn("state_needs", step_capability.stdout)
+        self.assertIn("named playbook state location", step_capability.stdout)
+        self.assertNotIn("Nested deferral", step_capability.stdout)
         self.assertIn("workflow.step.state_set", step_capability.stdout)
         self.assertIn("example_for: field_fragment", step_capability.stdout)
         self.assertIn("example_for: step_fragment", step_capability.stdout)
 
         self.assertEqual(step_form.returncode, 0)
-        self.assertIn("Workflow step form for one named state-deletion checkpoint", step_form.stdout)
+        self.assertIn("Named step form that removes one bound state target", step_form.stdout)
         self.assertIn("state.workflow_surface.step_state_delete_field", step_form.stdout)
         self.assertIn("workflow.step_forms.state_set", step_form.stdout)
 
@@ -804,7 +862,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(needs_capability.returncode, 0)
         self.assertIn("Workflow capability for declaring which state roles and storage targets the workflow requires", needs_capability.stdout)
         self.assertIn("workflow.state_bindings", needs_capability.stdout)
-        self.assertIn("playbook.states", needs_capability.stdout)
+        self.assertIn("state_needs", needs_capability.stdout)
         self.assertIn("example_for: workflow_fragment", needs_capability.stdout)
 
         self.assertEqual(needs_field.returncode, 0)
@@ -818,7 +876,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(bindings_capability.returncode, 0)
         self.assertIn("Workflow capability for binding declared playbook state locations into workflow roles", bindings_capability.stdout)
-        self.assertIn("playbook.states", bindings_capability.stdout)
+        self.assertIn("state_needs", bindings_capability.stdout)
         self.assertIn("example_for: workflow_fragment", bindings_capability.stdout)
 
         self.assertEqual(bindings_field.returncode, 0)
@@ -837,7 +895,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("example_for: step_fragment", step_capability.stdout)
 
         self.assertEqual(step_form.returncode, 0)
-        self.assertIn("Workflow step form for one named ephemeral value checkpoint", step_form.stdout)
+        self.assertIn("Named step form that computes one local value", step_form.stdout)
         self.assertIn("workflow.step.result", step_form.stdout)
         self.assertIn("workflow.step.publish", step_form.stdout)
 
@@ -959,27 +1017,26 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"]')
         self.assertEqual(payload["canonical_examples"][0]["form"], "value")
 
-    def test_describe_state_publishes_missing_value_reporting_boundaries(self) -> None:
+    def test_describe_state_is_a_concise_authoring_guide(self) -> None:
         payload = json.loads(self.run_help("describe", "state", "--json").stdout)
         text = self.run_help("describe", "state")
         self.assertEqual(text.returncode, 0)
         guidance = "\n".join(payload["metadata"]["use_when"])
-        for phrase in (
-            "runtime.value.state_missing",
-            "private resolved absolute location path, text key, and field path",
-            "does not merge inode or symlink aliases",
-            "occurrence_count (emitted events, not inferred reads)",
-            "reported_at (unique effective structural locations of emitted diagnostic events, not all dependent uses)",
-            "distinct expression/state pairs, with no separate workflow field",
-            "A singleton keeps existing details",
-            "no evaluation, short-circuit, cache, status, or barrier changes",
-            "Operation-result diagnostics remain unchanged",
-            "next keeps groups candidate-local",
-            "not runtime grouping output",
-        ):
+        for phrase in ("state_needs", "playbook", "state.<role>[<key>]", "state_set", "state_delete"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, guidance)
-                self.assertIn(phrase, text.stdout)
+        self.assertIn(payload["human"]["summary"], text.stdout)
+        for phrase in (
+            "graph", "normalized paths", "symlinks", "hardlinks", "cross-invocation",
+            "caching", "status", "barriers", "reporting", "docs/", "meta/",
+        ):
+            with self.subTest(forbidden=phrase):
+                self.assertNotIn(phrase, text.stdout.lower())
+        for handle in (
+            "workflow.state_needs", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete",
+        ):
+            with self.subTest(handle=handle):
+                self.assertIn(handle, text.stdout)
 
     def test_describe_state_step_and_filter_nodes_publish_canonical_snippets(self) -> None:
         state_set = json.loads(self.run_help("describe", "workflow.step.state_set", "--json").stdout)
@@ -1080,7 +1137,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("duplicate target names conflict", target["metadata"]["effects"][0])
         self.assertEqual(with_payload["snippet_coverage"], "excerpt_verified")
         self.assertEqual(with_payload["canonical_examples"][0]["form"], "field_fragment")
-        self.assertIn("opaque object payload", with_payload["metadata"]["definition"])
+        self.assertIn("structured data", with_payload["human"]["summary"])
         self.assertEqual(reason["snippet_coverage"], "excerpt_verified")
         self.assertIn("human-readable explanation", reason["metadata"]["definition"])
         self.assertEqual(reason["canonical_examples"][0]["yaml"], "    reason: Share one profile-scoped triage adaptation record.")
@@ -1171,7 +1228,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Delete one local non-default Git branch", delete["metadata"]["definition"])
         self.assertEqual(delete["canonical_examples"][0]["form"], "step_fragment")
         self.assertEqual(delete["canonical_examples"][1]["name"], "git_branch_delete_force_step")
-        self.assertIn("force defaults to false", delete["metadata"]["definition"])
+        self.assertIn("selected local branch no longer exists", json.dumps(delete["human"]))
         self.assertIn("git branch -D", delete["metadata"]["definition"])
 
         self.assertEqual(switch["snippet_coverage"], "runner_verified")
@@ -1272,6 +1329,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("current Git worktree cleanliness and changed-path inventory", worktree["metadata"]["definition"])
         self.assertEqual(worktree["canonical_examples"][0]["form"], "step_fragment")
         self.assertIn("connector.git.state", [item["handle"] for item in worktree["metadata"]["nearest_surfaces"]])
+        self.assertIn("repository root", worktree["human"]["summary"] + " ".join(item for section in worktree["human"]["sections"] for item in section.get("items", [])))
 
         self.assertEqual(state["snippet_coverage"], "runner_verified")
         self.assertIn("combined Git repository-state snapshot", state["metadata"]["definition"])
@@ -1302,6 +1360,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(rebase_onto["snippet_coverage"], "runner_verified")
         self.assertIn("Rewrite one non-default Git branch", rebase_onto["metadata"]["definition"])
         self.assertEqual(rebase_onto["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("newly rebased head revision", " ".join(item for section in rebase_onto["human"]["sections"] for item in section.get("items", [])))
 
     def test_describe_connector_git_sync_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
         fetch = json.loads(self.run_help("describe", "connector.git.sync.fetch", "--json").stdout)
@@ -1317,15 +1376,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Push one local Git branch", push["metadata"]["definition"])
         self.assertEqual(push["canonical_examples"][0]["form"], "step_fragment")
         self.assertIn("connector.git.sync.fetch", [item["handle"] for item in push["metadata"]["nearest_surfaces"]])
-        for payload, blocked in ((fetch, "fetch_blocked"), (push, "push_blocked")):
-            guidance = " ".join(payload["metadata"]["use_when"] + payload["metadata"]["do_not_use_for"])
-            for term in ("exactly match", "team/origin", "action.git.invalid_remote", "action.git.remote_not_found", "action.git.remote_inventory_failed", blocked, "Inspection modes do not", "not a protocol sandbox"):
-                self.assertIn(term, guidance)
-            self.assertIn("configured", payload["canonical_examples"][0]["yaml"])
+        for payload in (fetch, push):
+            self.assertIn("Result and boundary", [section["heading"] for section in payload["human"]["sections"]])
         self.assertIn("omitted or null", push["metadata"]["definition"])
-        self.assertIn("including nested names", " ".join(push["metadata"]["use_when"]))
-        self.assertNotIn("splits at the first slash", json.dumps(push))
-        self.assertNotIn("slash-splitting", json.dumps(fetch))
 
     def test_describe_connector_git_stash_is_teaching_ready(self) -> None:
         stash = json.loads(self.run_help("describe", "connector.git.stash", "--json").stdout)
@@ -1358,6 +1411,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(command["canonical_examples"][0]["form"], "step_fragment")
         self.assertEqual(command["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("workflow-rules.shell.command", [item["handle"] for item in command["metadata"]["nearest_surfaces"]])
+        self.assertIn("workflow-rules.routine.*", [item["handle"] for item in command["metadata"]["nearest_surfaces"]])
+        self.assertNotIn("routines", [item["handle"] for item in command["metadata"]["nearest_surfaces"]])
 
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
@@ -1366,12 +1421,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 56)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 74)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 78)
         self.assertEqual(handles["connector.git.remote"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.actions.run"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.actions.run.jobs"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
-        self.assertEqual(handles["connector.authoring"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.authoring"]["snippet_coverage"], "none")
         self.assertEqual(handles["connector.gh.pr.create"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.pr.list"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.checks"]["snippet_coverage"], "excerpt_verified")
@@ -1502,12 +1557,8 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_text_describe_workflow_step_if_shows_optional_step_example(self) -> None:
         result = self.run_help("describe", "workflow.step.if")
 
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("Local step-branching field for an optional step or local branch inside an already-valid path", result.stdout)
-        self.assertIn("use when:", result.stdout)
-        self.assertIn("- one local step is optional inside a path that is already valid", result.stdout)
+        self.assert_reader_first_describe(result, "workflow.step.if", "Optional `if` field for local branching inside an already-valid path")
         self.assertIn("do not use for:", result.stdout)
-        self.assertIn("- workflow applicability or early rejection", result.stdout)
         self.assertIn("example_for: value", result.stdout)
         self.assertIn("example_for: step_fragment", result.stdout)
         self.assertIn("Show a valid `workflow.step.if` value for the case when a close comment is present.", result.stdout)
@@ -1518,13 +1569,8 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_text_describe_workflow_step_gate_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "workflow.step.gate")
 
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("Step-admission field for deciding whether a path or step may run at all", result.stdout)
-        self.assertIn("use when:", result.stdout)
-        self.assertIn("- the real question is whether the protected path or step may execute at all", result.stdout)
+        self.assert_reader_first_describe(result, "workflow.step.gate", "Optional `gate` field for admitting or blocking protected step work")
         self.assertIn("do not use for:", result.stdout)
-        self.assertIn("- whole-workflow applicability; use guards instead", result.stdout)
-        self.assertIn("workflow.step.if", result.stdout)
         self.assertIn("example_for: value", result.stdout)
         self.assertIn("example_for: step_fragment", result.stdout)
         self.assertIn("Show one complete gate-checkpoint step", result.stdout)
@@ -1535,13 +1581,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = self.run_help("describe", "workflow.step.result")
 
         self.assertEqual(publish.returncode, 0)
-        self.assertIn("Step field that carries the outward-facing payload emitted by a publish step for callers", publish.stdout)
-        self.assertIn("workflow.step.result", publish.stdout)
+        self.assert_reader_first_describe(publish, "workflow.step.publish", "Required `publish` field for a named caller-facing output")
+        self.assertIn("outward-facing published output bundle", publish.stdout)
         self.assertIn("example_for: field_fragment", publish.stdout)
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Step field that carries the value appended by a result step to the workflow's ordered result list", result.stdout)
-        self.assertIn("workflow.step.publish", result.stdout)
+        self.assertIn("Required `result` field for a result-emission step", result.stdout)
+        self.assertIn("workflow result", result.stdout)
         self.assertIn("example_for: field_fragment", result.stdout)
 
     def test_text_describe_workflow_step_run_family_group_is_teaching_ready(self) -> None:
@@ -1551,23 +1597,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         step_with = self.run_help("describe", "workflow.step.with")
 
         self.assertEqual(step_run.returncode, 0)
-        self.assertIn("Step field that names the reusable runtime target invoked by a run-invocation step", step_run.stdout)
-        self.assertIn("workflow.step.steps", step_run.stdout)
+        self.assert_reader_first_describe(step_run, "workflow.step.run", "Required `run` field for a named workflow invocation")
+        self.assertIn("named reusable runtime target", step_run.stdout)
         self.assertIn("example_for: step_fragment", step_run.stdout)
 
         self.assertEqual(step_steps.returncode, 0)
-        self.assertIn("Step field that carries the inline repeated step body executed for each item", step_steps.stdout)
-        self.assertIn("workflow.step.for_each", step_steps.stdout)
+        self.assertIn("Required inline body field for an inline fan-out step", step_steps.stdout)
+        self.assertIn("for_each: inputs.issue_numbers", step_steps.stdout)
         self.assertIn("example_for: field_fragment", step_steps.stdout)
 
         self.assertEqual(step_for_each.returncode, 0)
-        self.assertIn("Step field that provides the array-valued repeated item source", step_for_each.stdout)
-        self.assertIn("workflow.step.steps", step_for_each.stdout)
+        self.assertIn("Required fan-out field for an inline repeated body and optional field for a named run", step_for_each.stdout)
+        self.assertIn("steps:", step_for_each.stdout)
         self.assertIn("example_for: value", step_for_each.stdout)
 
         self.assertEqual(step_with.returncode, 0)
-        self.assertIn("Step field that binds invocation arguments into an operation call or named run target at runtime", step_with.stdout)
-        self.assertIn("workflow.include.with", step_with.stdout)
+        self.assertIn("Optional `with` field for operation or named-run inputs", step_with.stdout)
+        self.assertIn("binding runtime arguments into a named run target", step_with.stdout)
         self.assertIn("example_for: field_fragment", step_with.stdout)
 
     def test_text_describe_workflow_step_operation_family_group_is_teaching_ready(self) -> None:
@@ -1575,13 +1621,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         step_register = self.run_help("describe", "workflow.step.register")
 
         self.assertEqual(step_uses.returncode, 0)
-        self.assertIn("Step field that selects the published operation surface invoked by an operation-call step", step_uses.stdout)
-        self.assertIn("workflow.step.register", step_uses.stdout)
+        self.assert_reader_first_describe(step_uses, "workflow.step.uses", "Required `uses` field for an operation-call step")
+        self.assertIn("register: repo_info", step_uses.stdout)
         self.assertIn("example_for: step_fragment", step_uses.stdout)
 
         self.assertEqual(step_register.returncode, 0)
         self.assertIn("Workflow step capability for binding one step result to a reusable step-local name", step_register.stdout)
-        self.assertIn("workflow.step_forms.operation_call", step_register.stdout)
+        self.assertIn("step.<register>.outputs.value", step_register.stdout)
         self.assertIn("example_for: step_fragment", step_register.stdout)
 
     def test_text_describe_profile_overrides_group_is_teaching_ready(self) -> None:
@@ -1590,16 +1636,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         with_payload = self.run_help("describe", "profile.overrides.with")
         reason = self.run_help("describe", "profile.overrides.reason")
 
-        self.assertIn("publishing one or more explicit override records", parent.stdout)
-        self.assertIn("fields:", parent.stdout)
-        self.assertIn("- target (type=string, required=yes, role=consumer_owned_override_key)", parent.stdout)
-        self.assertIn("effects:", parent.stdout)
+        self.assertIn("publishing explicit override records", parent.stdout)
+        self.assertIn("what happens:", parent.stdout)
+        self.assertNotIn("type=string", parent.stdout)
+        self.assertNotIn("effects:", parent.stdout)
         self.assertIn("canonical examples:", parent.stdout)
         self.assertIn("overrides:", parent.stdout)
-        self.assertIn("consumer-owned target key", target.stdout)
+        self.assertIn("which integration or local convention", target.stdout)
         self.assertIn("duplicate target names conflict", target.stdout)
-        self.assertIn("opaque object payload", with_payload.stdout)
-        self.assertIn("the engine preserves this object verbatim", with_payload.stdout)
+        self.assertIn("structured data", with_payload.stdout)
+        self.assertIn("does not treat its keys as built-in workflow behavior", with_payload.stdout)
         self.assertIn("human-readable explanation", reason.stdout)
         self.assertIn("reason text is optional", reason.stdout)
 
@@ -1616,7 +1662,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("version: 1", version.stdout)
 
         self.assertEqual(connectors.returncode, 0)
-        self.assertIn("repository-wide default connector bootstrap context", connectors.stdout)
+        self.assertIn("repository-wide default connector settings", connectors.stdout)
         self.assertIn("use when:", connectors.stdout)
         self.assertIn("profile.connectors", connectors.stdout)
         self.assertIn("playbook.workflows", connectors.stdout)
@@ -1627,7 +1673,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = self.run_help("describe", "profile.connectors")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Profile-scoped connector bootstrap field", result.stdout)
+        self.assertIn("Profile-scoped connector setup field", result.stdout)
         self.assertIn("use when:", result.stdout)
         self.assertIn("playbook.connectors", result.stdout)
         self.assertIn("profile.inputs", result.stdout)
@@ -1679,7 +1725,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("use when:", result.stdout)
         self.assertIn("workflow-rules.paired_check_review_passes", result.stdout)
         self.assertIn("profile.overrides", result.stdout)
-        self.assertIn("does not treat the labels themselves as an automatic execution plan", result.stdout)
+        self.assertIn("labels themselves do not form an automatic execution plan", result.stdout)
         self.assertIn("example_for: field_fragment", result.stdout)
         self.assertIn("- unit", result.stdout)
         self.assertIn("- contract", result.stdout)
@@ -1689,39 +1735,45 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("Deprecated profile field", result.stdout)
-        self.assertIn("status: deprecated", result.stdout)
-        self.assertIn("preferred_alternative: published_routines", result.stdout)
+        self.assertIn("deprecated and retained mainly for compatibility", result.stdout)
+        self.assertIn("supported routines alternative", result.stdout)
         self.assertIn("workflow.step.launcher", result.stdout)
         self.assertIn("workflow-rules.routine.*", result.stdout)
+        self.assertIn("examples.launcher-step", result.stdout)
         self.assertIn("example_for: field_fragment", result.stdout)
         self.assertIn("shell_frontend:", result.stdout)
         self.assertIn("file: ../launchers/shell-frontend.yaml", result.stdout)
+        self.assertNotIn("connector: shell.command", result.stdout)
+        self.assertIn("`before` for setup before the step", result.stdout)
+        self.assertIn("`after` for cleanup after it", result.stdout)
 
     def test_text_describe_runtime_launchers_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "runtime.launchers")
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("Deprecated runtime capability", result.stdout)
-        self.assertIn("status: deprecated", result.stdout)
-        self.assertIn("scope: runtime", result.stdout)
+        self.assertIn("Deprecated runtime capability", result.stdout)
+        self.assertNotIn("scope:", result.stdout)
         self.assertIn("use when:", result.stdout)
         self.assertIn("do not use for:", result.stdout)
         self.assertIn("profile.launchers", result.stdout)
         self.assertIn("workflow.step.launcher", result.stdout)
-        self.assertIn("must not infer:", result.stdout)
+        self.assertIn("compatibility, not as the preferred path", result.stdout)
 
     def test_text_describe_workflow_step_launcher_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "workflow.step.launcher")
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("Deprecated workflow-step capability", result.stdout)
-        self.assertIn("status: deprecated", result.stdout)
-        self.assertIn("scope: workflow.step", result.stdout)
+        self.assertIn("deprecated and retained for compatibility only", result.stdout)
+        self.assertNotIn("scope:", result.stdout)
         self.assertIn("use when:", result.stdout)
         self.assertIn("do not use for:", result.stdout)
-        self.assertIn("runtime.launchers", result.stdout)
+        self.assertIn("routines are now preferred", result.stdout)
         self.assertIn("profile.launchers", result.stdout)
-        self.assertIn("must not infer:", result.stdout)
+        self.assertIn("move forward:", result.stdout)
+        self.assertIn("examples.launcher-step", result.stdout)
+        self.assertIn("deprecated and retained for compatibility only", result.stdout)
 
     def test_text_describe_workflow_version_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "workflow.version")
@@ -1739,7 +1791,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = self.run_help("describe", "workflow.workflow")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Required top-level workflow identity field", result.stdout)
+        self.assert_reader_first_describe(result, "workflow.workflow", "Required top-level field that gives the workflow")
         self.assertIn("do not use for:", result.stdout)
         self.assertIn("playbook.workflows.file", result.stdout)
         self.assertIn("profile.name", result.stdout)
@@ -1757,41 +1809,40 @@ class OrdoHelpCliTest(unittest.TestCase):
         steps = self.run_help("describe", "workflow.run.steps")
 
         self.assertEqual(run_target.returncode, 0)
-        self.assertIn("named reusable runtime target", run_target.stdout)
-        self.assertIn("workflow.run.steps", run_target.stdout)
-        self.assertIn("workflow.step_forms.run_invocation", run_target.stdout)
+        self.assertIn("Required `run` field that names the workflow target called by this step", run_target.stdout)
+        self.assertIn("named reusable run target", run_target.stdout)
         self.assertIn("example_for: field_fragment", run_target.stdout)
         self.assertIn("run: examples/fragments/check-issue.yaml", run_target.stdout)
 
         self.assertEqual(with_payload.returncode, 0)
-        self.assertIn("caller-scoped argument values", with_payload.stdout)
-        self.assertIn("workflow.include.with", with_payload.stdout)
+        self.assertIn("Bind explicit caller-scoped values into one named run target", with_payload.stdout)
+        self.assertIn("run_argument_bindings_block", with_payload.stdout)
         self.assertIn("repository: \"acme/widgets\"", with_payload.stdout)
 
         self.assertEqual(for_each.returncode, 0)
-        self.assertIn("array-valued repeated item source", for_each.stdout)
-        self.assertIn("workflow.run.steps", for_each.stdout)
-        self.assertIn("workflow-rules.fan_out_scope_and_conditions", for_each.stdout)
+        self.assertIn("Repeat one invocation-shaped step over an explicit array-valued item source.", for_each.stdout)
+        self.assertIn("run_bounded_fan_out_source", for_each.stdout)
+        self.assertIn("if: inputs.enabled", for_each.stdout)
         self.assertIn("for_each: inputs.issue_numbers", for_each.stdout)
 
         self.assertEqual(outer_if.returncode, 0)
         self.assertIn("whole invocation step", outer_if.stdout)
-        self.assertIn("workflow.run.gate", outer_if.stdout)
+        self.assertIn("Gate the whole invocation step", outer_if.stdout)
         self.assertIn("if: inputs.enabled", outer_if.stdout)
 
         self.assertEqual(outer_gate.returncode, 0)
-        self.assertIn("whole invocation step may run at all", outer_gate.stdout)
-        self.assertIn("workflow.step_forms.gate_checkpoint", outer_gate.stdout)
+        self.assertIn("whether the whole invocation may proceed at all", outer_gate.stdout)
+        self.assertIn("run_outer_gate_condition", outer_gate.stdout)
         self.assertIn("all:", outer_gate.stdout)
 
         self.assertEqual(register.returncode, 0)
-        self.assertIn("outer aggregate result", register.stdout)
-        self.assertIn("workflow.run.gate", register.stdout)
+        self.assertIn("Capture the aggregate results of a run invocation", register.stdout)
+        self.assertIn("run_aggregate_register_name", register.stdout)
         self.assertIn("register: reviewed_issues", register.stdout)
 
         self.assertEqual(steps.returncode, 0)
-        self.assertIn("short inline repeated body", steps.stdout)
-        self.assertIn("workflow.step_forms.inline_fan_out_invocation", steps.stdout)
+        self.assertIn("Keep one short local repeated body inline under for_each", steps.stdout)
+        self.assertIn("run_inline_repeated_body", steps.stdout)
         self.assertIn("publish-item", steps.stdout)
 
     def test_text_describe_workflow_step_form_group_is_teaching_ready(self) -> None:
@@ -1803,31 +1854,33 @@ class OrdoHelpCliTest(unittest.TestCase):
         step_outputs = self.run_help("describe", "workflow.step.outputs")
 
         self.assertEqual(operation_call.returncode, 0)
-        self.assertIn("published-operation invocation", operation_call.stdout)
+        self.assertIn("Named step form that calls one published operation", operation_call.stdout)
         self.assertIn("workflow.step.uses", operation_call.stdout)
         self.assertIn("workflow.step_forms.run_invocation", operation_call.stdout)
         self.assertIn("example_for: step_fragment", operation_call.stdout)
         self.assertIn("uses: gh.issue", operation_call.stdout)
+        self.assertIn("Author every operation call with `name`", operation_call.stdout)
+        self.assertIn("`if` to make the call optional", operation_call.stdout)
+        self.assertIn("`launcher` remains available only", operation_call.stdout)
+        self.assertIn("register: issue", operation_call.stdout)
 
         self.assertEqual(run_invocation.returncode, 0)
-        self.assertIn("workflow-fragment runtime invocation", run_invocation.stdout)
+        self.assertIn("Named step form that invokes a named workflow fragment through run", run_invocation.stdout)
         self.assertIn("workflow.run.run", run_invocation.stdout)
         self.assertIn("workflow.step_forms.inline_fan_out_invocation", run_invocation.stdout)
         self.assertIn("example_for: step_fragment", run_invocation.stdout)
         self.assertIn("run: examples/fragments/check-issue.yaml", run_invocation.stdout)
 
         self.assertEqual(inline_fan_out.returncode, 0)
-        self.assertIn("bounded fan-out invocation", inline_fan_out.stdout)
+        self.assertIn("repeats one short inline step list for each item", inline_fan_out.stdout)
         self.assertIn("workflow.run.steps", inline_fan_out.stdout)
         self.assertIn("workflow.step_forms.run_invocation", inline_fan_out.stdout)
         self.assertIn("example_for: step_fragment", inline_fan_out.stdout)
         self.assertIn("publish-item", inline_fan_out.stdout)
 
         self.assertEqual(step_name.returncode, 0)
-        self.assertIn("stable local step identity", step_name.stdout)
-        self.assertIn("workflow.step.outputs", step_name.stdout)
-        self.assertIn("workflow.step.register", step_name.stdout)
-        self.assertIn("step names should stay unique", step_name.stdout)
+        self.assertIn("Required `name` field that gives a step its stable local identity", step_name.stdout)
+        self.assertIn("later workflow surfaces can refer to it explicitly", step_name.stdout)
         self.assertIn("example_for: field_fragment", step_name.stdout)
         self.assertIn("name: inspect-issue", step_name.stdout)
 
@@ -1835,15 +1888,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("explicit boolean control decisions", step_condition.stdout)
         self.assertIn("failed gate blocks the protected execution path", step_condition.stdout)
         self.assertIn("do not use for:", step_condition.stdout)
-        self.assertIn("workflow.step.if", step_condition.stdout)
-        self.assertIn("workflow.step.gate", step_condition.stdout)
+        self.assertIn("step-level if and gate surfaces", step_condition.stdout)
+        self.assertIn("if is for optional local branching while gate is for admission decisions", step_condition.stdout)
         self.assertIn("example_for: field_fragment", step_condition.stdout)
         self.assertIn("step.membership.outputs.exists", step_condition.stdout)
 
         self.assertEqual(step_outputs.returncode, 0)
         self.assertIn("explicit output surface", step_outputs.stdout)
         self.assertIn("step.<register>.outputs", step_outputs.stdout)
-        self.assertIn("workflow.step.register", step_outputs.stdout)
+        self.assertIn("previously registered step", step_outputs.stdout)
         self.assertIn("example_for: field_fragment", step_outputs.stdout)
         self.assertIn("step.membership.outputs.exists", step_outputs.stdout)
 
@@ -1851,59 +1904,73 @@ class OrdoHelpCliTest(unittest.TestCase):
         family = self.run_help("describe", "connector.compose")
         service = self.run_help("describe", "connector.compose.service")
         start = self.run_help("describe", "connector.compose.start")
+        stop = self.run_help("describe", "connector.compose.stop")
         remove = self.run_help("describe", "connector.compose.remove")
         profile_connectors = self.run_help("describe", "profile.connectors")
 
         self.assertEqual(family.returncode, 0)
         self.assertIn("Published Docker Compose connector family", family.stdout)
-        self.assertIn("published operations:", family.stdout)
-        self.assertIn("bootstrap prerequisites:", family.stdout)
-        self.assertIn("authored connector context fields:", family.stdout)
-        self.assertIn("directory: working directory for docker compose commands", family.stdout)
+        self.assertIn("inspect next:", family.stdout)
+        self.assertIn("related references:", family.stdout)
+        self.assertIn("compose.directory", family.stdout)
         self.assertIn("profile.connectors", family.stdout)
         self.assertIn("connector.compose.project", family.stdout)
+        self.assertIn("start here:", family.stdout)
+        self.assertIn("No checked family-level example", family.stdout)
 
         self.assertEqual(service.returncode, 0)
         self.assertIn("Probe one declared Compose service as a single orchestration unit.", service.stdout)
         self.assertIn("do not use for:", service.stdout)
         self.assertIn("connector.compose.project", service.stdout)
-        self.assertIn("compose.service(service=api)", service.stdout)
+        self.assertIn("what to provide:", service.stdout)
+        self.assertIn("result and boundary:", service.stdout)
+        self.assertIn("A name that is not declared is a failure", service.stdout)
+        self.assertIn("This is a point-in-time observation", service.stdout)
+        self.assertIn('compose.service with inputs {"service": "api"}', service.stdout)
 
         self.assertEqual(start.returncode, 0)
-        self.assertIn("Start one Compose project or one declared Compose service, reconciling one transient nonzero compose start", start.stdout)
-        self.assertIn("preflight observations:", start.stdout)
-        self.assertIn("invalidates observations:", start.stdout)
-        self.assertIn("compose.start(service=api)", start.stdout)
+        self.assertIn("Request that one Compose project or declared service run", start.stdout)
+        self.assertIn("use when:", start.stdout)
+        self.assertIn("related references:", start.stdout)
+        self.assertIn('compose.start with inputs {"service": "api"}', start.stdout)
         self.assertIn("compose.start", start.stdout)
+
+        self.assertEqual(stop.returncode, 0)
+        self.assertIn("Omit service to stop the whole project", stop.stdout)
+        self.assertIn("successful stop reports `state=stopped`", stop.stdout)
+        self.assertIn("partial stop reports `state=degraded`", stop.stdout)
 
         self.assertEqual(remove.returncode, 0)
         self.assertIn("Remove one stopped materialized Compose service instance.", remove.stdout)
         self.assertIn("connector.compose.stop", remove.stdout)
-        self.assertIn("compose.remove(service=api)", remove.stdout)
+        self.assertIn('compose.remove with inputs {"service": "api"}', remove.stdout)
+        self.assertIn("non-empty declared service name", remove.stdout)
+        self.assertIn("rejected without an implicit stop", remove.stdout)
 
         self.assertEqual(profile_connectors.returncode, 0)
-        self.assertIn("Profile-scoped connector bootstrap field for declaring connector context", profile_connectors.stdout)
+        self.assertIn("Profile-scoped connector setup field for declaring connector context", profile_connectors.stdout)
         self.assertIn("connector.compose", profile_connectors.stdout)
-        self.assertIn("compose.directory=./deploy", profile_connectors.stdout)
+        self.assertIn("directory: ./deploy", profile_connectors.stdout)
 
     def test_text_describe_connector_fs_group_explains_observation_boundary(self) -> None:
         family = self.run_help("describe", "connector.fs")
         file_probe = self.run_help("describe", "connector.fs.file")
 
         self.assertEqual(family.returncode, 0)
-        self.assertIn("observing UTF-8 content and metadata from the same opened regular file, not an atomic snapshot", family.stdout)
+        self.assertIn("observing UTF-8 content and metadata from one regular file, not an atomic snapshot", family.stdout)
         self.assertIn("use when:", family.stdout)
         self.assertIn("do not use for:", family.stdout)
         self.assertIn("connector.fs.file", family.stdout)
-        self.assertIn("connector.shell.command", family.stdout)
+        self.assertIn("workflow-rules.routine.*", family.stdout)
+        self.assertNotIn("connector.shell.command", family.stdout)
 
         self.assertEqual(file_probe.returncode, 0)
-        self.assertIn("Observe UTF-8 content and metadata from the same opened regular file.", file_probe.stdout)
-        self.assertIn("probe.fs_file.secure_open_unavailable", file_probe.stdout)
+        self.assertIn("Observe UTF-8 content and metadata from one regular file", file_probe.stdout)
+        self.assertNotIn("probe.fs_file.secure_open_unavailable", file_probe.stdout)
         self.assertIn("fs_file_observation_workflow", file_probe.stdout)
         self.assertIn("Directory inspection or generic filesystem traversal", file_probe.stdout)
         self.assertIn("workflow.local_expression.adapter.key_value", file_probe.stdout)
-        self.assertIn("fs.file(path=/workspace/app.env)", file_probe.stdout)
+        self.assertIn("related references:", file_probe.stdout)
 
     def test_text_describe_connector_runtime_group_is_teaching_ready(self) -> None:
         family = self.run_help("describe", "connector.runtime")
@@ -1913,23 +1980,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Published runtime connector family for legacy execution-context actions", family.stdout)
         self.assertIn("workflow.step.profile_switch", family.stdout)
         self.assertIn("do not use for:", family.stdout)
+        self.assertIn("No checked family-level example", family.stdout)
 
         self.assertEqual(profile_use.returncode, 0)
         self.assertIn("Legacy runtime action for switching later execution in the current run to another declared profile.", profile_use.stdout)
-        self.assertIn("published contract:", profile_use.stdout)
-        self.assertIn("- deprecated: yes", profile_use.stdout)
-        self.assertIn("effects:", profile_use.stdout)
-        self.assertIn("replaced by:", profile_use.stdout)
+        self.assertIn("related references:", profile_use.stdout)
+        self.assertIn("Legacy runtime action", profile_use.stdout)
+        self.assertIn("Preferred workflow-native step surface", profile_use.stdout)
         self.assertIn("workflow.step.profile_switch", profile_use.stdout)
-        self.assertIn("runtime.profile.use(profile=frontend)", profile_use.stdout)
+        self.assertIn('runtime.profile.use with inputs {"profile": "frontend"}', profile_use.stdout)
 
     def test_text_describe_workflow_profile_switch_group_is_teaching_ready(self) -> None:
         field_result = self.run_help("describe", "workflow.step.profile_switch")
         form_result = self.run_help("describe", "workflow.step_forms.profile_switch")
 
         self.assertEqual(field_result.returncode, 0)
-        self.assertIn("Workflow step field for switching later execution in the current workflow subtree to another declared profile.", field_result.stdout)
-        self.assertIn("required in forms:", field_result.stdout)
+        self.assert_reader_first_describe(field_result, "workflow.step.profile_switch", "Step field for changing the declared profile")
+        self.assertIn("Step field for changing the declared profile", field_result.stdout)
         self.assertIn("- profile_switch", field_result.stdout)
         self.assertIn("workflow.profile", field_result.stdout)
         self.assertIn("connector.runtime.profile.use", field_result.stdout)
@@ -1937,13 +2004,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("example_for: step_fragment", field_result.stdout)
 
         self.assertEqual(form_result.returncode, 0)
-        self.assertIn("Workflow step form for one explicit profile-switch checkpoint inside the current workflow path.", form_result.stdout)
-        self.assertIn("required fields:", form_result.stdout)
-        self.assertIn("- name", form_result.stdout)
-        self.assertIn("- profile_switch", form_result.stdout)
-        self.assertIn("optional fields:", form_result.stdout)
-        self.assertIn("- if", form_result.stdout)
-        self.assertIn("- gate", form_result.stdout)
+        self.assertIn("Named step form whose primary purpose is changing the profile for later work.", form_result.stdout)
+        self.assertIn("One named step only needs to change to another declared profile.", form_result.stdout)
         self.assertIn("workflow.step.gate", form_result.stdout)
         self.assertIn("example_for: step_fragment", form_result.stdout)
 
@@ -1951,7 +2013,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = self.run_help("describe", "workflow.profile")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.", result.stdout)
+        self.assert_reader_first_describe(result, "workflow.profile", "Top-level field that fixes one declared profile")
         self.assertIn("use when:", result.stdout)
         self.assertIn("do not use for:", result.stdout)
         self.assertIn("workflow.step.profile_switch", result.stdout)
@@ -1964,17 +2026,17 @@ class OrdoHelpCliTest(unittest.TestCase):
         default_workdir = self.run_help("describe", "playbook.defaults.working_directory")
 
         self.assertEqual(defaults.returncode, 0)
-        self.assertIn("Playbook field for declaring launch-time defaults", defaults.stdout)
+        self.assertIn("Playbook field for launch-time defaults", defaults.stdout)
         self.assertIn("workflow.profile", defaults.stdout)
-        self.assertIn("playbook.defaults(profile=review, working_directory=${inputs.repo_dir})", defaults.stdout)
+        self.assertIn("playbook.defaults.profile", defaults.stdout)
 
         self.assertEqual(default_profile.returncode, 0)
-        self.assertIn("Playbook default field for selecting the active profile when a run did not already choose one explicitly.", default_profile.stdout)
+        self.assertIn("Playbook default field for selecting the active profile when a run did not already choose one.", default_profile.stdout)
         self.assertIn("command-line.ordo-playbook.flag.profile", default_profile.stdout)
         self.assertIn("workflow.profile", default_profile.stdout)
 
         self.assertEqual(default_workdir.returncode, 0)
-        self.assertIn("Playbook default field for setting the execution working directory when no narrower launch surface already provided one.", default_workdir.stdout)
+        self.assertIn("Playbook default field for setting the execution working directory when no more specific launch setting provided one.", default_workdir.stdout)
         self.assertIn("playbook.workflows.working_directory", default_workdir.stdout)
         self.assertIn("profile.working_directory", default_workdir.stdout)
 
@@ -1990,20 +2052,16 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(workflows.returncode, 0)
         self.assertIn("Playbook field for publishing the named workflow catalog", workflows.stdout)
-        self.assertIn("required fields:", workflows.stdout)
-        self.assertIn("- file", workflows.stdout)
-        self.assertIn("optional fields:", workflows.stdout)
-        self.assertIn("- with", workflows.stdout)
-        self.assertIn("- description", workflows.stdout)
-        self.assertIn("- category", workflows.stdout)
-        self.assertIn("- when", workflows.stdout)
-        self.assertIn("- working_directory", workflows.stdout)
-        self.assertIn("- state_bindings", workflows.stdout)
-        self.assertIn("examples.playbook-workflows", workflows.stdout)
+        self.assertIn("caller interface", workflows.stdout)
+        self.assertIn("workflow files", workflows.stdout)
+        self.assertIn("entry-owned launch details", workflows.stdout)
+        self.assertIn("description, category, when, working_directory, with, or state_bindings", workflows.stdout)
+        self.assertIn("workflow files and entry-owned launch details", workflows.stdout)
+        self.assertIn("playbook_workflows_catalog_entry", workflows.stdout)
         self.assertIn("example_for: field_fragment", workflows.stdout)
 
         self.assertEqual(workflow_file.returncode, 0)
-        self.assertIn("Workflow-entry field that points one published playbook workflow name at the workflow file", workflow_file.stdout)
+        self.assertIn("Workflow-entry field that points one published workflow name at the workflow file to load when selected.", workflow_file.stdout)
         self.assertIn("playbook.pre_run.file", workflow_file.stdout)
         self.assertIn("playbook.profiles.file", workflow_file.stdout)
 
@@ -2014,27 +2072,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("active_profile_key: active_profile", workflow_with.stdout)
 
         self.assertEqual(workflow_description.returncode, 0)
-        self.assertIn("Workflow-entry field for the short human-facing summary", workflow_description.stdout)
+        self.assertIn("Workflow-entry field for the short reader-facing summary", workflow_description.stdout)
         self.assertIn("playbook.workflows.when", workflow_description.stdout)
 
         self.assertEqual(workflow_category.returncode, 0)
-        self.assertIn("Workflow-entry field for the lightweight catalog group label", workflow_category.stdout)
-        self.assertIn("preserve authored playbook entry order", workflow_category.stdout)
-        self.assertIn("Dependency placement takes precedence", workflow_category.stdout)
-        self.assertIn("never creates graph links or execution precedence", workflow_category.stdout)
+        self.assertIn("Workflow-entry field for the catalog group label", workflow_category.stdout)
+        self.assertIn("preserve playbook entry order", workflow_category.stdout)
+        self.assertIn("Dependencies take precedence", workflow_category.stdout)
+        self.assertIn("creates neither graph links nor execution order", workflow_category.stdout)
 
         self.assertEqual(workflow_when.returncode, 0)
-        self.assertIn("Workflow-entry field for the operator-facing selection hint", workflow_when.stdout)
+        self.assertIn("Workflow-entry field for guidance on when this published workflow is the right one to run.", workflow_when.stdout)
         self.assertIn("workflow-rules.early_guards", workflow_when.stdout)
 
         self.assertEqual(workflow_workdir.returncode, 0)
-        self.assertIn("Workflow-entry field for overriding the execution working directory", workflow_workdir.stdout)
+        self.assertIn("Workflow-entry field for overriding one published workflow's execution working directory", workflow_workdir.stdout)
         self.assertIn("playbook.defaults.working_directory", workflow_workdir.stdout)
         self.assertIn("profile.working_directory", workflow_workdir.stdout)
         self.assertIn("${inputs.repo_dir}", workflow_workdir.stdout)
 
         self.assertEqual(workflow_state_bindings.returncode, 0)
-        self.assertIn("Workflow-entry field for binding the requested workflow's declared state roles", workflow_state_bindings.stdout)
+        self.assertIn("Workflow-entry field for binding the requested workflow's state roles to named playbook state locations", workflow_state_bindings.stdout)
         self.assertIn("workflow.state_bindings", workflow_state_bindings.stdout)
         self.assertIn("playbook.pre_run.state_bindings", workflow_state_bindings.stdout)
         self.assertIn("shared_state: shared_state", workflow_state_bindings.stdout)
@@ -2091,9 +2149,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         pr_timeline = self.run_help("describe", "connector.gh.pr.timeline")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("Published GitHub connector family for typed repository, issue, pull-request, Actions run, and project operations", gh_family.stdout)
-        self.assertIn("connector.gh.pr", gh_family.stdout)
-        self.assertIn("gh.pr(pull_number=42)", gh_family.stdout)
+        self.assertIn("Published GitHub probes and actions", gh_family.stdout)
+        self.assertIn("connector.gh.pr.list", gh_family.stdout)
+        self.assertIn("creation, merge, and other changes remain separate actions", gh_family.stdout)
 
         self.assertEqual(pr.returncode, 0)
         self.assertIn("Probe one GitHub pull request as a typed metadata snapshot", pr.stdout)
@@ -2117,7 +2175,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connector.gh.pr.diff", pr_review_comments.stdout)
 
         self.assertEqual(pr_checks.returncode, 0)
-        self.assertIn("Probe one GitHub pull request head for normalized status contexts and check runs", pr_checks.stdout)
+        self.assertIn("Read the checks attached to one pull request source revision", pr_checks.stdout)
         self.assertIn("connector.gh.pr.reviews", pr_checks.stdout)
 
         self.assertEqual(pr_timeline.returncode, 0)
@@ -2131,8 +2189,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         option = self.run_help("describe", "connector.gh.project.field.option")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("connector.gh.project", gh_family.stdout)
-        self.assertIn("gh.project(project_id=PVT_kwDOExample)", gh_family.stdout)
+        self.assertIn("project interaction", gh_family.stdout)
 
         self.assertEqual(project.returncode, 0)
         self.assertIn("Probe one GitHub Project by its stable project id", project.stdout)
@@ -2154,15 +2211,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         sync = self.run_help("describe", "connector.gh.repo.sync")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("typed repository, issue, pull-request, Actions run, and project operations", gh_family.stdout)
+        self.assertIn("repository, issue, pull-request, Actions, or project interaction", gh_family.stdout)
         self.assertIn("connector.gh.repo", gh_family.stdout)
-        self.assertIn("connector_contexts.gh.repository", gh_family.stdout)
-        self.assertIn("review warns when an explicit repository overrides that default", gh_family.stdout)
-        self.assertIn("- gh.repo", gh_family.stdout)
+        self.assertIn("explicit OWNER/REPO", gh_family.stdout)
 
         self.assertEqual(repo.returncode, 0)
         self.assertIn("Probe one GitHub repository as a normalized identity and fork snapshot", repo.stdout)
-        self.assertIn("Prefer connector_contexts.gh.repository", repo.stdout)
+        self.assertIn("Prefer the workflow's GitHub repository context as the normal repository target", repo.stdout)
         self.assertIn("review warns when it differs from the current gh context repository", repo.stdout)
         self.assertIn("connector.gh.repo.sync", repo.stdout)
         self.assertIn("example_for: workflow_fragment", repo.stdout)
@@ -2177,13 +2232,13 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(permissions.returncode, 0)
         self.assertIn("Probe GitHub Actions permissions for one repository", permissions.stdout)
-        self.assertIn("Prefer connector_contexts.gh.repository", permissions.stdout)
+        self.assertIn("Prefer the workflow's GitHub repository context as the normal repository target", permissions.stdout)
         self.assertIn("connector.gh.repo.actions.permissions.set", permissions.stdout)
         self.assertIn("example_for: workflow_fragment", permissions.stdout)
 
         self.assertEqual(set_permissions.returncode, 0)
         self.assertIn("Set the GitHub Actions enabled state for one repository", set_permissions.stdout)
-        self.assertIn("Prefer connector_contexts.gh.repository", set_permissions.stdout)
+        self.assertIn("Prefer the workflow's GitHub repository context as the normal repository target", set_permissions.stdout)
         self.assertIn("connector.gh.repo.sync", set_permissions.stdout)
 
     def test_text_describe_connector_gh_project_issue_group_is_teaching_ready(self) -> None:
@@ -2235,7 +2290,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         branches = self.run_help("describe", "connector.git.branches")
 
         self.assertEqual(branch.returncode, 0)
-        self.assertIn("Probe the currently checked out local Git branch", branch.stdout)
+        self.assertIn("Read the currently checked out local Git branch", branch.stdout)
         self.assertIn("connector.git.branches", branch.stdout)
         self.assertIn("example_for: workflow_fragment", branch.stdout)
 
@@ -2247,15 +2302,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Delete one local non-default Git branch", delete.stdout)
         self.assertIn("connector.git.branch.switch", delete.stdout)
         self.assertIn("force: true", delete.stdout)
-        self.assertIn("origin/HEAD", delete.stdout)
-        self.assertIn("input_error", delete.stdout)
+        self.assertIn("selected local branch no longer exists", delete.stdout)
 
         self.assertEqual(switch.returncode, 0)
         self.assertIn("Switch the current Git checkout", switch.stdout)
         self.assertIn("connector.git.worktree", switch.stdout)
 
         self.assertEqual(branches.returncode, 0)
-        self.assertIn("Probe the Git branch inventory", branches.stdout)
+        self.assertIn("List local and remote Git branches", branches.stdout)
         self.assertIn("connector.git.branch", branches.stdout)
 
     def test_text_describe_connector_git_commit_group_is_teaching_ready(self) -> None:
@@ -2277,7 +2331,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connector.git.commits", revert.stdout)
 
         self.assertEqual(commits.returncode, 0)
-        self.assertIn("Probe a bounded readable slice of Git commit history", commits.stdout)
+        self.assertIn("Read a bounded, reviewable slice of Git commit history from one revision scope", commits.stdout)
         self.assertIn("connector.git.commit.create", commits.stdout)
         self.assertIn("example_for: workflow_fragment", commits.stdout)
 
@@ -2286,11 +2340,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         tags = self.run_help("describe", "connector.git.tags")
 
         self.assertEqual(tag.returncode, 0)
-        self.assertIn("Probe one named Git tag", tag.stdout)
+        self.assertIn("Check one named Git tag", tag.stdout)
         self.assertIn("connector.git.tags", tag.stdout)
 
         self.assertEqual(tags.returncode, 0)
-        self.assertIn("Probe the Git tag inventory as a version-sorted collection", tags.stdout)
+        self.assertIn("List Git tags as a version-sorted collection", tags.stdout)
         self.assertIn("connector.git.tag", tags.stdout)
         self.assertIn("example_for: workflow_fragment", tags.stdout)
 
@@ -2299,11 +2353,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         range_payload = self.run_help("describe", "connector.git.range")
 
         self.assertEqual(ref.returncode, 0)
-        self.assertIn("Probe one named Git ref", ref.stdout)
+        self.assertIn("Check one named Git ref", ref.stdout)
         self.assertIn("connector.git.range", ref.stdout)
 
         self.assertEqual(range_payload.returncode, 0)
-        self.assertIn("Probe the relationship between two Git revision endpoints", range_payload.stdout)
+        self.assertIn("Compare two Git revision endpoints", range_payload.stdout)
         self.assertIn("connector.git.ref", range_payload.stdout)
         self.assertIn("example_for: workflow_fragment", range_payload.stdout)
 
@@ -2312,14 +2366,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         upstream = self.run_help("describe", "connector.git.upstream")
 
         self.assertEqual(repo.returncode, 0)
-        self.assertIn("Probe the current local Git repository context", repo.stdout)
+        self.assertIn("Read the current local Git repository context", repo.stdout)
         self.assertIn("connector.git.upstream", repo.stdout)
 
         self.assertEqual(upstream.returncode, 0)
-        self.assertIn("Probe the upstream-tracking configuration for the current local branch", upstream.stdout)
+        self.assertIn("Observe the current branch tracking relationship", upstream.stdout)
         self.assertIn("connector.git.repo", upstream.stdout)
         self.assertIn("example_for: workflow_fragment", upstream.stdout)
-        for term in ("branch.<current>.remote", "local tracking tail", "probe.git_upstream.invalid_remote", "probe.git_upstream.remote_lookup_failed", "probe.git_upstream.invalid_ref", "probe.git_upstream.ref_lookup_failed", "non-atomic"):
+        for term in ("tracked remote and branch names", "configured=false", "without a guessed result"):
             self.assertIn(term, upstream.stdout)
 
     def test_text_describe_connector_git_worktree_staging_group_is_teaching_ready(self) -> None:
@@ -2332,11 +2386,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connector.git.worktree", index_add_all.stdout)
 
         self.assertEqual(worktree.returncode, 0)
-        self.assertIn("Probe the current Git worktree cleanliness and changed-path inventory", worktree.stdout)
+        self.assertIn("Read current Git worktree cleanliness and changed paths", worktree.stdout)
         self.assertIn("connector.git.state", worktree.stdout)
+        self.assertIn("repository root", worktree.stdout)
 
         self.assertEqual(state.returncode, 0)
-        self.assertIn("Probe one combined Git repository-state snapshot", state.stdout)
+        self.assertIn("Read one combined Git repository-state snapshot", state.stdout)
         self.assertIn("connector.git.worktree", state.stdout)
         self.assertIn("example_for: workflow_fragment", state.stdout)
 
@@ -2362,6 +2417,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(rebase_onto.returncode, 0)
         self.assertIn("Rewrite one non-default Git branch", rebase_onto.stdout)
         self.assertIn("connector.git.integrate.cherry_pick", rebase_onto.stdout)
+        self.assertIn("upstream boundary", rebase_onto.stdout)
 
     def test_text_describe_connector_git_sync_group_is_teaching_ready(self) -> None:
         fetch = self.run_help("describe", "connector.git.sync.fetch")
@@ -2376,13 +2432,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Push one local Git branch", push.stdout)
         self.assertIn("connector.git.sync.fetch", push.stdout)
 
-        for result in (fetch, push):
-            for term in ("exactly match", "team/origin", "remote_not_found", "action.git.invalid_remote", "action.git.remote_inventory_failed", "Inspection modes do not", "not a protocol sandbox"):
-                self.assertIn(term, result.stdout)
-        self.assertIn("fetch_blocked", fetch.stdout)
-        self.assertIn("push_blocked", push.stdout)
+        self.assertIn("team/origin", fetch.stdout)
+        self.assertIn("remote-tracking information", fetch.stdout)
+        self.assertIn("rejected non-fast-forward push", push.stdout)
         self.assertIn("omitted or null", push.stdout)
-        self.assertIn("including nested names", push.stdout)
+        self.assertIn("configured upstream remote", push.stdout)
+        self.assertNotIn("action.git.", push.stdout)
         self.assertNotIn("slash-splitting", push.stdout)
         self.assertNotIn("splits at the first slash", push.stdout)
 
@@ -2390,7 +2445,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         stash = self.run_help("describe", "connector.git.stash")
 
         self.assertEqual(stash.returncode, 0)
-        self.assertIn("Probe the current Git stash inventory", stash.stdout)
+        self.assertIn("List current Git stash entries", stash.stdout)
         self.assertIn("connector.git.state", stash.stdout)
         self.assertIn("example_for: workflow_fragment", stash.stdout)
 
@@ -2398,7 +2453,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         worktrees = self.run_help("describe", "connector.git.worktrees")
 
         self.assertEqual(worktrees.returncode, 0)
-        self.assertIn("Probe the repository's Git worktree inventory", worktrees.stdout)
+        self.assertIn("List the repository's Git worktrees", worktrees.stdout)
         self.assertIn("connector.git.worktree", worktrees.stdout)
         self.assertIn("example_for: workflow_fragment", worktrees.stdout)
 
@@ -2409,10 +2464,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(family.returncode, 0)
         self.assertIn("Published shell connector family for one coarse legacy command-execution action", family.stdout)
         self.assertIn("workflow-rules.shell.command", family.stdout)
-        self.assertIn("routines", family.stdout)
+        self.assertIn("workflow-rules.routine.*", family.stdout)
+        self.assertIn("No checked family-level example", family.stdout)
 
         self.assertEqual(command.returncode, 0)
-        self.assertIn("Execute one arbitrary shell command string through bash -lc", command.stdout)
+        self.assertIn("Execute one trusted command through Bash as a login shell", command.stdout)
+        self.assertIn("bash -lc <command>", command.stdout)
         self.assertIn("workflow-rules.shell.command", command.stdout)
         self.assertIn("example_for: workflow_fragment", command.stdout)
 
@@ -2423,8 +2480,8 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(include_args.returncode, 0)
         self.assertIn("Workflow include example that passes explicit arguments into one reusable fragment contract.", include_args.stdout)
-        self.assertIn("Verified example at examples/include-args.yaml", include_args.stdout)
-        self.assertIn("shows:", include_args.stdout)
+        self.assertIn("example file:", include_args.stdout)
+        self.assertIn("what it demonstrates:", include_args.stdout)
 
         self.assertEqual(inspect_pr.returncode, 0)
         self.assertIn("Pull-request inspection example that composes the published PR metadata", inspect_pr.stdout)
@@ -2440,16 +2497,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         register_requires = self.run_help("describe", "workflow_step.register_requires_uses")
 
         self.assertEqual(exactly_one.returncode, 0)
-        self.assertIn("A workflow step must define exactly one of uses, value, state_set, or state_delete", exactly_one.stdout)
-        self.assertIn("step forms are mutually exclusive", exactly_one.stdout)
+        self.assert_reader_first_describe(exactly_one, "workflow_step.exactly_one_form", "Every step chooses one primary body")
+        self.assertIn("uses, run, inline steps", exactly_one.stdout)
 
         self.assertEqual(gate_conflict.returncode, 0)
-        self.assertIn("The gate and register fields cannot be used together", gate_conflict.stdout)
-        self.assertIn("split the gate into a standalone checkpoint step", gate_conflict.stdout)
+        self.assertIn("A gated step cannot also register a result", gate_conflict.stdout)
+        self.assertIn("Place the gate in a checkpoint step", gate_conflict.stdout)
 
         self.assertEqual(register_requires.returncode, 0)
-        self.assertIn("The register field is allowed only together with uses, run, or value", register_requires.stdout)
-        self.assertIn("reusable run invocations", register_requires.stdout)
+        self.assertIn("A registered operation result requires an operation step selected by `uses`.", register_requires.stdout)
+        self.assertIn("Use the run form when registering a named invocation result", register_requires.stdout)
 
     def test_text_describe_general_negative_rule_group_is_teaching_ready(self) -> None:
         backward_step_refs = self.run_help("describe", "embedded_value_expression.step_refs_must_be_backward")
@@ -2457,28 +2514,28 @@ class OrdoHelpCliTest(unittest.TestCase):
         fragment_no_state = self.run_help("describe", "workflow_fragment.no_state_surface")
 
         self.assertEqual(backward_step_refs.returncode, 0)
-        self.assertIn("Registered step references may target only earlier steps", backward_step_refs.stdout)
-        self.assertIn("order-sensitive execution-local data flow", backward_step_refs.stdout)
+        self.assertIn("Read a step result only after that step", backward_step_refs.stdout)
+        self.assertIn("do not predict later results", backward_step_refs.stdout)
 
         self.assertEqual(guard_boolean.returncode, 0)
-        self.assertIn("Guard expressions must evaluate to a boolean result", guard_boolean.stdout)
-        self.assertIn("boolean policy outcomes", guard_boolean.stdout)
+        self.assertIn("A guard accepts a boolean result", guard_boolean.stdout)
+        self.assertIn("whether the workflow may proceed", guard_boolean.stdout)
 
         self.assertEqual(fragment_no_state.returncode, 0)
-        self.assertIn("Included fragments must not read, declare, or mutate runtime state", fragment_no_state.stdout)
-        self.assertIn("top-level workflow handoff surface", fragment_no_state.stdout)
+        self.assertIn("Included fragments share their caller workflow's state declarations and bindings.", fragment_no_state.stdout)
+        self.assertIn("Declare state needs on the assembled workflow", fragment_no_state.stdout)
 
     def test_text_describe_publish_result_step_form_group_is_teaching_ready(self) -> None:
         publish = self.run_help("describe", "workflow.step_forms.publish")
         result = self.run_help("describe", "workflow.step_forms.result")
 
         self.assertEqual(publish.returncode, 0)
-        self.assertIn("Workflow step form for one named publish checkpoint", publish.stdout)
+        self.assertIn("Named step form that publishes one named output payload", publish.stdout)
         self.assertIn("workflow.step_forms.result", publish.stdout)
         self.assertIn("example_for: step_fragment", publish.stdout)
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Workflow step form for one named result-emission checkpoint", result.stdout)
+        self.assertIn("Named step form that adds one resolved value to the workflow result list.", result.stdout)
         self.assertIn("workflow.step_forms.publish", result.stdout)
         self.assertIn("example_for: step_fragment", result.stdout)
 
@@ -2490,78 +2547,75 @@ class OrdoHelpCliTest(unittest.TestCase):
         pre_run_contract = self.run_help("describe", "playbook.pre_run_contract")
 
         self.assertEqual(pre_run.returncode, 0)
-        self.assertIn("Playbook field for declaring one or more playbook-owned workflows that run before the requested published workflow", pre_run.stdout)
+        self.assertIn("Playbook field for workflows that run before the requested published workflow", pre_run.stdout)
         self.assertIn("playbook.pre_run_contract", pre_run.stdout)
-        self.assertIn("playbook.pre_run(file=.ordo/workflows/bootstrap.yaml", pre_run.stdout)
-        self.assertIn("explicit --profile choice still remains authoritative", pre_run.stdout)
+        self.assertIn("shared launch-time preparation", pre_run.stdout)
+        self.assertIn("caller's explicit --profile choice remains authoritative", pre_run.stdout)
 
         self.assertEqual(pre_run_file.returncode, 0)
-        self.assertIn("Pre-run entry field that selects which workflow file executes before the requested workflow.", pre_run_file.stdout)
+        self.assertIn("Pre-run entry field that selects the workflow file to execute before the requested workflow.", pre_run_file.stdout)
         self.assertIn("playbook.workflows.file", pre_run_file.stdout)
 
         self.assertEqual(pre_run_with.returncode, 0)
-        self.assertIn("Pre-run entry field for static playbook-owned invocation inputs passed only to the pre_run workflow.", pre_run_with.stdout)
+        self.assertIn("Pre-run entry field for fixed playbook-owned launch inputs passed only to the pre-run workflow.", pre_run_with.stdout)
         self.assertIn("command-line.ordo-playbook.flag.input", pre_run_with.stdout)
-        self.assertIn("strict=true", pre_run_with.stdout)
+        self.assertIn("static YAML values only", pre_run_with.stdout)
 
         self.assertEqual(pre_run_state_bindings.returncode, 0)
-        self.assertIn("Pre-run entry field for explicit state-location bindings", pre_run_state_bindings.stdout)
+        self.assertIn("Pre-run entry field for state-location bindings", pre_run_state_bindings.stdout)
         self.assertIn("playbook.workflows.state_bindings", pre_run_state_bindings.stdout)
         self.assertIn("state.workflow_surface.state_binding_field", pre_run_state_bindings.stdout)
 
         self.assertEqual(pre_run_contract.returncode, 0)
-        self.assertIn("Playbook contract for pre_run entries that execute before the requested workflow", pre_run_contract.stdout)
-        self.assertIn("required fields:", pre_run_contract.stdout)
-        self.assertIn("- file", pre_run_contract.stdout)
-        self.assertIn("optional fields:", pre_run_contract.stdout)
-        self.assertIn("- with", pre_run_contract.stdout)
-        self.assertIn("- state_bindings", pre_run_contract.stdout)
+        self.assertIn("Playbook contract for pre-run entries that execute before the requested workflow", pre_run_contract.stdout)
+        self.assertIn("playbook.pre_run.file", pre_run_contract.stdout)
+        self.assertIn("playbook.pre_run.with", pre_run_contract.stdout)
+        self.assertIn("playbook.pre_run.state_bindings", pre_run_contract.stdout)
 
     def test_text_describe_playbook_profiles_group_is_teaching_ready(self) -> None:
         profiles = self.run_help("describe", "playbook.profiles")
         profile_file = self.run_help("describe", "playbook.profiles.file")
 
         self.assertEqual(profiles.returncode, 0)
-        self.assertIn("Playbook field for declaring the reusable named profiles", profiles.stdout)
+        self.assertIn("Playbook field for declaring reusable named profiles", profiles.stdout)
         self.assertIn("playbook.defaults.profile", profiles.stdout)
         self.assertIn("workflow.profile", profiles.stdout)
-        self.assertIn("playbook.profiles(backend={\"file\": \"backend.yml\"}, review={\"file\": \"review.yml\"})", profiles.stdout)
+        self.assertIn("playbook-local catalog of named execution contexts", profiles.stdout)
 
         self.assertEqual(profile_file.returncode, 0)
-        self.assertIn("Playbook profile-entry field that points one declared profile name at the profile file to load for that catalog entry.", profile_file.stdout)
+        self.assertIn("Playbook profile-entry field that points one declared profile name at the profile file to load.", profile_file.stdout)
         self.assertIn("profile.name", profile_file.stdout)
         self.assertIn("playbook.workflows.file", profile_file.stdout)
-        self.assertIn("playbook.profiles.file(file=backend.yml)", profile_file.stdout)
+        self.assertIn("separate profile document", profile_file.stdout)
 
     def test_text_describe_playbook_states_group_is_teaching_ready(self) -> None:
         states = self.run_help("describe", "playbook.states")
         state_path = self.run_help("describe", "playbook.states.path")
 
         self.assertEqual(states.returncode, 0)
-        self.assertIn("Playbook field for declaring the named state storage locations", states.stdout)
+        self.assertIn("Playbook field for declaring named state storage locations", states.stdout)
         self.assertIn("workflow.state_bindings", states.stdout)
         self.assertIn("state.workflow_surface.state_binding_field", states.stdout)
-        self.assertIn("playbook.states(shared_state={\"path\": \"repo.json\"}, cache={\"path\": \".ordo/cache.json\"})", states.stdout)
+        self.assertIn("durable named storage", states.stdout)
 
         self.assertEqual(state_path.returncode, 0)
-        self.assertIn("Playbook state-entry field that assigns one declared state location name to the filesystem path", state_path.stdout)
+        self.assertIn("Playbook state-entry field that assigns a declared state name to the filesystem path", state_path.stdout)
         self.assertIn("workflow.state_bindings", state_path.stdout)
         self.assertIn("profile.working_directory", state_path.stdout)
-        self.assertIn("playbook.states.path(path=repo.json)", state_path.stdout)
+        self.assertIn("durable state is stored", state_path.stdout)
 
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Public launch command for discovering playbook workflows", result.stdout)
-        self.assertIn("use when:", result.stdout)
-        self.assertIn("do not use for:", result.stdout)
-        self.assertIn("nearest surfaces:", result.stdout)
-        self.assertIn("workflow check/review passes:", result.stdout)
-        self.assertIn("stable flags:", result.stdout)
-        self.assertIn("examples:", result.stdout)
-        self.assertIn("inspect next:", result.stdout)
-        self.assertIn("workflow-rules.paired_check_review_passes", result.stdout)
+        self.assertIn("Choose the public command that lets you inspect", result.stdout)
+        self.assertIn("main entrypoint:", result.stdout)
+        self.assertIn("choose a mode:", result.stdout)
+        self.assertIn("public flags:", result.stdout)
+        self.assertIn("practical next steps:", result.stdout)
+        self.assertNotIn("canonical examples:", result.stdout)
+        self.assertNotIn("read_a_state_graph", result.stdout)
+        self.assertIn("readiness and workflow quality are separate questions", result.stdout)
 
     def test_text_describe_command_line_flag_group_is_compact_and_distinct(self) -> None:
         input_result = self.run_help("describe", "command-line.ordo-playbook.flag.input")
@@ -2575,7 +2629,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("use when:", input_result.stdout)
         self.assertIn("do not use for:", input_result.stdout)
         self.assertIn("workflow.inputs_contract", input_result.stdout)
-        self.assertIn("ordo-playbook --input enabled=true plan inspect-issue", input_result.stdout)
+        self.assertNotIn("metadata:", input_result.stdout)
         self.assertNotIn("ordo-playbook --input-file body=./prompt.md plan inspect-issue", input_result.stdout)
 
         self.assertEqual(input_file_result.returncode, 0)
@@ -2589,9 +2643,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("should win over playbook defaults", profile_result.stdout)
 
         self.assertEqual(progress_result.returncode, 0)
-        self.assertIn("During run, emit each step name to stderr right before execution.", progress_result.stdout)
+        self.assertIn("During run, emit each step name to standard error", progress_result.stdout)
         self.assertIn("only supported with run", progress_result.stdout)
-        self.assertIn("progress is emitted on stderr instead", progress_result.stdout)
+        self.assertIn("progress is emitted on standard error instead", progress_result.stdout)
 
         self.assertEqual(json_result.returncode, 0)
         self.assertIn("Emit machine-readable JSON for this invocation instead of the default text rendering.", json_result.stdout)
@@ -2695,7 +2749,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         register_requires = json.loads(self.run_help("describe", "workflow_step.register_requires_uses", "--json").stdout)
 
         self.assertEqual(exactly_one["node_kind"], "negative_rule")
-        self.assertIn("exactly one of uses, value, state_set, or state_delete", exactly_one["rule"])
+        self.assertIn("exactly one of uses, run, steps, profile_switch", exactly_one["rule"])
+        self.assertIn("standalone gate checkpoint is the exception", exactly_one["rule"])
         self.assertIn("workflow contract", exactly_one["reason"])
 
         self.assertEqual(gate_conflict["node_kind"], "negative_rule")
@@ -2767,15 +2822,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("state", builtin_node["metadata"]["allowed_roots"])
 
     def test_search_indexes_representation_adapter_topics(self) -> None:
-        result = json.loads(self.run_help("search", "markdown", "--json").stdout)
+        result = json.loads(self.run_help("search", "markdown", "--all", "--json").stdout)
         key_value_result = json.loads(self.run_help("search", "separator", "--json").stdout)
-        text_result = json.loads(self.run_help("search", "text", "--json").stdout)
+        text_result = json.loads(self.run_help("search", "text", "--all", "--json").stdout)
         fs_result = json.loads(self.run_help("search", "filesystem", "--json").stdout)
-        file_result = json.loads(self.run_help("search", "content_unavailable", "--json").stdout)
+        file_result = json.loads(self.run_help("search", "regular text", "--json").stdout)
         pr_result = json.loads(self.run_help("search", "pull request", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.markdown" for item in result["facts"]))
-        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.key_value" for item in key_value_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "connector.gh.issue.body.append" for item in key_value_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.text" for item in text_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "connector.fs" for item in fs_result["facts"]))
         self.assertTrue(any(item["reference"] == "fs.file" for item in file_result["operations"]))
@@ -2791,11 +2846,11 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_search_indexes_local_expression_builtins_and_state_aliases(self) -> None:
         builtin_result = json.loads(self.run_help("search", "is_missing", "--json").stdout)
         combined_result = json.loads(self.run_help("search", "is_missing state", "--json").stdout)
-        state_alias_result = json.loads(self.run_help("search", "state key expression", "--json").stdout)
+        state_alias_result = json.loads(self.run_help("search", "durable state", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in builtin_result["facts"]))
-        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in combined_result["facts"]))
-        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "state" for item in state_alias_result["facts"]))
+        self.assertEqual(combined_result["facts"], [])
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.states.path" for item in state_alias_result["facts"]))
 
     def test_search_indexes_workflow_rules(self) -> None:
         shell_result = json.loads(self.run_help("search", "shell.command", "--json").stdout)
@@ -3058,18 +3113,23 @@ class OrdoHelpCliTest(unittest.TestCase):
                     self.assertEqual(payload["snippet_coverage"], "runner_verified")
                     self.assertEqual([example["form"] for example in examples], ["step_fragment", "workflow_fragment"])
                     for example in examples:
-                        self.assertIn("# Revision or range (e.g. HEAD~10..HEAD), never a Git option.", example["yaml"])
+                        self.assertIn('rev: "HEAD"', example["yaml"])
                         self.assertEqual(example["verification"]["target"], "connector.git.commits")
                         self.assertEqual(example["verification"]["kind"], "runner_verified")
+                    expected_terms = (
+                        "revisions and ranges such as HEAD~10..HEAD are supported",
+                        "rev must not start with '-' after trimming whitespace",
+                        "probe.git_commits.invalid_rev before git log runs",
+                        "including during guard and preflight observations in inspection modes",
+                    )
                 else:
                     boundary = result.stdout
-                    self.assertIn("# Revision or range (e.g. HEAD~10..HEAD), never a Git option.", result.stdout)
-                for term in (
-                    "revisions and ranges such as HEAD~10..HEAD are supported",
-                    "rev must not start with '-' after trimming whitespace",
-                    "probe.git_commits.invalid_rev before git log runs",
-                    "including during guard and preflight observations in inspection modes",
-                ):
+                    self.assertIn('rev: "HEAD"', result.stdout)
+                    expected_terms = (
+                        "revision or range to review, such as HEAD or HEAD~10..HEAD",
+                        "Loading patch text, changed files, diff statistics, or a history diagram",
+                    )
+                for term in expected_terms:
                     self.assertIn(term, boundary)
 
     def test_operation_topic_publishes_gh_project_items_examples_and_filter_shape(self) -> None:

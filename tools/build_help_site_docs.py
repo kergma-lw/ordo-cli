@@ -8,11 +8,15 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from ordo.model.human import human_text
 ORDO_HELP = ROOT / "ordo-help"
 DEFAULT_OUTPUT = ROOT / "site-docs"
 STATIC_TOPICS = (
@@ -26,6 +30,10 @@ STATIC_TOPICS = (
     "examples",
 )
 
+# These help routes require an input or report live discovery results, so they
+# remain CLI-only rather than becoming static site pages.
+CLI_ONLY_TOPICS = ("snippet-coverage", "describe", "search")
+
 TOPIC_TITLES = {
     "features": "Workflow-authoring feature map",
     "overview": "Overview",
@@ -33,7 +41,6 @@ TOPIC_TITLES = {
     "workflow-rules": "Workflow rules",
     "capabilities": "Capabilities",
     "command-line": "Command-line reference",
-    "operations": "Operation catalog",
     "examples": "Examples",
 }
 
@@ -44,7 +51,6 @@ TOPIC_INTROS = {
     "workflow-rules": "Use this page when adding, changing, or reviewing workflows.",
     "capabilities": "This page shows what Ordo supports, restricts, or deprecates.",
     "command-line": "This page summarizes the public CLI surface and the main execution modes.",
-    "operations": "This page lists public operations by connector namespace.",
     "examples": "This page collects verified examples you can inspect as reference material.",
 }
 
@@ -65,7 +71,6 @@ TOPIC_USE_WHEN = {
     "workflow-rules": "Use this page when you are deciding how to structure or review a workflow.",
     "capabilities": "Use this page when you need to know whether a surface is supported, restricted, or deprecated.",
     "command-line": "Use this page when you need the public CLI entrypoints, flags, and execution modes.",
-    "operations": "Use this page when you need to find a concrete operation that a workflow can call.",
     "examples": "Use this page when you want concrete repository examples to inspect side by side with the reference docs.",
 }
 
@@ -278,11 +283,7 @@ def render_topic_header(topic: str, doc: dict[str, Any]) -> list[str]:
 def render_root_index(root_doc: dict[str, Any], topics: list[str], operation_refs: list[str]) -> str:
     page = Path("index.md")
     lines = [
-        "# Ordo help reference",
-        "",
-        "Generated reference pages from `./ordo-help --json`.",
-        "",
-        "This site is meant to be browsed as product reference rather than as a narrative tutorial.",
+        render_human_topic(root_doc, page),
         "",
         "## Start here",
         "",
@@ -309,20 +310,9 @@ def render_root_index(root_doc: dict[str, Any], topics: list[str], operation_ref
             lines.append(f"- `{topic['name']}` — {humanize_topic_summary(topic.get('summary', ''))}")
     lines += [
         "",
-        "## Recommended first calls",
-        "",
-    ]
-    for item in root_doc.get("recommended_first_calls", []):
-        lines.append(f"- `{item['command']}` — {item['purpose']}")
-    lines += [
-        "",
         "## Operation reference",
         "",
         doc_link("All operations", page, Path("operations/index.md"), f"{len(operation_refs)} published operations"),
-        "",
-        "## Full JSON reference",
-        "",
-        json_block(root_doc),
     ]
     return "\n".join(lines)
 
@@ -371,7 +361,6 @@ def render_overview(page: Path, doc: dict[str, Any]) -> str:
     ]
     for item in doc.get("recommended_next_calls", []):
         lines.append(f"- `{item['command']}` — {item['purpose']}")
-    lines += ["", "## Full JSON reference", "", json_block(doc)]
     return "\n".join(lines)
 
 
@@ -381,88 +370,45 @@ def render_model(doc: dict[str, Any]) -> str:
         lines += ["## Published document kinds", ""]
         lines.extend(bullet_list([f"`{kind}`" for kind in doc.get("document_kinds", [])]))
         lines.append("")
-    lines += ["## Full JSON reference", "", json_block(doc)]
-    return "\n".join(lines)
-
-
-def render_command_line(doc: dict[str, Any]) -> str:
-    lines = render_topic_header("command-line", doc)
-    for command in doc.get("commands", []):
-        lines += [
-            f"## {command['name']}",
-            "",
-            command.get("purpose", ""),
-            "",
-            f"**Usage:** `{command.get('usage', '')}`",
-            "",
-            "### Modes",
-            "",
-        ]
-        for mode in command.get("modes", []):
-            lines.append(f"- `{mode['name']}` — {mode['summary']}")
-        lines += ["", "### Flags", ""]
-        for flag in command.get("flags", []):
-            value_shape = f" (`{flag['value_shape']}`)" if flag.get("value_shape") else ""
-            lines.append(f"- `{flag['name']}`{value_shape} — {flag['summary']}")
-        lines += ["", "### Discovery commands", ""]
-        for item in command.get("discovery_commands", []):
-            lines.append(f"- `{item['name']}` — {item['summary']}")
-        lines += ["", "### Input override precedence", ""]
-        lines.extend(bullet_list(command.get("input_override_precedence", [])))
-        authoring = command.get("check_review_passes", {})
-        if authoring:
-            lines += ["", "### Workflow check/review loop", "", authoring.get("rule", ""), ""]
-            for item in authoring.get("passes", []):
-                lines.append(f"- `{item['mode']}` — {item['purpose']} _Question: {item['question']}_")
-        lines += ["", "### Example commands", ""]
-        lines.extend(bullet_list([f"`{example}`" for example in command.get("examples", [])]))
-        lines.append("")
-    lines += ["## Full JSON reference", "", json_block(doc)]
     return "\n".join(lines)
 
 
 def render_examples(page: Path, doc: dict[str, Any]) -> str:
-    lines = render_topic_header("examples", doc)
-    for example in doc.get("examples", []):
-        lines += [f"## {example['name']}", "", f"- Path: `{example['path']}`"]
-        if example.get("status"):
-            lines.append(f"- Status: `{example['status']}`")
-        lines.append(f"- Verified: `{str(example.get('verified', False)).lower()}`")
-        if example.get("shows"):
-            lines.append(f"- Highlights: {', '.join(f'`{item}`' for item in example['shows'])}")
-        if example.get("related_topics"):
-            related = []
-            for topic in example["related_topics"]:
-                target = topic_doc_path(topic)
-                related.append(f"[{topic_title(topic)}]({rel_link(page, target)})")
-            lines.append(f"- Related topics: {', '.join(related)}")
-        lines.append("")
-    lines += ["## Full JSON reference", "", json_block(doc)]
-    return "\n".join(lines)
-
-
-def render_operations_topic(page: Path, doc: dict[str, Any]) -> str:
-    lines = render_topic_header("operations", doc)
-    for connector in doc.get("connectors", []):
-        namespace = connector["namespace"]
-        lines += [f"## {namespace}", "", namespace_gloss(namespace), ""]
-        bootstrap = connector.get("bootstrap", {})
-        lines += ["### Requirements", ""]
-        lines.extend(bullet_list(bootstrap.get("prerequisites", [])))
-        lines += ["", "### Available context", ""]
-        lines.extend(bullet_list([f"`{field}`" for field in bootstrap.get("context_fields", [])]))
-        lines += ["", "### Operations", ""]
-        for operation in connector.get("operations", []):
-            reference = f"{namespace}.{operation['name']}"
-            lines.append(
-                doc_link(reference, page, operation_doc_path(reference), humanize_operation_summary(reference, operation))
-            )
-        lines.append("")
-    lines += ["## Full JSON reference", "", json_block(doc)]
-    return "\n".join(lines)
+    page = Path(page)
+    lines = render_human_topic(doc, page).splitlines()
+    example_paths = {
+        f"See {example['path']}.": f"See [{example['path']}]({rel_link(page, Path(example['path']))})."
+        for example in doc.get("examples", [])
+    }
+    return "\n".join(
+        next((line.replace(source, link) for source, link in example_paths.items() if source in line), line)
+        for line in lines
+    )
 
 
 def render_operation(page: Path, doc: dict[str, Any], authoring: dict[str, Any] | None = None) -> str:
+    del authoring
+    page = Path(page)
+    rendered = render_human_topic(doc, page)
+    exact_contract = [
+        rendered,
+        "",
+        "## Exact machine contract",
+        "",
+        f"Use `ordo-help operation {doc['reference']} --json` when you need the exact machine-readable input and result contract for this operation.",
+    ]
+    examples = doc.get("canonical_examples", [])
+    if not examples:
+        return "\n".join(exact_contract)
+    lines = [*exact_contract, "", "## Canonical Examples", ""]
+    for example in examples:
+        lines.extend([f"### {example['name']}", "", example["summary"], ""])
+        language = "yaml"
+        source = example.get(language)
+        if source:
+            lines.extend([f"```{language}", source, "```"])
+    return "\n".join(lines)
+
     reference = doc["reference"]
     op = doc["operation"]
     lines = [
@@ -545,7 +491,6 @@ def render_capabilities(doc: dict[str, Any]) -> str:
         if rule.get("related_codes"):
             lines.append("- Related codes: " + ", ".join(f"`{item}`" for item in rule["related_codes"]))
         lines.append("")
-    lines += ["## Expression surfaces", "", json_block(doc.get("expression_surfaces", [])), "", "## Full JSON reference", "", json_block(doc)]
     return "\n".join(lines)
 
 
@@ -579,32 +524,96 @@ def render_workflow_rules(doc: dict[str, Any]) -> str:
             lines += ["", "### Stop when", ""]
             lines.extend(bullet_list(rule.get("stop_when", [])))
         lines.append("")
-    lines += ["## Full JSON reference", "", json_block(doc)]
     return "\n".join(lines)
 
 
 def render_generic_topic(topic: str, doc: dict[str, Any]) -> str:
-    lines = render_topic_header(topic, doc)
-    lines += ["## Full JSON reference", "", json_block(doc)]
+    return render_human_topic(doc)
+
+
+def _human_reference(label: str, page: Path | None) -> str:
+    if page is None:
+        return f"`{label}`"
+    if label.startswith("connector."):
+        reference = label.removeprefix("connector.")
+        if "." in reference and reference.split(".", 1)[0] in NAMESPACE_GLOSS:
+            return f"[`{label}`]({rel_link(page, operation_doc_path(reference))})"
+    if label in {*STATIC_TOPICS, "operations"}:
+        return f"[`{label}`]({rel_link(page, topic_doc_path(label))})"
+    return f"`ordo-help describe {label}`"
+
+
+def render_human_topic(doc: dict[str, Any], page: Path | None = None) -> str:
+    """Render the shared reader-facing projection without contract fallbacks."""
+
+    human = human_text(doc, owner=str(doc.get("document_kind", "help")))
+    lines = [f"# {human['title']}", "", human["goal"], "", human["summary"]]
+    def render_section(section: dict[str, Any], level: int) -> None:
+        if not any(section.get(key) for key in ("body", "items", "references", "examples", "subsections")):
+            return
+        lines.extend(["", f"{'#' * level} {section['heading']}", ""])
+        if section.get("body"):
+            lines.extend([section["body"], ""])
+        lines.extend(bullet_list(section.get("items", []), empty=""))
+        for reference in section.get("references", []):
+            lines.append(f"- {_human_reference(reference['handle'], page)}: {reference['summary']}")
+        lines.extend(f"- Example: {example}" for example in section.get("examples", []))
+        for subsection in section.get("subsections", []):
+            render_section(subsection, level + 1)
+
+    for section in human["sections"]:
+        render_section(section, 2)
     return "\n".join(lines)
 
 
 def render_topic(page: Path, topic: str, doc: dict[str, Any]) -> str:
+    page = Path(page)
+    if topic == "operations":
+        return render_operations_topic(page, doc)
+    if topic in {"features", "overview", "model", "workflow-rules", "capabilities", "command-line"}:
+        return render_human_topic(doc, page)
     if topic == "overview":
         return render_overview(page, doc)
     if topic == "model":
         return render_model(doc)
-    if topic == "command-line":
-        return render_command_line(doc)
     if topic == "examples":
         return render_examples(page, doc)
-    if topic == "operations":
-        return render_operations_topic(page, doc)
     if topic == "capabilities":
         return render_capabilities(doc)
     if topic == "workflow-rules":
         return render_workflow_rules(doc)
     return render_generic_topic(topic, doc)
+
+
+def render_operations_topic(page: Path, doc: dict[str, Any]) -> str:
+    """Render the operation catalog as links to the generated operation pages."""
+
+    human = human_text(doc, owner="operations")
+    without_catalog = dict(human)
+    without_catalog["sections"] = [
+        section for section in human["sections"] if section["heading"] != "Catalog by namespace"
+    ]
+    lines = [render_human_topic({"human": without_catalog}, page), "", "## Browse operation pages", ""]
+    lines.extend([
+        doc_link("Full operation index", page, Path("operations/index.md")),
+        "",
+        "Use `ordo-help operation <namespace.operation>` to read the focused CLI reference for an operation before adding it to a workflow. Use `ordo-help operation <namespace.operation> --json` when you need its exact machine-readable input and result contract.",
+        "",
+        "## Catalog by namespace",
+        "",
+    ])
+    for connector in doc.get("connectors", []):
+        namespace = str(connector["namespace"])
+        lines.extend([f"### {namespace}", "", namespace_gloss(namespace), ""])
+        for operation in connector.get("operations", []):
+            name = str(operation["name"])
+            reference = f"{namespace}.{name}"
+            label = f"{reference} ({operation['kind']})"
+            if reference == "shell.command":
+                label += " [legacy-only; do not use for new workflows]"
+            lines.append(doc_link(label, page, operation_doc_path(reference)))
+        lines.append("")
+    return "\n".join(lines)
 
 
 def render_operations_index(operation_refs: list[str], root_topics_path: Path) -> str:
@@ -644,6 +653,12 @@ def prepare_output(output_dir: Path, keep: bool) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
+def copy_repository_examples(output_dir: Path) -> None:
+    """Make repository-verified examples directly browsable from the site."""
+
+    shutil.copytree(ROOT / "examples", output_dir / "examples", dirs_exist_ok=True)
+
+
 def main() -> None:
     args = parse_args()
     output_dir = args.output.resolve()
@@ -652,6 +667,7 @@ def main() -> None:
         raise SystemExit(f"Missing launcher: {ORDO_HELP}")
 
     prepare_output(output_dir, args.keep)
+    copy_repository_examples(output_dir)
 
     root_doc = run_help()
     operations_doc = run_help("operations")

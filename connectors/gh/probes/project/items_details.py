@@ -20,11 +20,50 @@ from connectors.gh.probes.project.items import (
     _requested_content_modes,
 )
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, probe, ok
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub project items details',
+ 'goal': 'A workflow needs project-scoped item matching plus richer content details that are not present on '
+         'connector.gh.project.items alone.',
+ 'summary': 'Probe one GitHub Project as a normalized item collection with stable content details such as issue state '
+            'and label names in addition to the base membership facts.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs project-scoped item matching plus richer content details that are not '
+                         'present on connector.gh.project.items alone.',
+                         'Later branching or publishing depends on issue or pull-request state, or on label_names for '
+                         'the matched project-backed content.']},
+              {'heading': 'Do not use for',
+               'items': ['Cheap project membership scans where repository, number, title, and url are already enough; '
+                         'use connector.gh.project.items for the lighter collection probe.',
+                         'Checking or mutating one specific issue membership; use connector.gh.project.issue or '
+                         'connector.gh.project.issue.* for the one-item membership family.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.project.items',
+                               'summary': 'Parent collection probe for lighter normalized project items without extra '
+                                          'content details'},
+                              {'handle': 'connector.gh.project.issue',
+                               'summary': 'Sibling probe for one issue-specific membership snapshot instead of a '
+                                          'collection result set'},
+                              {'handle': 'connector.gh.issue',
+                               'summary': 'Sibling probe for one repository issue snapshot outside the '
+                                          'project-collection context'},
+                              {'handle': 'connector.gh.project.field',
+                               'summary': 'Sibling probe for project field metadata rather than matched item '
+                                          'details'}]},
+              {'heading': 'Examples',
+               'items': ['gh.project.items.details with inputs {"content_kind": "Issue", "project_id": "PVT_demo"}',
+                         'gh.project.items.details with inputs {"content_kind": "Issue", "content_refs": '
+                         '["owner/repo#7", "owner/repo#8"], "filters": [{"field": "Type", "value": "Task"}], '
+                         '"project_id": "PVT_demo"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.project.items', 'connector.gh.project.issue', 'connector.gh.issue']}]})
 
 def info():
     return probe(
         name="project.items.details",
+        human=HUMAN,
         inputs={
             "project_id": "string",
             "content_kind": "string",

@@ -3,11 +3,47 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git ref',
+ 'goal': 'A workflow needs one exact ref existence check such as HEAD, refs/heads/main, or origin/main before making a '
+         'narrower branch, tag, or sync decision.',
+  'summary': 'Check one named Git ref and report whether it resolves, which object id it names, and whether it is a '
+            'symbolic ref with a separate target.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs one exact ref existence check such as HEAD, refs/heads/main, or origin/main '
+                         'before making a narrower branch, tag, or sync decision.',
+                         "Later logic needs one ref's oid or symbolic-target facts without comparing two revisions or "
+                         'listing an inventory.']},
+              {'heading': 'Do not use for',
+               'items': ['Comparing two revision endpoints for ahead/behind or merge-base facts; use '
+                          'connector.git.range for that relationship comparison.',
+                         'Reading tag-specific semantics or tag inventories; use connector.git.tag or '
+                         'connector.git.tags when the workflow is really about Git tags rather than generic refs.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.range',
+                                'summary': 'Compare two revision endpoints rather than resolve '
+                                          'one exact ref'},
+                              {'handle': 'connector.git.tag',
+                                'summary': 'Check one exact Git tag when tag semantics matter more than '
+                                          'generic ref resolution'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current checkout branch context rather than one arbitrary '
+                                          'named ref'},
+                              {'handle': 'connector.git.tags',
+                                'summary': 'List tags instead of looking up one exact ref'}]},
+              {'heading': 'Examples',
+               'items': ['git.ref with inputs {"ref": "HEAD"}', 'git.ref with inputs {"ref": "refs/heads/main"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.range', 'connector.git.tag', 'connector.git.branch']}]})
 
 def info():
     return probe(
         name="ref",
+        human=git_human(HUMAN, provide="`ref`: required; provide the exact revision name to inspect, such as HEAD or refs/heads/main, without guessing a replacement when it is absent.", result="Returns name, exists, oid, symbolic, symbolic_target, and repository_root. A missing ref succeeds with exists=false and unknown object facts; refs may change after this observation."),
         inputs={"ref": "string"},
         outputs={
             "name": "string",
@@ -117,4 +153,3 @@ def run(ctx: OperationContext) -> OperationOutcome:
         },
         raw=raw,
     )
-

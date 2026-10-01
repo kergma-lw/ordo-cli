@@ -9,6 +9,10 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         payload = describe_capabilities()
 
         capabilities = {item["name"]: item for item in payload["capabilities"]}
+        self.assertEqual(
+            sum(item["name"] == "workflow.step.value" for item in payload["capabilities"]),
+            1,
+        )
         self.assertEqual(capabilities["workflow.local_expressions"]["status"], "supported")
         self.assertEqual(capabilities["workflow.step.condition"]["status"], "supported")
         self.assertEqual(capabilities["workflow.step.register"]["status"], "supported")

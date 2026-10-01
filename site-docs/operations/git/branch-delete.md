@@ -1,134 +1,64 @@
-# git.branch.delete
+# Git branch delete
 
-Delete a local Git branch.
+A workflow is intentionally cleaning up one stale local branch rather than switching branches or resetting repository state broadly.
 
-Use this when a workflow needs Git state or Git side effects. In practice: delete a local Git branch.
+Delete one local non-default Git branch. Optional strictly boolean force defaults to false: omitted or false keeps the merged-branch safety check; true bypasses it.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use the normal merged-branch safety check for ordinary cleanup. Force deletion only after the workflow has independently established that removing unmerged local history is intended.
+- The action protects the repository default branch and branches checked out in any worktree.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the selected local branch no longer exists.
+- A protected, checked-out, or unmerged branch remains in place unless an intentional forced deletion is allowed. Other Git blocks do not report that deletion completed.
+- Returns branch after deletion. Missing, default, checked-out, or unmerged branches remain present unless intentional force applies; blocks do not report deletion.
 
-```json
-{
-  "branch": "string",
-  "force": "boolean"
-}
+## What to provide
+
+- `branch`: required. `force`: optional; omit it or use false for ordinary merged-branch safety, and use true only after confirming unmerged history may be removed.
+
+## Do not use for
+
+- Switching away from the current branch before deletion; use connector.git.branch.switch first when the current checkout must move.
+- Deleting tags, remote refs, or arbitrary refs; this operation only covers local branch cleanup.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.branch`](branch.md): Check whether the target branch is currently active
+- [`connector.git.branches`](branches.md): List local and remote branches before deletion
+- [`connector.git.branch.switch`](branch-switch.md): Sibling action for moving off the target branch before deletion if needed
+- [`connector.git.repo`](repo.md): Read repository-level facts such as the protected default branch
+
+## Exact machine contract
+
+Use `ordo-help operation git.branch.delete --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_branch_delete_step
+
+Delete one stale local branch with the default force: false behavior (git branch -d), preserving Git's merged-branch check.
+
+```yaml
+      - name: delete-stale-branch
+        uses: git.branch.delete
+        with:
+          branch: "stale/demo"
 ```
+### git_branch_delete_force_step
 
-## Outputs
+After independently verifying squash-merge cleanup eligibility, explicitly select git branch -D with force: true. Default and checked-out branch protections still apply.
 
-```json
-{
-  "branch": "string"
-}
-```
-
-## Effects
-
-- delete a local non-default branch
-
-## Failure modes
-
-- `input_error`
-- `branch_not_found`
-- `branch_checked_out`
-- `default_branch_protected`
-- `branch_not_merged`
-- `delete_blocked`
-
-## Requirements
-
-- None
-
-## Invalidated observations
-
-- `git.branches`
-- `git.ref.*`
-
-## Example inputs
-
-### `git.branch.delete`
-
-```json
-{
-  "branch": "string",
-  "force": "boolean"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "delete a local non-default branch"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "branch": "string",
-          "force": "boolean"
-        },
-        "reference": "git.branch.delete"
-      }
-    ],
-    "failure_modes": [
-      "input_error",
-      "branch_not_found",
-      "branch_checked_out",
-      "default_branch_protected",
-      "branch_not_merged",
-      "delete_blocked"
-    ],
-    "inputs": {
-      "branch": "string",
-      "force": "boolean"
-    },
-    "invalidates_observations": [
-      "git.branches",
-      "git.ref.*"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "branch.delete",
-    "outputs": {
-      "branch": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Delete a local non-default branch; optional boolean force defaults to false (-d), true uses -D.",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "branch.delete",
-  "reference": "git.branch.delete",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      # Caller has independently verified that this squash-merged branch is eligible for cleanup.
+      - name: delete-verified-squash-branch
+        uses: git.branch.delete
+        with:
+          branch: "squash/demo"
+          force: true
 ```

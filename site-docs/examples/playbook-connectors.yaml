@@ -1,0 +1,21 @@
+version: 1
+states:
+  shared_state:
+    path: .ordo/example-state.json
+defaults:
+  profile: review
+connectors:
+  compose:
+    directory: ./deploy
+    file: compose.prod.yaml
+workflows:
+  inspect-compose:
+    file: ./playbook-workflow-target.yaml
+    with:
+      active_profile_key: active_profile
+      repo_dir: .
+    state_bindings:
+      shared_state: shared_state
+profiles:
+  review:
+    file: ../profiles/read-only-review.yaml

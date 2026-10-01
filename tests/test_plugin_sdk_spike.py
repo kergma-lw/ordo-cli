@@ -157,7 +157,10 @@ class PluginSdkSpikeTest(unittest.TestCase):
         package.mkdir()
         probes.mkdir()
 
-        (package / "__init__.py").write_text("", encoding="utf-8")
+        (package / "__init__.py").write_text(
+            'from ordo.model.human import declare_human\nOPERATION_HUMAN = {"branch": declare_human({"title": "Branch", "goal": "Inspect a branch.", "summary": "Returns the current branch.", "sections": []})}\n',
+            encoding="utf-8",
+        )
         (probes / "__init__.py").write_text("", encoding="utf-8")
         (package / "bootstrap.py").write_text(
             textwrap.dedent(

@@ -1,53 +1,54 @@
-# gh.project.issue.add
+# GitHub project issue add
 
-Add a GitHub issue to a GitHub Project.
+the workflow's GitHub repository context already names the normal repository target and the workflow needs to ensure one issue there becomes a project item.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: add a GitHub issue to a GitHub Project.
+Add one GitHub issue to one GitHub Project and return the project item id, while staying idempotent when the issue is already attached. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "issue_number": "integer",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "added": "boolean",
-  "issue_ref": "string",
-  "item_id": "string",
-  "project_id": "string"
-}
-```
-
-## Authoring contract
-
-Add one GitHub issue to one GitHub Project and return the project item id, while staying idempotent when the issue is already attached. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs to ensure one issue there becomes a project item.
 - A workflow has one concrete issue and one target project and needs to ensure that the issue becomes a project item before later project-field updates.
 - The workflow wants one typed membership-creation result instead of shelling out to ad hoc gh project mutations.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `issue_number`: required.
+- `project_id`: required.
+
+## Result and boundary
+
+- Usable result fact: `issue_ref`.
+- Usable result fact: `project_id`.
+- Usable result fact: `item_id`.
+- Usable result fact: `added`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails.
+
+## Do not use for
 
 - Checking membership without changing anything; use connector.gh.project.issue when the real question is whether the issue is already in the project.
-- Updating Status, Estimate, Iteration, or another project-backed field after membership exists; use the narrower connector.gh.project.issue.field_* setters for those follow-up mutations.
+- Updating Status, Estimate, Iteration, or another project-backed field after membership exists; use connector.gh.project.issue.field_single_select.set, connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set for those follow-up mutations.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.project.issue`](project-issue.md): Sibling probe for membership inspection before or after this action
+- [`connector.gh.project.issue.field_single_select.set`](project-issue-field-single-select-set.md): Follow-up action for setting one selectable project field after membership is ensured
+- [`connector.gh.project.issue.field_number.set`](project-issue-field-number-set.md): Follow-up action for setting one numeric project field after membership is ensured
+- [`connector.gh.project.items`](project-items.md): Project-wide collection probe when the workflow needs many project items rather than attaching one issue
+
+## Inspect next
+
+- connector.gh.project.issue
+- connector.gh.project.issue.field_single_select.set
+- connector.gh.project.issue.field_number.set
+
+## Exact machine contract
+
+Use `ordo-help operation gh.project.issue.add --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_project_issue_add_step
 
@@ -62,107 +63,4 @@ Attach the issue to the target GitHub Project only when the earlier membership p
           issue_number: inputs.issue_number
           project_id: inputs.project_id
         register: membership_add
-```
-
-## Effects
-
-- add GitHub issue to project
-
-## Failure modes
-
-- `issue_not_found`
-- `project_not_found`
-- `add_blocked`
-
-## Requirements
-
-- None
-
-## Invalidated observations
-
-- `gh.project.issue`
-
-## Example inputs
-
-### `gh.project.issue.add`
-
-```json
-{
-  "issue_number": "integer",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "add GitHub issue to project"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "issue_number": "integer",
-          "project_id": "string",
-          "repository": "string"
-        },
-        "reference": "gh.project.issue.add"
-      }
-    ],
-    "failure_modes": [
-      "issue_not_found",
-      "project_not_found",
-      "add_blocked"
-    ],
-    "inputs": {
-      "issue_number": "integer",
-      "project_id": "string",
-      "repository": "string"
-    },
-    "invalidates_observations": [
-      "gh.project.issue"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "project.issue.add",
-    "outputs": {
-      "added": "boolean",
-      "issue_ref": "string",
-      "item_id": "string",
-      "project_id": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'gh.project.issue.add'",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "project.issue.add",
-  "reference": "gh.project.issue.add",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

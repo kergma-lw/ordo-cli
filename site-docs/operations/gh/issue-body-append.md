@@ -1,53 +1,53 @@
-# gh.issue.body.append
+# GitHub issue body append
 
-Append text to a GitHub issue body.
+the workflow's GitHub repository context already names the normal repository target and the workflow should append one note to one issue body there.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: append text to a GitHub issue body.
+Append one text fragment to the end of an existing GitHub issue body, optionally separated from the prior body by one explicit separator. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "issue_number": "integer",
-  "repository": "string",
-  "separator": "string | null",
-  "text": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "body": "string",
-  "changed": "boolean",
-  "issue_ref": "string",
-  "url": "string"
-}
-```
-
-## Authoring contract
-
-Append one text fragment to the end of an existing GitHub issue body, optionally separated from the prior body by one explicit separator. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow should append one note to one issue body there.
 - The workflow should preserve the current issue body and add one extra section, note, or footer to it.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `issue_number`: required.
+- `text`: required.
+- `separator`: optional.
+
+## Result and boundary
+
+- Usable result fact: `issue_ref`.
+- Usable result fact: `url`.
+- Usable result fact: `body`.
+- Usable result fact: `changed`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails.
+
+## Do not use for
 
 - Regenerating the whole canonical body from scratch; use connector.gh.issue.body.replace for a full rewrite.
 - Adding conversational discussion that belongs in the comment thread instead of the issue body; use connector.gh.issue.comment.add.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.issue.body.replace`](issue-body-replace.md): Rewrite the full body instead of appending one trailing fragment
+- [`connector.gh.issue.comment.add`](issue-comment-add.md): Write a discussion comment instead of mutating the issue body
+- [`connector.gh.issue`](issue.md): Probe the current body first when the append decision depends on existing issue metadata
+
+## Inspect next
+
+- connector.gh.issue.body.replace
+- connector.gh.issue.comment.add
+- connector.gh.issue
+
+## Exact machine contract
+
+Use `ordo-help operation gh.issue.body.append --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_issue_body_append_step
 
@@ -61,104 +61,4 @@ Append one extra note to the existing issue body while preserving earlier body c
       issue_number: step.created_issue.outputs.number
       text: "Follow-up note: checklist synced."
       separator: "\n\n"
-```
-
-## Effects
-
-- append text to GitHub issue body
-
-## Failure modes
-
-- `issue_not_found`
-- `text_invalid`
-- `append_blocked`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.issue.body.append`
-
-```json
-{
-  "issue_number": "integer",
-  "repository": "string",
-  "separator": "string | null",
-  "text": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "append text to GitHub issue body"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "issue_number": "integer",
-          "repository": "string",
-          "separator": "string | null",
-          "text": "string"
-        },
-        "reference": "gh.issue.body.append"
-      }
-    ],
-    "failure_modes": [
-      "issue_not_found",
-      "text_invalid",
-      "append_blocked"
-    ],
-    "inputs": {
-      "issue_number": "integer",
-      "repository": "string",
-      "separator": "string | null",
-      "text": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "issue.body.append",
-    "outputs": {
-      "body": "string",
-      "changed": "boolean",
-      "issue_ref": "string",
-      "url": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'gh.issue.body.append'",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "issue.body.append",
-  "reference": "gh.issue.body.append",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

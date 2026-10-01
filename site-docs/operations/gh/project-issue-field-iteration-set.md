@@ -1,57 +1,60 @@
-# gh.project.issue.field_iteration.set
+# GitHub project issue field-iteration set
 
-Set an iteration field for a GitHub Project issue.
+Move one issue that is already in a GitHub Project into a named iteration.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: set an iteration field for a GitHub Project issue.
+Set one iteration-valued GitHub Project field on one issue's Project item by field name and iteration title.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- A workflow needs to move one project-backed issue into a named iteration such as Sprint 12.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- Provide the issue number, Project ID, visible iteration field name, and iteration title.
+- Choose the project by owner and project number, retrieve its stable Project ID with the GitHub project view command, then confirm the project title with connector.gh.project. Use connector.gh.project.field to confirm the named iteration field and its available iterations before changing an issue.
+- Use the workflow's GitHub repository context normally. Supply repository only when the issue belongs to a different repository.
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `issue_number`: required.
+- `project_id`: required.
+- `field`: required.
+- `iteration`: required.
 
-```json
-{
-  "field": "string",
-  "issue_number": "integer",
-  "iteration": "string",
-  "project_id": "string",
-  "repository": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- The result identifies the issue and its Project item, and reports whether the requested iteration changed. changed=false means the item was already in that iteration.
+- The issue must already be in the Project and the named iteration must exist. Observe again before a decision that depends on the current iteration because another actor can change it.
+- Usable result fact: `issue_ref`.
+- Usable result fact: `project_id`.
+- Usable result fact: `item_id`.
+- Usable result fact: `field`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails. Required preflight facts must be established before the change is submitted.
 
-```json
-{
-  "changed": "boolean",
-  "field": "string",
-  "issue_ref": "string",
-  "item_id": "string",
-  "iteration": "string",
-  "project_id": "string"
-}
-```
-
-## Authoring contract
-
-Set one iteration-valued GitHub Project field on one issue's project item by field name and human iteration title. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs to move one project-backed issue there into a named iteration.
-- A workflow needs to move one project-backed issue into a named iteration such as Sprint 12 after membership already exists or can be resolved.
-- The caller knows the field by its project-visible name and wants Ordo to resolve the underlying iteration id and item id automatically.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
-
-### Boundaries
+## Do not use for
 
 - Attaching the issue to the project in the first place; use connector.gh.project.issue.add when membership may still be missing.
 - Updating numeric or single-select fields; use connector.gh.project.issue.field_number.set or connector.gh.project.issue.field_single_select.set for those different field kinds.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.project.issue`](project-issue.md): Parent issue-membership probe for reading current project field values before or after mutation
+- [`connector.gh.project.field`](project-field.md): Sibling probe for confirming the project field exists and is iteration-backed before mutation
+- [`connector.gh.project.issue.add`](project-issue-add.md): Sibling action for ensuring the issue is a project item before setting iteration
+- [`connector.gh.project.issue.field_single_select.set`](project-issue-field-single-select-set.md): Sibling setter for selectable fields rather than iteration-backed fields
+
+## Inspect next
+
+- connector.gh.project.issue
+- connector.gh.project.field
+- connector.gh.project.issue.add
+
+## Exact machine contract
+
+Use `ordo-help operation gh.project.issue.field_iteration.set --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_project_issue_field_iteration_set_step
 
@@ -66,171 +69,4 @@ Move the project-backed issue into one named iteration after membership is alrea
           project_id: inputs.project_id
           field: "Iteration"
           iteration: "Sprint 12"
-```
-
-## Effects
-
-- set one GitHub project issue iteration field by field name
-
-## Failure modes
-
-- `issue_not_found`
-- `project_not_found`
-- `field_not_found`
-- `field_kind_unsupported`
-- `iteration_not_found`
-- `field_update_blocked`
-
-## Requirements
-
-- None
-
-## Preflight observations
-
-```json
-[
-  {
-    "fields": [
-      "exists"
-    ],
-    "probe": "gh.project.issue",
-    "with": {
-      "issue_number": "{issue_number}",
-      "project_id": "{project_id}",
-      "repository": "{repository}"
-    }
-  },
-  {
-    "fields": [
-      "exists"
-    ],
-    "probe": "gh.project.field",
-    "with": {
-      "field": "{field}",
-      "project_id": "{project_id}"
-    }
-  }
-]
-```
-
-## Invalidated observations
-
-- `gh.project.issue`
-
-## Example inputs
-
-### `gh.project.issue.field_iteration.set`
-
-```json
-{
-  "field": "string",
-  "issue_number": "integer",
-  "iteration": "string",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "set one GitHub project issue iteration field by field name"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "field": "string",
-          "issue_number": "integer",
-          "iteration": "string",
-          "project_id": "string",
-          "repository": "string"
-        },
-        "reference": "gh.project.issue.field_iteration.set"
-      }
-    ],
-    "failure_modes": [
-      "issue_not_found",
-      "project_not_found",
-      "field_not_found",
-      "field_kind_unsupported",
-      "iteration_not_found",
-      "field_update_blocked"
-    ],
-    "inputs": {
-      "field": "string",
-      "issue_number": "integer",
-      "iteration": "string",
-      "project_id": "string",
-      "repository": "string"
-    },
-    "invalidates_observations": [
-      "gh.project.issue"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "project.issue.field_iteration.set",
-    "outputs": {
-      "changed": "boolean",
-      "field": "string",
-      "issue_ref": "string",
-      "item_id": "string",
-      "iteration": "string",
-      "project_id": "string"
-    },
-    "preflight_observations": [
-      {
-        "fields": [
-          "exists"
-        ],
-        "probe": "gh.project.issue",
-        "with": {
-          "issue_number": "{issue_number}",
-          "project_id": "{project_id}",
-          "repository": "{repository}"
-        }
-      },
-      {
-        "fields": [
-          "exists"
-        ],
-        "probe": "gh.project.field",
-        "with": {
-          "field": "{field}",
-          "project_id": "{project_id}"
-        }
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'gh.project.issue.field_iteration.set'",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "project.issue.field_iteration.set",
-  "reference": "gh.project.issue.field_iteration.set",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

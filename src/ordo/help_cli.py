@@ -7,6 +7,8 @@ import json
 import re
 import sys
 from copy import deepcopy
+from dataclasses import dataclass
+from functools import cache
 
 import yaml
 
@@ -24,9 +26,42 @@ from ordo.introspection import (
 )
 from ordo.runtime.representation_adapters import describe_representation_adapter_surface
 from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
-from ordo.model.help_snippets import describe_help_snippets
+from ordo.model.help_snippets import describe_help_snippets, snippet_coverage_human, text_canonical_examples
 from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
+from ordo.model.connector import CONNECTOR_AUTHORING_HUMAN, CONNECTOR_HUMAN, operations_catalog_human
+from ordo.model.command_line import COMMAND_LINE_HUMAN
+from ordo.model.discovery_catalog import (
+    OVERVIEW_HUMAN,
+    ROOT_HUMAN,
+    SEARCH_HUMAN,
+    features_human,
+    keyword_dispatcher_human,
+    model_human,
+)
+from ordo.model.examples_catalog import EXAMPLE_FOCUSED_DESCRIBE_HUMAN, examples_catalog_human
+from ordo.model.human import HumanDeclaration, human_content, human_keywords, human_text, validate_human_mapping
+from ordo.model.playbook_contract import PLAYBOOK_FOCUSED_DESCRIBE_HUMAN
+from ordo.model.profile_contract import PROFILE_FOCUSED_DESCRIBE_HUMAN
+from ordo.model.routine_contract import (
+    ROUTINE_ADDITIONAL_FOCUSED_DESCRIBE_HUMAN,
+    ROUTINE_FOCUSED_DESCRIBE_HUMAN,
+)
+from ordo.model.state_contract import (
+    STATE_ADDITIONAL_FOCUSED_DESCRIBE_HUMAN,
+    STATE_FOCUSED_DESCRIBE_HUMAN,
+)
+from ordo.model.workflow_contract import (
+    WORKFLOW_ADDITIONAL_FOCUSED_DESCRIBE_HUMAN,
+    WORKFLOW_FOCUSED_DESCRIBE_HUMAN,
+)
+from ordo.model.command_line import COMMAND_LINE_FOCUSED_DESCRIBE_HUMAN
+from ordo.runtime.authoring_human import (
+    WORKFLOW_RULE_EXAMPLE_FOCUSED_DESCRIBE_HUMAN,
+    workflow_rules_focused_describe_human,
+    workflow_rules_human,
+)
+from ordo.runtime.capabilities import CAPABILITY_FOCUSED_DESCRIBE_HUMANS, capabilities_human
 
 
 PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
@@ -198,11 +233,11 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "why": [
             "shell.command is the coarsest and riskiest legacy execution surface",
             "arbitrary inline shell makes workflows harder to validate, explain, and keep environment-stable",
-            "routine publication now provides a more reviewable bounded local-automation surface than inline shell text",
+            "a published project-local helper is more reviewable than inline shell text",
         ],
         "prefer": [
             "prefer published connector operations first",
-            "prefer published routine.<id> entries over any legacy shell fallback when bounded project-local automation is still necessary",
+            "prefer published routine.<id> entries over any legacy shell fallback when a small project-local helper is still necessary",
             "treat any remaining shell.command mention as migration or compatibility work rather than a valid new design choice",
         ],
         "avoid": [
@@ -219,7 +254,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "name": "routine.*",
         "priority": "critical_caution",
         "guidance_level": "strong_restriction",
-        "rule": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
+        "rule": "routine.* is a deliberately limited project-local helper path, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
         "why": [
             "routine.* can still hide project-local semantics that should not silently become product truth",
             "routine publication is safer than inline shell but still acts as a controlled fallback rather than a rich public domain model",
@@ -653,7 +688,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "write with, value, publish, result, and for_each entries as bare expressions when they are meant to evaluate",
             "quote literal strings explicitly when a value-bearing field should preserve raw text",
             "treat runtime evaluation failure in a bare expression as a real error to fix rather than a cue to keep the bare form as text",
-            "keep ${...} only for YAML-hostile expressions that are not viable as bare plain scalars",
+            "use ${...} only when YAML would otherwise read the expression as YAML syntax rather than as one expression; for example, quote `${inputs.title}` when the surrounding YAML position cannot safely hold the bare expression",
         ],
         "avoid": [
             "wrapping native expression contexts in ${...} just by habit",
@@ -865,12 +900,12 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "appropriate_when": [
             "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
             "Typed public operations express product intent better than broad execution surfaces.",
-            "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to the direct GraphQL Actions association; null association is found=false. Jobs are complete read-only observations, not tested-SHA attestation or merge policy. gh.actions is a namespace segment, not an executable operation.",
+            "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to their associated Actions run; null association is found=false. Jobs are complete read-only observations, not merge policy. gh.actions is a namespace segment, not an executable operation.",
             "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
-            "Connector authors use ctx.call(name, inputs=...) for same-family probe dependencies with already-resolved values, never reevaluated expressions. Full and local dotted names work; omitted inputs/None preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring.",
+            "Before proposing a new connector capability, inspect the existing operations and compose the narrow published operations that already express the work. Inspect connector.authoring only when that review leaves a stable, user-visible capability gap.",
             "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
             "For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error.",
-            "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
+            "Use fs.file for UTF-8 content and metadata from one regular file. It returns a failure rather than a weakened result when it cannot safely read that file; it is not an atomic snapshot guarantee.",
             "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
             "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
             "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
@@ -894,7 +929,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "keywords": ["routine.*", "fallback", "bounded automation", "local automation", "with.env", "opaque exception path"],
         "appropriate_when": [
             "Published connector operations and clean composition have already been exhausted, and the remaining gap is mechanical or intentionally project-local rather than semantic.",
-            "A narrowly bounded local automation step must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface.",
+            "A small project-local helper must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface.",
         ],
         "inappropriate_when": [
             "The remaining gap is semantic, unclear, or being preserved silently through a nearby local helper.",
@@ -944,7 +979,7 @@ GH_PR_CREATE_GUIDANCE = (
     "GitHub creation: gh.pr.create requires head, base, title, and an explicit boolean draft; body defaults to empty. "
     "repository is optional: valid explicit OWNER/REPO overrides connector_contexts.gh.repository; omitted or null uses context, malformed explicit input fails without fallback. "
     "head_repository is a full source OWNER/REPO, default target repository; explicit cross-repository intent requires it, with no fork guessing. "
-    "head_owner is an optional consistency assertion, otherwise derived from the exact source repository. Same-organization head_repo API argument is derived repository NAME. Reject same-branch/same-repository requests. "
+    "head_owner is conditional and acts only as a consistency assertion; otherwise it is derived from the exact source repository. Same-organization head_repo API argument is derived repository NAME. Reject same-branch/same-repository requests. "
     "The action uses ctx.call('gh.pr.list', inputs=...) with resolved repository/head/head_owner/base and state: open; require complete traversal and exact case-insensitive head_repository_key identity. "
     "One exact open match including draft returns non-OK already_exists with pull_number, url, created=false and no POST; multiple matches return ambiguous; unknown identity and list failure return precheck_failed. "
     "No existing match permits one POST. Only validated HTTP 201 means created=true; malformed 201, timeout, or server failure returns creation_unknown with created=null. "
@@ -954,10 +989,10 @@ GH_PR_CREATE_GUIDANCE = (
 )
 
 SDK_CALL_GUIDANCE = (
-    "Connector-author SDK: ctx.call(name, *, inputs=None) supports nonempty already-resolved inputs only for same-family probe dependencies. "
-    "Full references (gh.pr.list) and local dotted names (pr.list) work; values are not reevaluated as expressions or templates. "
-    "Omitted inputs or None preserve legacy no-input behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. "
-    "Inspect connector.authoring for dependency boundaries and verified examples."
+    "Before proposing a connector, inspect existing operations and combine the narrow published operations that already express the work. "
+    "A new connector is appropriate only for a stable user-visible capability with clear inputs, results, effects, and failure boundaries. "
+    "Use a routine for a remaining mechanical project-local gap; discuss a semantic gap before adding a connector. "
+    "Inspect connector.authoring for this decision guidance; it intentionally has no checked implementation example."
 )
 
 
@@ -1024,7 +1059,8 @@ GRAPH_PARAMETER_GUIDANCE = (
 
 
 def build_capabilities_response() -> JSONObject:
-    return {**describe_capabilities(), "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
+    capabilities = describe_capabilities()
+    return {**capabilities, "document_kind": "capabilities", "human": human_content(capabilities_human(capabilities), owner="capabilities"), "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
             "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE, "connector_authoring_guidance": SDK_CALL_GUIDANCE,
             "graph_guidance": GRAPH_GUIDANCE, "graph_presentation": GRAPH_PRESENTATION,
             "graph_source_placement": GRAPH_SOURCE_PLACEMENT, "graph_context": GRAPH_CONTEXT_GUIDANCE,
@@ -1032,8 +1068,12 @@ def build_capabilities_response() -> JSONObject:
 
 
 def build_operations_response() -> JSONObject:
-    return {**describe_operations(), "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
-            "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE, "connector_authoring_guidance": SDK_CALL_GUIDANCE}
+    operations = describe_operations()
+    return {
+        **operations,
+        "document_kind": "operations",
+        "human": human_content(operations_catalog_human(operations["connectors"]), owner="operations"),
+    }
 
 
 def build_root_response() -> JSONObject:
@@ -1062,15 +1102,16 @@ def build_root_response() -> JSONObject:
             "entrypoint": internal_sections["discovery"]["entrypoint"],
             "published_sections": sorted(name for name in internal_sections if name != "discovery"),
         },
+        "human": human_content(ROOT_HUMAN, owner="root"),
     }
 
 
-def build_overview_response() -> JSONObject:
+def build_overview_response(*, include_snippet_coverage: bool = True) -> JSONObject:
     """Return the aggregated overview discovery response."""
 
     system = describe_system()
     operations = describe_operations()
-    snippet_coverage = build_snippet_coverage_response()
+    snippet_coverage = build_snippet_coverage_response() if include_snippet_coverage else None
     document_kinds = []
     for name, payload in system["sections"].items():
         if name == "discovery":
@@ -1133,8 +1174,9 @@ def build_overview_response() -> JSONObject:
         },
         "connector_namespaces": [connector["namespace"] for connector in operations["connectors"]],
         "published_topics": [topic["name"] for topic in PUBLIC_TOPICS],
-        "snippet_coverage_summary": snippet_coverage["summary"],
+        "snippet_coverage_summary": snippet_coverage["summary"] if snippet_coverage is not None else {},
         "recommended_next_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS if item["command"] != "ordo-help overview"],
+        "human": human_content(OVERVIEW_HUMAN, owner="overview"),
     }
 
 
@@ -1160,6 +1202,10 @@ def build_model_response() -> JSONObject:
         "connectors": describe_operations()["connectors"],
         "local_expressions": describe_local_expression_surface(),
         "representation_adapters": describe_representation_adapter_surface(),
+        "human": human_content(model_human([
+            describe_workflow_contract(), describe_profile_contract(), describe_routine_contract(),
+            describe_playbook_contract(), describe_state_contract(),
+        ]), owner="model"),
     }
 
 
@@ -1206,10 +1252,10 @@ def _snippet_surface_for_handle(handle: str, *, snippets: dict[str, JSONObject] 
     }
 
 
-def build_features_response() -> JSONObject:
+def build_features_response(context: _HelpResponseContext | None = None) -> JSONObject:
     """Return the compact feature map for workflow discovery."""
 
-    context = _HelpResponseContext()
+    context = _HelpResponseContext() if context is None else context
     model = build_model_response()
     workflow_rules = build_workflow_rules_response()
     examples = describe_examples_catalog()
@@ -1231,11 +1277,41 @@ def build_features_response() -> JSONObject:
             }
         )
 
+    human = human_content(features_human(clusters, {
+        **describe_playbook_contract()["human"]["feature_clusters"],
+        **describe_profile_contract()["human"]["feature_clusters"],
+        **describe_workflow_contract()["human"]["feature_clusters"],
+        **describe_state_contract()["human"]["feature_clusters"],
+        **describe_routine_contract()["human"]["feature_clusters"],
+        **CONNECTOR_HUMAN["feature_clusters"],
+    }), owner="features")
+    _validate_feature_keyword_targets(human_keywords(human, owner="features"))
+
     return {
         "document_kind": "features",
         "purpose": "Compact workflow feature map for authors and agents, with named handles for deeper discovery.",
         "clusters": clusters,
+        "human": human,
     }
+
+
+def _validate_feature_keyword_targets(keywords: list[JSONObject]) -> None:
+    """Reject feature keywords that point outside the published focused-help catalogue."""
+
+    available = focused_describe_declarations()
+    names = {str(keyword["name"]) for keyword in keywords}
+    for keyword in keywords:
+        for target in keyword["targets"]:
+            handle = str(target["handle"])
+            if handle not in available:
+                raise ValueError(
+                    f"features human keyword {keyword['name']!r} targets unpublished focused help {handle!r}"
+                )
+            target_keyword = target.get("keyword")
+            if target_keyword is not None and str(target_keyword) not in names:
+                raise ValueError(
+                    f"features human keyword {keyword['name']!r} routes to unknown keyword {target_keyword!r}"
+                )
 
 
 def _names_from_fields(entries: list[JSONObject]) -> list[str]:
@@ -1494,6 +1570,7 @@ def build_workflow_rules_response() -> JSONObject:
             },
         ],
         "rules": [dict(rule) for rule in WORKFLOW_AUTHORING_RULES],
+        "human": human_content(workflow_rules_human([dict(rule) for rule in WORKFLOW_AUTHORING_RULES]), owner="workflow-rules"),
     }
 
 
@@ -1635,6 +1712,7 @@ def build_command_line_response() -> JSONObject:
                 ],
             }
         ],
+        "human": human_content(COMMAND_LINE_HUMAN, owner="command-line"),
     }
 
 
@@ -1651,17 +1729,24 @@ def build_operation_response(reference: str) -> JSONObject | None:
     if connector is None or operation is None:
         return None
 
+    snippet_surface = describe_help_snippets().get(f"connector.{reference}", {})
+    canonical_examples = text_canonical_examples(
+        f"connector.{reference}", list(snippet_surface.get("canonical_examples", [])),
+    )
     return {
         "document_kind": "operation",
         "reference": reference,
         "namespace": connector.namespace,
         "bootstrap": connector.bootstrap.to_contract(),
         "operation": operation.to_contract(),
+        "human": human_content(operation.human_declaration(), owner=f"operation.{reference}"),
         "related_commands": {
             "operations": "ordo-help operations --json",
             "capabilities": "ordo-help capabilities --json",
         },
         "operation_name": operation_name,
+        "snippet_coverage": snippet_surface.get("snippet_coverage", "none"),
+        "canonical_examples": canonical_examples,
     }
 
 
@@ -1673,7 +1758,7 @@ def _build_capability_lookup(*, context: _HelpResponseContext | None = None) -> 
 
     capability_overrides: dict[str, JSONObject] = {
         "workflow.local_expressions": {
-            "definition": "Workflow capability for short inline local expressions that only read and reshape already-available input data through workflow roots, pipeline filters, function-style builtins, and representation adapters.",
+            "definition": "Workflow capability for short inline local expressions that only read and reshape already-available input data through workflow roots, pipeline filters, call-style built-in helpers, and representation adapters.",
             "use_when": [
                 "A workflow-owned field needs a concise inline read, check, comparison, or small transformation without escalating to a heavier execution surface.",
                 "Authoring intent is still local expression shaping rather than external operations, step orchestration, or long opaque helper logic.",
@@ -1771,16 +1856,13 @@ def _build_capability_lookup(*, context: _HelpResponseContext | None = None) -> 
         "workflow.step.state_set": {
             "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
             "use_when": [
-                "The workflow must persist one value for future runs, after the final read of the same actual file, regardless of role or profile.",
-                "Top-level check evaluates conditions and gates first, then records deferred without mutation, simulation, outputs, registers, or reuse, and continues to independent guards. Plan retains a not_reusable node with planned_probe_result null; run executes admitted writing once in order.",
-                "Before binding, authoring validation retains the same-role rule. Bound validation resolves relative paths in each access context, recognizes normalized paths, symlinks, and existing hardlinks, and permits the same role to access different files.",
+                "The workflow must save one value for a future run after all needed reads of that stored value are complete.",
+                "The state role is declared by the workflow and bound by the playbook entry.",
             ],
             "do_not_use_for": [
                 "Ordinary local dataflow that should stay in step outputs or workflow values instead of becoming durable state.",
-                "Writing before a later read of the same actual file, even through another role, profile, key, or field: validation.workflow.state_storage.write_before_last_read reports proven violations. Use value + register for per-run reuse.",
-                "Treating validation.workflow.state_storage.identity_unresolved as a proven violation: it conservatively rejects only relevant uncertain write/later-read pairs before observations or effects, not all uncertain contexts.",
+                "Writing before a later read of the same stored value. Use value plus register for data needed only during this run.",
                 "Writing several unrelated state targets in one step; each state_set step writes exactly one resolved target entry.",
-                "Nested deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, which profile switches cannot resume. Cross-invocation and cross-iteration guarantees remain deferred.",
             ],
         },
         "workflow.include_fragments": {
@@ -1897,13 +1979,14 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "New workflow authoring when workflow.step.profile_switch can express the intent directly and more honestly.",
                 "External system operations; this family changes local Ordo runtime context rather than calling a remote tool or service.",
             ],
+            "starting_path": "For new workflow authoring, start with workflow.step.profile_switch. Inspect connector.runtime.profile.use only when maintaining an existing legacy workflow.",
+            "checked_example_note": "No checked family-level example is published because the only action is a legacy compatibility path; the preferred workflow-native profile-switch guide is the honest starting point.",
             "nearest_surfaces": [
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "connector.runtime.profile.use", "summary": "Legacy runtime action for switching the active execution profile in the current run"},
                 {"handle": "workflow.step.profile_switch", "summary": "Preferred workflow-native step surface for profile switching"},
             ],
-            "inspect_next": ["connector.runtime.profile.use", "workflow.step.profile_switch", "profile"],
+            "inspect_next": ["connector.runtime.profile.use", "workflow.step.profile_switch", "profile.name"],
         },
         "shell": {
             "definition": "Published shell connector family for one coarse legacy command-execution action that runs arbitrary shell text inside the current working directory context.",
@@ -1912,29 +1995,29 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "You need to understand the broad fallback namespace that exists when no narrower published connector operation yet expresses the required external behavior.",
             ],
             "do_not_use_for": [
-                "New workflow authoring when a narrower published connector surface, a composed public workflow, or a bounded routine can express the intent more honestly.",
+                "New workflow authoring when a narrower published connector surface, a composed public workflow, or a published project-local helper can express the intent more honestly.",
                 "Treating arbitrary shell execution as a normal first-choice operation family; this namespace is intentionally coarse and high-risk.",
             ],
+            "starting_path": "Start with operations to find a narrower published operation. If none fits, read workflow-rules.shell.command before inspecting the legacy shell.command action.",
+            "checked_example_note": "No checked family-level example is published because a generic shell workflow would endorse an unsafe fallback. The checked shell.command example is limited to an explicit legacy compatibility workflow.",
             "nearest_surfaces": [
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "connector.shell.command", "summary": "The one coarse shell action published in this family"},
                 {"handle": "workflow-rules.shell.command", "summary": "Authoring rule that explains why shell.command is forbidden for new workflow work"},
-                {"handle": "routines", "summary": "Bounded opaque local-automation fallback surface that is preferred over new shell.command authoring when structured public surfaces are exhausted"},
+                {"handle": "workflow-rules.routine.*", "summary": "Authoring guidance for the limited project-local helper path when structured public surfaces are exhausted"},
             ],
-            "inspect_next": ["connector.shell.command", "workflow-rules.shell.command", "routines", "operations"],
+            "inspect_next": ["connector.shell.command", "workflow-rules.shell.command", "workflow-rules.routine.*", "operations"],
         },
         "fs": {
-            "definition": "Published filesystem connector family for observing UTF-8 content and metadata from the same opened regular file, not an atomic snapshot.",
+            "definition": "Published filesystem connector family for observing UTF-8 content and metadata from one regular file, not an atomic snapshot.",
             "use_when": [
                 "You need one typed filesystem probe instead of a broader shell command just to inspect a file.",
             ],
             "do_not_use_for": [
                 "Writing, mutating, or deleting files; this family currently publishes observation only.",
-                "Atomic snapshots or workspace confinement; parent symlinks and hardlinks remain allowed. Safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK with no unsafe fallback.",
+                "Atomic snapshots or workspace confinement; parent symlinks and hardlinks remain allowed.",
             ],
             "nearest_surfaces": [
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "connector.fs.file", "summary": "Observe content and metadata from one opened regular file"},
                 {"handle": "connector.shell.command", "summary": "Broader shell surface for cases that are not covered by published filesystem probes"},
@@ -1951,8 +2034,9 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "Pure workflow-local branching or value shaping that does not need an external orchestrator call.",
                 "Repository-local helper scripts when the published Compose operations already express the intent directly.",
             ],
+            "starting_path": "Start by setting the Compose directory or file in profile.connectors, then inspect connector.compose.project for a project decision or connector.compose.service for one service decision.",
+            "checked_example_note": "No checked family-level example is published because Compose targets and lifecycle authorization are deployment-specific. Start with a focused project or service observation before choosing an action.",
             "nearest_surfaces": [
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "profile.connectors", "summary": "Profile field where family-specific connector context such as compose.directory or compose.file can be authored"},
                 {"handle": "connector.compose.project", "summary": "Probe one whole Compose project"},
@@ -1980,7 +2064,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "You want separate public surfaces for repository sync, issue snapshots, pull-request review surfaces, and GitHub Project membership instead of one coarse GitHub command wrapper.",
                 "The published operations list includes read-only probes and effectful actions. gh.pr and gh.pr.checks observe facts; gh.pr.merge submits a mutation, while gh.pr.merge.request observes its saved UUID. The project-membership example also includes actions and is not a read-only recipe.",
                 "Bootstrap requires an available authenticated gh CLI with repository access. gh.actions.run observes one attempt by run_id or check_suite_id (exactly one); omitted/null attempt reads latest then pins it. gh.actions.run.jobs requires explicit attempt, normally the returned run_attempt. Optional/null repository uses connector_contexts.gh.repository; explicit valid OWNER/REPO overrides it, invalid explicit input fails without fallback, and no resolved target is input_error.",
-                "A gh.pr.checks check-run item supplies nullable check_suite_id for direct GraphQL CheckSuite.workflowRun lookup. A validated null association returns found=false. Jobs expose check_run_id only from a validated official API URL, not logs. Complete jobs retrieval and pinned attempts remain non-atomic API observations, not tested-SHA attestation or immutable PR event snapshots. Run failures are actions_run_unavailable; jobs failures, including incomplete pagination, are actions_jobs_unavailable.",
+                "A gh.pr.checks check-run item supplies nullable check_suite_id for its associated Actions run. A validated null association returns found=false. Jobs expose check_run_id only when its repository association is valid, not from logs. Complete jobs retrieval and pinned attempts remain non-atomic observations, not immutable PR event snapshots. Run failures are actions_run_unavailable; jobs failures, including incomplete pagination, are actions_jobs_unavailable.",
                 GH_PR_LIST_GUIDANCE,
                 GH_PR_MERGE_GUIDANCE,
                 GH_PR_CREATE_GUIDANCE,
@@ -2037,35 +2121,35 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "examples": [
                 {"inputs": {"profile": "frontend"}, "reference": "runtime.profile.use"},
             ],
-            "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "profile"],
+            "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "profile.name"],
         },
         ("shell", "command"): {
             "definition": "Execute one arbitrary shell command string through bash -lc and return its exit code together with captured stdout and stderr.",
             "use_when": [
                 "You are reading, debugging, or migrating legacy workflow logic that already depends on shell.command and must understand its coarse runtime contract accurately.",
-                "A compatibility or containment scenario still needs one broad shell escape hatch, and narrower published connector surfaces or bounded routines have already been ruled out explicitly.",
+                "A compatibility or containment scenario still needs one broad shell escape hatch, and narrower published connector surfaces or project-local helpers have already been ruled out explicitly.",
             ],
             "do_not_use_for": [
                 "New workflow authoring as a default mechanism; prefer narrower published connector operations, composed public workflows, or routines before falling back here.",
-                "Pretending this surface carries typed domain semantics; shell.command only runs raw shell text and leaves parsing, safety, and intent outside the public contract.",
+                "Work that needs a published operation with defined inputs, results, and safety boundaries; shell.command only runs raw shell text and leaves parsing, safety, and intent outside the public contract.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.shell", "summary": "Parent shell connector family for this coarse legacy execution action"},
                 {"handle": "workflow-rules.shell.command", "summary": "Authoring rule that marks shell.command as forbidden for new workflow authoring"},
-                {"handle": "routines", "summary": "Preferred bounded fallback surface when local automation is still necessary after structured public options are exhausted"},
+                {"handle": "workflow-rules.routine.*", "summary": "Authoring guidance for the limited project-local helper path when structured public options are exhausted"},
                 {"handle": "operations", "summary": "Flat connector catalog to check whether a narrower published operation already exists before using shell.command"},
             ],
             "examples": [
                 {"reference": "shell.command", "inputs": {"command": "printf 'legacy check'"}},
             ],
-            "inspect_next": ["workflow-rules.shell.command", "routines", "operations", "connector.shell"],
+            "inspect_next": ["workflow-rules.shell.command", "workflow-rules.routine.*", "operations", "connector.shell"],
         },
         ("fs", "file"): {
-            "definition": "Observe UTF-8 content and metadata from the same opened regular file. The initial no-follow stat preserves diagnostics; nonzero O_NOFOLLOW and O_NONBLOCK are required before opening, then fstat verifies a regular file before reading that descriptor.",
+            "definition": "Observe UTF-8 content and metadata from the same regular file. The probe reads only when it can safely confirm a regular file, otherwise it returns a clear failure without partial content.",
             "use_when": [
                 "You need one file's content and metadata inside workflow logic, guards, or later adapters.",
-                "Supply a required path explicitly. Relative and absolute textual Path projections are retained, not resolved to the opened object's identity. Publish basename, size, or line_count rather than full content by default; later adapters can consume the registered content.",
-                "Initial missing paths return path_not_found; initial final symlinks or nonregular entries and opened FIFO/directory objects return not_a_file. Missing secure flags return content_unavailable with probe.fs_file.secure_open_unavailable and no fallback. Open errors including ELOOP return content_unavailable without guessing kind; fstat failure returns probe_failed with probe.fs_file.stat_failed.",
+                "Supply a required path explicitly. The result preserves the path text you supplied rather than replacing it with a resolved filesystem location. Publish basename, size, or line_count rather than full content by default; later workflow steps and adapters can use the returned content.",
+                "Missing paths, non-file targets, unreadable files, and unsupported text content return clear failures without publishing partial content or guessing at the file kind.",
             ],
             "do_not_use_for": [
                 "Directory inspection or generic filesystem traversal; this probe requires one regular file path.",
@@ -2316,7 +2400,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "do_not_use_for": [
                 "Checking only whether one named allowed value exists; use connector.gh.project.field.option for that narrower yes/no probe.",
-                "Setting a field value on a project item; use the relevant connector.gh.project.issue.field_* action surface for mutation rather than this read-only metadata probe.",
+                "Setting a field value on a project item; use connector.gh.project.issue.field_single_select.set, connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set for the matching field kind rather than this read-only metadata probe.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.project", "summary": "Parent project probe for confirming the project identity before field-specific inspection"},
@@ -2358,7 +2442,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "do_not_use_for": [
                 "Scanning many project items or filtering project membership collections; use connector.gh.project.items or connector.gh.project.items.details for collection-shaped project inspection.",
-                "Adding the issue to the project or mutating project field values; use connector.gh.project.issue.add or the connector.gh.project.issue.field_* setters for those effectful changes.",
+                "Adding the issue to the project or mutating project field values; use connector.gh.project.issue.add or connector.gh.project.issue.field_single_select.set, connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set for those effectful changes.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.project", "summary": "Parent project probe for confirming the target project identity before issue-membership inspection"},
@@ -2380,7 +2464,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "do_not_use_for": [
                 "Checking membership without changing anything; use connector.gh.project.issue when the real question is whether the issue is already in the project.",
-                "Updating Status, Estimate, Iteration, or another project-backed field after membership exists; use the narrower connector.gh.project.issue.field_* setters for those follow-up mutations.",
+                "Updating Status, Estimate, Iteration, or another project-backed field after membership exists; use connector.gh.project.issue.field_single_select.set, connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set for those follow-up mutations.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.project.issue", "summary": "Sibling probe for membership inspection before or after this action"},
@@ -3114,7 +3198,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "Discovering candidates before a pull number is known; use gh.pr.list with explicit state filters, then apply workflow-owned identity and history rules.",
                 "Conversation history, submitted reviews, line comments, checks, or lifecycle events; use the dedicated PR sibling surfaces for those narrower views.",
                 "Mutating or merging the pull request; this published surface is observation only.",
-                "A test-merge candidate is not a completed merge or proof of the CI worker checkout. Missing identity stays unavailable, not invented. A snapshot gives no atomic base or stack guarantee; never replace the accepted CI head with this probe's freshly fetched head when authoring expected_head_sha.",
+                "A test-merge candidate is not a completed merge. Missing identity stays unavailable, not invented. A snapshot gives no atomic base or stack guarantee; never replace the accepted CI head with this probe's freshly fetched head when authoring expected_head_sha.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh", "summary": "Parent GitHub connector family for issue, pull-request, and project operations"},
@@ -3169,7 +3253,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "use_when": [
                 GH_PR_CREATE_GUIDANCE,
                 "Workflow policy has authorized creation, including any closed-history decision. Register the action result and distinguish runtime status, diagnostic code, pull_number/url identity, and tri-state created; already_exists is non-OK rather than reuse.",
-                "Outputs are repository, pull_number, pull_ref, url, created, head_repository, head_ref, head_sha, base_repository, base_ref, base_sha, draft, state, http_status, message, and errors. Unknown identity/response facts stay null. Failure statuses are input_error, precheck_failed, ambiguous, already_exists, api_failed, create_refused, and creation_unknown; validated creation is ok.",
+                "Outputs are repository, pull_number, pull_ref, url, created, head_repository, head_ref, head_sha, base_repository, base_ref, base_sha, draft, state, message, and errors. Unknown identity/response facts stay null. Failure statuses are input_error, precheck_failed, ambiguous, already_exists, api_failed, create_refused, and creation_unknown; validated creation is ok.",
                 "check, review, plan, explain, and next retain action non-execution; run executes the admitted action. The internal probe does not make creation read-only or authorize POST in analysis modes.",
             ],
             "do_not_use_for": [
@@ -3271,13 +3355,13 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "use_when": [
                 "Supply exactly one non-null positive integer run_id or check_suite_id. Optional positive integer attempt selects that numbered attempt; omitted/null attempt reads the latest observed run_attempt, then retrieves the pinned numbered attempt. Booleans are not integer identifiers.",
                 "repository is optional and nullable: explicit valid literal ASCII OWNER/REPO overrides bootstrapped connector_contexts.gh.repository; omitted/null uses context. Malformed explicit values fail without fallback; no resolved target is input_error. Bootstrap requires an available authenticated gh CLI with repository access on github.com. Context is a default, not an authorization allowlist.",
-                "For check_suite_id, resolve the REST suite node then query GraphQL CheckSuite.workflowRun directly, validating repository, node type, suite identity and backreference. No repository-wide run scan is used. A validated null association returns found=false, requested check_suite_id, repository, pull_requests=[], and all other run fields null. Missing nodes/fields or GraphQL errors fail, not normal absence.",
-                "On found=true, outputs include repository, run_id, check_suite_id, run_attempt, workflow_id, workflow_path, event, status, conclusion, head_sha, head_branch, url, created_at, updated_at, run_started_at, and pull_requests with number/head_sha/base_sha. Optional API facts remain null; missing pull_requests becomes []. Present SHAs are full hexadecimal values. Output run_attempt becomes the explicit attempt input to gh.actions.run.jobs.",
-                "Invalid selectors, attempt or repository resolution produce input_error. API/transport failures, malformed responses and repository/run/attempt/suite mismatches produce actions_run_unavailable with reason diagnostics and raw request evidence. HTTP 404 is not found=false; shared bootstrap failures can precede operation execution.",
+                "For check_suite_id, resolve its directly associated Actions run and validate the repository and suite identity. No repository-wide run scan is used. A validated null association returns found=false, requested check_suite_id, repository, pull_requests=[], and all other run fields null. Missing association details fail, not normal absence.",
+                "On found=true, outputs include repository, run_id, check_suite_id, run_attempt, workflow_id, workflow_path, event, status, conclusion, head_sha, head_branch, url, created_at, updated_at, run_started_at, and pull_requests with number/head_sha/base_sha. Optional facts remain null; missing pull_requests becomes []. Present SHAs are full hexadecimal values. Output run_attempt becomes the explicit attempt input to gh.actions.run.jobs.",
+                "Invalid selectors, attempt or repository resolution produce input_error. Unavailable or malformed results and repository/run/attempt/suite mismatches produce actions_run_unavailable. A missing saved run is not found=false; shared setup failures can precede operation execution.",
             ],
             "do_not_use_for": [
                 "Run triggering, reruns, cancellation, polling, log retrieval, required-job selection, or merge policy. This is read-only observation.",
-                "A tested-SHA attestation or immutable event snapshot: PR head/base SHAs are API observations, not proof of worker checkout. Latest-then-pinned retrieval is non-atomic and does not promise the newest attempt at return time.",
+                "An immutable event snapshot: PR head/base SHAs are observations. Latest-then-pinned retrieval is non-atomic and does not promise the newest attempt at return time.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.actions.run.jobs", "summary": "Full jobs traversal using the observed run_id and explicit attempt=run_attempt"},
@@ -3297,13 +3381,13 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "Supply required positive integer run_id and explicit positive integer attempt, normally from gh.actions.run outputs run_id and run_attempt. There is no latest-attempt default or caller limit; booleans are invalid identifiers.",
                 "repository is optional and nullable: explicit valid literal ASCII OWNER/REPO overrides bootstrapped connector_contexts.gh.repository; omitted/null uses context. Malformed explicit values fail without fallback; no resolved target is input_error. Bootstrap requires an available authenticated gh CLI with repository access on github.com. Context is a default, not an authorization allowlist.",
                 "Outputs are repository, run_id, run_attempt, items, count and complete=true. Each item contains positive job_id, nullable check_run_id, and nullable name/status/conclusion/head_sha/url/started_at/completed_at. Present head_sha is a full hexadecimal SHA. Empty retrieval is items=[], count=0, complete=true, not successful CI.",
-                "check_run_id is extracted only from a validated official https://api.github.com/repos/OWNER/REPO/check-runs/ID API check_run_url matching repository, not from logs or display URLs. Missing/null link gives null identity; malformed or mismatched links fail. Correlate this ID with gh.pr.checks check-run item id, whose check_suite_id supplies the suite-to-run bridge.",
-                "Traverse attempt-scoped pages of 100 jobs, up to 100 pages, requiring stable total_count, exact page sizes, valid official API Link relations, unique job IDs and matching run/attempt per job. count equals len(items). Incomplete or inconsistent traversal fails rather than publishing partial success.",
-                "Invalid repository/run_id/attempt is input_error. API/transport, malformed response, identity, invalid link, changing totals, duplicate IDs, missing pages or page-bound failures are actions_jobs_unavailable with reason diagnostics and raw evidence. Shared bootstrap failures can precede operation execution.",
+                "check_run_id is retained only when the job has a repository-matching check association, not from logs or display URLs. Missing/null link gives null identity; malformed or mismatched links fail. Correlate this ID with gh.pr.checks check-run item id, whose check_suite_id supplies the suite-to-run bridge.",
+                "Traverse attempt-scoped pages of 100 jobs, up to 100 pages, requiring stable total_count, exact page sizes, valid page relations, unique job IDs and matching run/attempt per job. count equals len(items). Incomplete or inconsistent traversal fails rather than publishing partial success.",
+                "Invalid repository/run_id/attempt is input_error. Unavailable or malformed results, identity, invalid link, changing totals, duplicate IDs, missing pages or page-bound failures are actions_jobs_unavailable. Shared setup failures can precede operation execution.",
             ],
             "do_not_use_for": [
                 "Selecting the latest attempt implicitly, triggering, rerunning, cancelling, polling, downloading logs, choosing required jobs, or enforcing merge policy; this is read-only observation.",
-                "Treating complete as an atomic snapshot, CI success, immutable event-time data, or tested-SHA attestation. Cross-page and cross-probe observations are non-atomic and do not prove worker checkout.",
+                "Treating complete as an atomic snapshot, CI success, or immutable event-time data. Cross-page and cross-probe observations are non-atomic.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.actions.run", "summary": "Resolve a run or suite association and pin its observed run_attempt before reading jobs"},
@@ -3316,19 +3400,19 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
         },
         ("gh", "pr.checks"): {
-            "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, or select a verified test-merge candidate. Paginated API-attached evidence preserves status fidelity and commit identity for workflow-owned CI acceptance policy.",
+                "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, or select a verified test-merge candidate. Paginated evidence preserves status fidelity and commit identity for workflow-owned CI acceptance policy.",
             "use_when": [
                 "connector_contexts.gh.repository already names the normal repository target and the workflow needs CI readiness for one PR there by pull number.",
                 "The workflow needs CI readiness or status context outcomes before recommending merge, rerun, or escalation steps.",
-                "target defaults to head; target=test_merge requires verified candidate M with base B and head H. commit_sha identifies the checked API commit; head_sha remains H. Optional expected_head_sha binds the observation to H and rejects a mismatch without silently switching targets.",
+                "target defaults to head; target=test_merge requires verified candidate M with base B and head H. commit_sha identifies the checked commit; head_sha remains H. Optional expected_head_sha binds the observation to H and rejects a mismatch without silently switching targets.",
                 "Inspect complete, statuses_complete, check_runs_complete, sha_evidence, and each check's name/context, app identity, SHA source, status, conclusion, and timestamps. Pending, failed, skipped, neutral, unknown, and empty evidence are not interchangeable with success; workflow policy must choose required checks and trusted producers explicitly.",
                 "Preserve the head from accepted CI evidence for gh.pr.merge.expected_head_sha. Checks on candidate M authorize expected H, not M; never substitute a freshly fetched head after CI acceptance.",
-                "Check-run items expose nullable check_suite_id from API check_suite.id; legacy commit statuses use null. Pass a known suite ID to gh.actions.run for direct GraphQL association lookup, then its run_id and run_attempt to gh.actions.run.jobs as run_id and explicit attempt. A validated null Actions association is found=false, not failed CI. Jobs' check_run_id comes from a validated official API URL and can correlate back to check-run item id; this bridge adds no tested-SHA or merge-policy claim.",
+                "Check-run items expose nullable check_suite_id; legacy commit statuses use null. Pass a known suite ID to gh.actions.run for its associated run, then its run_id and run_attempt to gh.actions.run.jobs as run_id and explicit attempt. A validated null Actions association is found=false, not failed CI. Jobs' check_run_id can correlate back to check-run item id; this bridge adds no merge-policy claim.",
             ],
             "do_not_use_for": [
                 "Review decisions from humans; use connector.gh.pr.reviews when the workflow cares about approvals or change requests.",
                 "Branch or headline PR metadata unrelated to execution status; use connector.gh.pr for the broader snapshot.",
-                "API-attached SHA evidence does not prove the CI worker checkout, branch-protection satisfaction, or an atomic base/stack snapshot. Pagination can drift; incomplete or unavailable evidence must not be treated as passing CI. No polling or merge submission occurs here.",
+                "The observed SHA evidence does not establish branch-protection satisfaction or an atomic base/stack snapshot. Pagination can drift; incomplete or unavailable evidence must not be treated as passing CI. No polling or merge submission occurs here.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.pr", "summary": "Parent PR snapshot that supplies the head SHA and mergeability context"},
@@ -3467,10 +3551,12 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "definition": "Stop one Compose project or one declared Compose service.",
             "use_when": [
                 "You need a running Compose target quiesced before cleanup, mutation, or another orchestration phase.",
+                "Omit service to stop the whole project, or provide one declared service name to stop only that service.",
             ],
             "do_not_use_for": [
                 "Removing stopped runtime instances; use connector.compose.remove when the intent is cleanup rather than stop.",
                 "Pure observation; use connector.compose.project or connector.compose.service when you only need state.",
+                "Assuming stop removes a service instance. A successful stop reports state stopped; an already stopped or down target reports changed false, while a partial stop reports degraded.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.compose", "summary": "Parent Compose connector family"},
@@ -3487,10 +3573,12 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "definition": "Remove one stopped materialized Compose service instance.",
             "use_when": [
                 "You need cleanup of one stopped service instance after it is no longer needed.",
+                "Provide one non-empty declared service name. This action has no project-wide form.",
             ],
             "do_not_use_for": [
                 "Stopping a still-running target; use connector.compose.stop first when runtime is still active.",
                 "Whole-project lifecycle changes; use connector.compose.start or connector.compose.stop when the intent is project/service runtime state rather than removal.",
+                "Assuming removal stops a service. A running, starting, or degraded service is rejected without an implicit stop; success reports state absent, including an already absent service with changed false.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.compose", "summary": "Parent Compose connector family"},
@@ -3550,7 +3638,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 {"handle": "workflow.profile", "summary": "Top-level workflow field for fixed project-local profile binding before guards run"},
                 {"handle": "connector.runtime.profile.use", "summary": "Legacy runtime action replaced by this workflow-native field"},
             ],
-            "inspect_next": ["workflow.step_forms.profile_switch", "workflow.profile", "profile"],
+            "inspect_next": ["workflow.step_forms.profile_switch", "workflow.profile", "profile.name"],
         },
         "workflow.step_forms.profile_switch": {
             "definition": "Workflow step form for one explicit profile-switch checkpoint inside the current workflow path.",
@@ -3658,20 +3746,20 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
                 "You need short inline value shaping such as projection, normalization, comparison, type checks, or collection helpers in one expression pipeline.",
             ],
             "do_not_use_for": [
-                "Function-style helpers such as is_present(...) or format(...); those belong to workflow.local_expression.builtin.",
+                "Call-style helpers such as is_present(...) or format(...); those belong to workflow.local_expression.builtin.",
                 "Representation-owned parsing or structural selection across text families; use adapter families when the value first needs json/yaml/markdown/text interpretation.",
             ],
             "nearest_surfaces": [
                 {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions across roots, builtins, filters, and conditions"},
-                {"handle": "workflow.local_expression.builtin", "summary": "Overview of function-style local-expression helpers rather than pipeline filters"},
+                {"handle": "workflow.local_expression.builtin", "summary": "Overview of call-style local-expression helpers rather than pipeline filters"},
                 {"handle": "workflow.local_expression.filter.lookup", "summary": "Representative pipeline filter for selecting one mapping value by key"},
             ],
             "inspect_next": ["workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow.local_expression.builtin"],
         },
         "workflow.local_expression.builtin": {
-            "definition": "Overview of function-style local-expression builtins that perform special checks or formatting outside the pipeline filter chain.",
+            "definition": "Overview of call-style local-expression helpers that perform special checks or formatting outside the pipeline filter chain.",
             "use_when": [
-                "You need one helper such as presence checks or formatting that reads more honestly as a builtin call than as a pipeline stage.",
+                "You need one helper such as presence checks or formatting that reads more honestly as a direct call than as a pipeline stage.",
             ],
             "do_not_use_for": [
                 "Ordinary pipeline shaping after one root value; prefer workflow.local_expression.filter for those transformations.",
@@ -3679,7 +3767,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "nearest_surfaces": [
                 {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions across roots, builtins, filters, and conditions"},
-                {"handle": "workflow.local_expression.filter", "summary": "Overview of pipeline-style filters rather than function-style builtins"},
+                {"handle": "workflow.local_expression.filter", "summary": "Overview of pipeline-style filters rather than call-style helpers"},
                 {"handle": "workflow.local_expression.builtin.is_present", "summary": "Representative builtin for checking whether a referenced value is present"},
             ],
             "inspect_next": ["workflow.local_expression.builtin.is_present", "workflow.local_expression.builtin.is_missing", "workflow.local_expression.filter"],
@@ -4271,9 +4359,9 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "nearest_surfaces": [
                 {"handle": "workflow.step.profile_switch", "summary": "Step-local profile change for later execution inside an already-started workflow path"},
                 {"handle": "workflow-rules.workflow_profile_binding_is_project_local", "summary": "Authoring guidance that explains why workflow.profile is intentionally restrictive"},
-                {"handle": "profile", "summary": "Profile contract surface for declared execution-context data that a binding selects"},
+                {"handle": "profile.name", "summary": "Profile field that declares the selected execution-context name"},
             ],
-            "inspect_next": ["workflow.step.profile_switch", "workflow-rules.workflow_profile_binding_is_project_local", "profile"],
+            "inspect_next": ["workflow.step.profile_switch", "workflow-rules.workflow_profile_binding_is_project_local", "profile.name"],
         },
         "workflow.version": {
             "definition": "Required top-level workflow format marker that declares which published workflow document shape this file is written against.",
@@ -4502,7 +4590,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "examples": [
                 {"reference": "playbook.defaults.profile", "inputs": {"profile": "review"}},
             ],
-            "inspect_next": ["command-line.ordo-playbook.flag.profile", "workflow.profile", "profile"],
+            "inspect_next": ["command-line.ordo-playbook.flag.profile", "workflow.profile", "profile.name"],
         },
         "playbook.defaults.working_directory": {
             "definition": "Playbook default field for setting the execution working directory when no narrower launch surface already provided one.",
@@ -4802,7 +4890,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "examples": [
                 {"reference": "playbook.profiles", "inputs": {"backend": {"file": "backend.yml"}, "review": {"file": "review.yml"}}},
             ],
-            "inspect_next": ["playbook.profiles.file", "playbook.defaults.profile", "profile"],
+            "inspect_next": ["playbook.profiles.file", "playbook.defaults.profile", "profile.name"],
         },
         "playbook.profiles.file": {
             "definition": "Playbook profile-entry field that points one declared profile name at the profile file to load for that catalog entry.",
@@ -4882,8 +4970,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "nearest_surfaces": [
                 {"handle": "workflow.step.launcher", "summary": "Workflow step field that consumes one named launcher record when older workflows still use launcher-based execution setup"},
-                {"handle": "routines", "summary": "Preferred bounded local-automation alternative for new work instead of growing launcher usage"},
-                {"handle": "workflow-rules.routine.*", "summary": "Authoring guidance that explains when routines are acceptable as the preferred replacement path"},
+                {"handle": "workflow-rules.routine.*", "summary": "Authoring guidance for the preferred bounded local-automation alternative to new launcher usage"},
             ],
             "fields": [
                 {"name": "file", "type": "string", "required": False, "role": "launcher_definition_file"},
@@ -4898,7 +4985,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "examples": [
                 {"reference": "profile.launchers", "inputs": {"shell_frontend": {"file": "../launchers/shell-frontend.yaml"}}},
             ],
-            "inspect_next": ["workflow.step.launcher", "routines", "workflow-rules.routine.*"],
+            "inspect_next": ["workflow.step.launcher", "workflow-rules.routine.*"],
         },
         "playbook.states": {
             "definition": "Playbook field for declaring the named state storage locations that workflows and playbook entries may bind explicitly.",
@@ -4998,7 +5085,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "nearest_surfaces": [
                 {"handle": "profile.connectors", "summary": "Profile-level connector context that can narrow or override playbook defaults"},
                 {"handle": "connector.compose", "summary": "One connector family that reads concrete context fields such as directory, file, and project_name"},
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "operations", "summary": "Published connector operation catalog"},
             ],
             "examples": [
                 {
@@ -5030,18 +5117,20 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
         }
 
     add_node(
-        "connector.authoring", contract="connector", node_category="sdk",
-        summary="Connector-author SDK dependency calls with already-resolved probe inputs",
+        "connector.authoring", contract="connector", node_category="guidance",
+        summary="Deciding whether a new connector capability is needed",
         metadata={
-            "definition": "Connector-author SDK surface for explicit same-family operation dependencies through ctx.call(name, *, inputs=None).",
-            "use_when": [SDK_CALL_GUIDANCE, "A connector probe or action needs a published same-family read-only observation with concrete values, such as gh.pr.create's gh.pr.list precheck."],
-            "do_not_use_for": ["Cross-family calls, probe-to-action hidden mutation, or new action composition.", "Workflow expressions, template reevaluation, workflow orchestration, or runtime mode selection inside a handler."],
+            "definition": "Guidance for deciding whether the published connector catalog needs a new, stable capability.",
+            "use_when": ["Existing operations and their clean composition do not express a stable user-visible need.", "You can state the proposed operation's purpose, required inputs, result, effects, and failure boundary in reader-facing terms."],
+            "do_not_use_for": ["Adding a wrapper around one local command or a one-off project task.", "Replacing workflow-level decisions or composition that existing published operations already support."],
             "nearest_surfaces": [
-                {"handle": "connector.gh.pr.create", "summary": "Action consumer of an explicit resolved-input probe dependency"},
-                {"handle": "connector.gh.pr.list", "summary": "Read-only dependency with full traversal semantics"},
-                {"handle": "workflow.step.uses", "summary": "Workflow-level invocation rather than Python SDK dependency reuse"},
+                {"handle": "operations", "summary": "Browse existing public operations before proposing another one"},
+                {"handle": "workflow-rules.structured_surface_bias", "summary": "Rule for preferring an existing structured surface over a broad fallback"},
+                {"handle": "workflow-rules.routine.*", "summary": "Guidance for narrow project-local mechanical work that does not warrant a new connector"},
             ],
-            "inspect_next": ["connector.gh.pr.create", "connector.gh.pr.list", "workflow.step.uses"],
+            "starting_path": "Start with operations and inspect the narrowest candidates. Use a routine only for a remaining mechanical project-local gap; discuss a semantic gap before creating a new connector.",
+            "checked_example_note": "No checked example is published because connector implementation is not a workflow shape that readers should copy. The related operation and workflow-rule guides provide the honest starting path.",
+            "inspect_next": ["operations", "workflow-rules.structured_surface_bias", "workflow-rules.routine.*"],
         },
     )
 
@@ -5184,13 +5273,13 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
         filter_metadata.setdefault(
             "use_when",
             [
-                f"You need `{filter_name}` as one short pipeline stage inside an inline local expression rather than a function-style builtin call.",
+                f"You need `{filter_name}` as one short pipeline stage inside an inline local expression rather than a call-style helper.",
             ],
         )
         filter_metadata.setdefault(
             "do_not_use_for",
             [
-                "Function-style helper calls such as is_present(...) or format(...); those belong to workflow.local_expression.builtin.*.",
+                "Call-style helpers such as is_present(...) or format(...); those belong to workflow.local_expression.builtin.*.",
                 "Representation parsing across text families before projection; use adapter families when the source first needs json/yaml/markdown/text interpretation.",
             ],
         )
@@ -5199,7 +5288,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             [
                 {"handle": "workflow.local_expression.filter", "summary": "Overview of the pipeline filter family"},
                 {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions"},
-                {"handle": "workflow.local_expression.builtin", "summary": "Overview of function-style local-expression builtins"},
+                {"handle": "workflow.local_expression.builtin", "summary": "Overview of call-style local-expression helpers"},
             ],
         )
         filter_metadata.setdefault(
@@ -5218,7 +5307,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
         builtin_name = builtin_spec["name"]
         builtin_metadata.setdefault(
             "definition",
-            f"Function-style local-expression builtin `{builtin_name}(...)` for special checks or formatting that read more honestly as a helper call than as a pipeline stage.",
+            f"Call-style local-expression helper `{builtin_name}(...)` for special checks or formatting that read more honestly as a direct call than as a pipeline stage.",
         )
         builtin_metadata.setdefault(
             "use_when",
@@ -5236,7 +5325,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
         builtin_metadata.setdefault(
             "nearest_surfaces",
             [
-                {"handle": "workflow.local_expression.builtin", "summary": "Overview of function-style local-expression builtins"},
+                {"handle": "workflow.local_expression.builtin", "summary": "Overview of call-style local-expression helpers"},
                 {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions"},
                 {"handle": "workflow.local_expression.filter", "summary": "Overview of pipeline-style local-expression filters"},
             ],
@@ -6132,10 +6221,10 @@ def _build_example_reference(
     return {"name": handle, "handle": handle, "summary": "Unresolved related example", "command": f"ordo-help describe {handle} --json"}
 
 
-def build_snippet_coverage_response() -> JSONObject:
+def build_snippet_coverage_response(context: _HelpResponseContext | None = None) -> JSONObject:
     """Return snippet-coverage metadata for public describable handles."""
 
-    context = _HelpResponseContext()
+    context = _HelpResponseContext() if context is None else context
     handles: list[JSONObject] = []
     lookup_groups = (
         ("capabilities", context.lookup("capabilities")),
@@ -6174,173 +6263,330 @@ def build_snippet_coverage_response() -> JSONObject:
             "coverage_counts": coverage_counts,
         },
         "handles": handles,
+        "human": human_content(
+            snippet_coverage_human(handles, coverage_counts), owner="snippet-coverage",
+        ),
     }
 
 
-def build_search_response(query: str) -> JSONObject:
-    """Return search results across public topics and operation references."""
+def build_examples_response() -> JSONObject:
+    """Return the example catalog with its canonical reader-facing projection."""
 
-    context = _HelpResponseContext()
-    lowered_query = query.strip().lower()
-    operation_results = []
-    for connector in describe_operations()["connectors"]:
-        namespace = connector["namespace"]
-        for operation in connector["operations"]:
-            reference = f"{namespace}.{operation['name']}"
-            search_record = _operation_search_record(reference=reference, operation=operation)
-            if _query_matches(lowered_query, search_record["all"]):
-                operation_results.append(
-                    {
-                        "_score": _operation_search_score(lowered_query, search_record),
-                        "reference": reference,
-                        "summary": operation.get("summary"),
-                        "command": f"ordo-help operation {reference} --json",
-                    }
-                )
-    operation_results.sort(key=lambda item: (-int(item["_score"]), str(item["reference"])))
-    for item in operation_results:
-        item.pop("_score", None)
+    payload = describe_examples_catalog()
+    payload["human"] = human_content(
+        examples_catalog_human(payload["examples"]), owner="examples",
+    )
+    return payload
 
-    topic_results = []
-    for topic in PUBLIC_TOPICS:
-        searchable = f"{topic['name']} {topic['summary']}".lower()
-        if _query_matches(lowered_query, searchable):
-            command = f"ordo-help {topic['name']} --json"
-            if topic["name"] == "operation":
-                command = "ordo-help operation <reference> --json"
-            elif topic["name"] == "describe":
-                command = "ordo-help describe <topic> --json"
-            elif topic["name"] == "search":
-                command = "ordo-help search <query> --json"
-            topic_results.append(
-                {
-                    "name": topic["name"],
-                    "summary": topic["summary"],
-                    "command": command,
-                }
-            )
 
-    fact_results = []
+def build_search_help_response() -> JSONObject:
+    """Return the standalone search guide without executing a query."""
+
+    return {
+        "document_kind": "search",
+        "human": human_content(SEARCH_HUMAN, owner="search"),
+    }
+
+
+@cache
+def _focused_describe_declarations() -> dict[str, HumanDeclaration]:
+    """Return every source-owned declaration available to focused describe."""
+
+    declarations: dict[str, HumanDeclaration] = {
+        **WORKFLOW_FOCUSED_DESCRIBE_HUMAN,
+        **WORKFLOW_ADDITIONAL_FOCUSED_DESCRIBE_HUMAN,
+        **PLAYBOOK_FOCUSED_DESCRIBE_HUMAN,
+        **PROFILE_FOCUSED_DESCRIBE_HUMAN,
+        **STATE_FOCUSED_DESCRIBE_HUMAN,
+        **STATE_ADDITIONAL_FOCUSED_DESCRIBE_HUMAN,
+        **ROUTINE_FOCUSED_DESCRIBE_HUMAN,
+        **ROUTINE_ADDITIONAL_FOCUSED_DESCRIBE_HUMAN,
+        **CAPABILITY_FOCUSED_DESCRIBE_HUMANS,
+        **COMMAND_LINE_FOCUSED_DESCRIBE_HUMAN,
+        "connector.authoring": CONNECTOR_AUTHORING_HUMAN,
+        **WORKFLOW_RULE_EXAMPLE_FOCUSED_DESCRIBE_HUMAN,
+        **workflow_rules_focused_describe_human(build_workflow_rules_response()["rules"]),
+        **{f"examples.{name}": declaration for name, declaration in EXAMPLE_FOCUSED_DESCRIBE_HUMAN.items()},
+    }
+    for connector_module in __import__("connectors._family", fromlist=["discover_family_modules"]).discover_family_modules():
+        family_human = getattr(connector_module, "get_family_human", lambda: None)()
+        if isinstance(family_human, HumanDeclaration):
+            declarations[f"connector.{connector_module.__name__.rsplit('.', 1)[-1]}"] = family_human
+    for connector in get_public_connector_registry().list_connectors():
+        for operation in connector.operations:
+            declarations[f"connector.{connector.namespace}.{operation.name}"] = operation.human_declaration()
+    return declarations
+
+
+def focused_describe_declarations() -> dict[str, HumanDeclaration]:
+    """Return a defensive map of source-owned focused-help declarations."""
+
+    return dict(_focused_describe_declarations())
+
+
+def _focused_describe_payload(payload: JSONObject, declaration: HumanDeclaration | None = None) -> JSONObject:
+    """Attach the target's source-owned reader-facing projection."""
+
+    focused = deepcopy(payload)
+    if declaration is None:
+        declaration = focused_describe_declarations().get(str(focused.get("name", "")))
+    if declaration is None:
+        raise ValueError(f"Focused target {focused.get('name', '<unnamed>')} has no canonical human declaration")
+    human = human_content(declaration, owner=str(focused["name"]))
+    if human["title"] == "Focused reference":
+        # The source-owned shorthand has no title field; the public handle is
+        # its stable reader-facing label, not metadata-derived prose.
+        human["title"] = str(focused["name"])
+    focused["human"] = human
+    if isinstance(focused.get("canonical_examples"), list):
+        focused["canonical_examples"] = text_canonical_examples(
+            str(focused["name"]), focused["canonical_examples"],
+        )
+    return focused
+
+
+def _focused_target_payload(handle: str, *, context: _HelpResponseContext) -> JSONObject | None:
+    """Resolve one published focused target without deriving reader prose from metadata."""
+
+    declaration = focused_describe_declarations().get(handle)
+    if declaration is None:
+        return None
+    for topic in ("capabilities", "model", "command-line", "workflow-rules", "examples"):
+        payload = context.lookup(topic).get(handle)
+        if payload is not None:
+            return _focused_describe_payload(payload, declaration)
+    return None
+
+
+def _basic_human_search_surfaces(
+    overrides: dict[str, JSONObject] | None = None, *, context: _HelpResponseContext,
+) -> dict[str, JSONObject]:
+    """Return the canonical human projections indexed as basic help topics."""
+
+    surfaces = {
+        "root": build_root_response(),
+        "overview": build_overview_response(include_snippet_coverage=False),
+        "features": build_features_response(context),
+        "model": build_model_response(),
+        "workflow-rules": build_workflow_rules_response(),
+        "capabilities": build_capabilities_response(),
+        "command-line": build_command_line_response(),
+        "operations": build_operations_response(),
+        "examples": build_examples_response(),
+        "snippet-coverage": build_snippet_coverage_response(context),
+        "search": build_search_help_response(),
+    }
+    if overrides:
+        surfaces.update(overrides)
+    return surfaces
+
+
+@dataclass(frozen=True)
+class _PreparedSearchIndex:
+    """Immutable, query-independent material consumed by help search."""
+
+    operations: tuple[tuple[str, str, str, str, str, str], ...]
+    topics: tuple[tuple[str, str, str, str], ...]
+    facts: tuple[tuple[str, str, str, str, str, str], ...]
+    keywords: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...]
+
+
+def _build_search_index(
+    *, human_surfaces: dict[str, JSONObject] | None = None, context: _HelpResponseContext,
+) -> _PreparedSearchIndex:
+    """Build the canonical human-only material used by search responses."""
+
+    declarations = focused_describe_declarations()
+    operations = []
+    for connector in get_public_connector_registry().list_connectors():
+        for operation in connector.operations:
+            reference = f"{connector.namespace}.{operation.name}"
+            human = human_content(operation.human_declaration(), owner=f"operation.{reference}")
+            operations.append((
+            reference,
+            human["summary"],
+            f"ordo-help operation {reference} --json",
+            (record := _operation_search_record(reference=reference, human=human))["reference"],
+            record["human"],
+            record["all"],
+            ))
+
+    topics = []
+    for handle, payload in _basic_human_search_surfaces(human_surfaces, context=context).items():
+        human = human_text(payload, owner=handle)
+        command = "ordo-help --json" if handle == "root" else f"ordo-help {handle} --json"
+        topics.append((handle, human["summary"], _human_searchable(human), command))
+
+    facts = []
+
+    def add_fact(kind: str, name: str, topic: str, payload: JSONObject) -> None:
+        human = human_text(_focused_describe_payload(payload), owner=name)
+        facts.append((
+            kind, name, human["summary"], topic,
+            f"ordo-help describe {name} --json", _human_searchable(human),
+        ))
+
     for capability in describe_capabilities()["capabilities"]:
-        searchable = " ".join([capability["name"], capability["scope"], capability["status"]]).lower()
-        if _query_matches(lowered_query, searchable):
-            fact_results.append(
-                {
-                    "kind": "capability",
-                    "name": capability["name"],
-                    "summary": f"Capability in scope '{capability['scope']}' is {capability['status']}",
-                    "topic": "capabilities",
-                    "command": f"ordo-help describe {capability['name']} --json",
-                }
-            )
-
+        if capability["name"] in declarations:
+            add_fact("capability", capability["name"], "capabilities", capability)
     for rule in describe_capabilities()["negative_rules"]:
-        searchable = " ".join([rule["name"], rule["surface"], rule["rule"], rule["reason"]]).lower()
-        if _query_matches(lowered_query, searchable):
-            fact_results.append(
-                {
-                    "kind": "negative_rule",
-                    "name": rule["name"],
-                    "summary": rule["rule"],
-                    "topic": "capabilities",
-                    "command": f"ordo-help describe {rule['name']} --json",
-                }
-            )
-
+        if rule["name"] in declarations:
+            add_fact("negative_rule", rule["name"], "capabilities", rule)
     for node_name, node in context.lookup("model").items():
-        searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
-        if _query_matches(lowered_query, searchable):
-            fact_results.append(
-                {
-                    "kind": "model_field",
-                    "name": node_name,
-                    "summary": node["summary"],
-                    "topic": "model",
-                    "command": f"ordo-help describe {node_name} --json",
-                }
-            )
-
+        if node_name in declarations:
+            add_fact("model_field", node_name, "model", node)
     for node_name, node in context.lookup("command-line").items():
-        searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
-        if _query_matches(lowered_query, searchable):
-            fact_results.append(
-                {
-                    "kind": "command_line_field",
-                    "name": node_name,
-                    "summary": node["summary"],
-                    "topic": "command-line",
-                    "command": f"ordo-help describe {node_name} --json",
-                }
-            )
-
-    for example in describe_examples_catalog()["examples"]:
-        searchable = " ".join([example["name"], example["path"], *example["shows"], *example["related_topics"]]).lower()
-        if _query_matches(lowered_query, searchable):
-            fact_results.append(
-                {
-                    "kind": "example",
-                    "name": example["name"],
-                    "summary": f"Verified example at {example['path']}",
-                    "topic": "examples",
-                    "command": f"ordo-help describe examples.{example['name']} --json",
-                }
-            )
-
+        if node_name in declarations:
+            add_fact("command_line_field", node_name, "command-line", node)
+    for node_name, node in context.lookup("examples").items():
+        if node_name in declarations:
+            add_fact("example", node_name, "examples", node)
     workflow_rules = build_workflow_rules_response()
     for rule in workflow_rules["rules"]:
-        searchable = " ".join(
-            [
-                rule["name"],
-                rule["priority"],
-                rule["guidance_level"],
-                rule["rule"],
-                *rule.get("why", []),
-                *rule.get("prefer", []),
-                *rule.get("avoid", []),
-            ]
-        ).lower()
-        if _query_matches(lowered_query, searchable):
-            fact_results.append(
-                {
-                    "kind": "workflow_rule",
-                    "name": f"workflow-rules.{rule['name']}",
-                    "summary": rule["rule"],
-                    "topic": "workflow-rules",
-                    "command": f"ordo-help describe workflow-rules.{rule['name']} --json",
-                }
+        node_name = f"workflow-rules.{rule['name']}"
+        if node_name in declarations:
+            add_fact("workflow_rule", node_name, "workflow-rules", context.lookup("workflow-rules")[node_name])
+
+    indexed_handles = {name for _, name, _, _, _, _ in facts}
+    for handle in declarations:
+        if handle in indexed_handles:
+            continue
+        payload = _focused_target_payload(handle, context=context)
+        if payload is not None:
+            add_fact("focused_reference", handle, "describe", payload)
+
+    keywords = []
+    for name, entry in _feature_keyword_index(context=context).items():
+        targets = tuple(
+            (
+                str(target.get("keyword", name)),
+                str(target["summary"]),
+                f"ordo-help describe {str(target.get('keyword', name))} --json",
             )
+            for target in entry["targets"]
+        )
+        keywords.append((name, targets))
+
+    return _PreparedSearchIndex(tuple(operations), tuple(topics), tuple(facts), tuple(keywords))
+
+
+def build_search_response(
+    query: str, *, human_surfaces: dict[str, JSONObject] | None = None,
+    context: _HelpResponseContext | None = None, prepared_index: _PreparedSearchIndex | None = None,
+    include_all: bool = False,
+) -> JSONObject:
+    """Return search results across public topics and operation references."""
+
+    context = _HelpResponseContext() if context is None else context
+    lowered_query = query.strip().lower()
+    index = prepared_index or _build_search_index(human_surfaces=human_surfaces, context=context)
+    keyword_results = [
+        {
+            "name": name,
+            "targets": [
+                {"name": target_name, "summary": summary, "command": command}
+                for target_name, summary, command in targets
+            ],
+        }
+        for name, targets in index.keywords
+        if lowered_query == name.lower()
+    ]
+    compact_exact = bool(keyword_results) and not include_all
+    operation_results = []
+    for reference, summary, command, record_reference, record_human, record_all in index.operations:
+        search_record = {"reference": record_reference, "human": record_human, "all": record_all}
+        if _query_matches(lowered_query, search_record["all"]):
+            operation_results.append({
+                "_score": _operation_search_score(lowered_query, search_record),
+                "_related": _keyword_related(lowered_query, record_reference, record_all),
+                "reference": reference, "summary": summary, "command": command,
+            })
+    operation_results.sort(key=lambda item: (-int(item["_score"]), str(item["reference"])))
+
+    topic_results = []
+    for handle, summary, searchable, command in index.topics:
+        if _query_matches(lowered_query, searchable):
+            topic_results.append({
+                "_score": _reference_search_score(lowered_query, handle, searchable),
+                "_related": _keyword_related(lowered_query, handle, searchable),
+                "name": handle, "summary": summary, "command": command,
+            })
+    fact_results = []
+    for kind, name, summary, topic, command, searchable in index.facts:
+        if _query_matches(lowered_query, searchable):
+            fact_results.append({
+                "_score": _reference_search_score(lowered_query, name, searchable),
+                "_related": _keyword_related(lowered_query, name, searchable),
+                "kind": kind, "name": name, "summary": summary, "topic": topic, "command": command,
+            })
+
+    related_results = []
+    if compact_exact:
+        source_commands = {
+            f"ordo-help describe {target['handle']} --json"
+            for name, entry in _feature_keyword_index(context=context).items()
+            if name.lower() == lowered_query
+            for target in entry["targets"]
+        }
+        related_candidates = [
+            {"kind": "topic", "name": item["name"], "summary": item["summary"], "command": item["command"], "_score": item["_score"]}
+            for item in topic_results if item["_related"]
+        ] + [
+            {"kind": item["kind"], "name": item["name"], "summary": item["summary"], "command": item["command"], "_score": item["_score"]}
+            for item in fact_results if item["_related"] and item["command"] not in source_commands
+        ]
+        related_candidates.sort(key=lambda item: (-int(item["_score"]), str(item["name"])))
+        related_results = related_candidates[:6]
+        topic_results = []
+        fact_results = []
+        operation_results = []
+
+    for collection in (topic_results, fact_results, operation_results, related_results):
+        for item in collection:
+            item.pop("_score", None)
+            item.pop("_related", None)
 
     return {
         "document_kind": "search_results",
         "query": query,
+        "keywords": keyword_results,
+        "broader_results_available": compact_exact and bool(related_results),
+        "related": related_results,
         "topics": topic_results,
         "facts": fact_results,
         "operations": operation_results,
+        "human": human_content(SEARCH_HUMAN, owner="search"),
     }
 
 
-def _operation_search_record(*, reference: str, operation: JSONObject) -> dict[str, str]:
+def _operation_search_record(*, reference: str, human: JSONObject) -> dict[str, str]:
     reference_text = reference.lower()
-    name_text = str(operation["name"]).lower()
-    summary_text = str(operation.get("summary") or "").lower()
-    inputs_text = json.dumps(operation.get("inputs") or {}, sort_keys=True).lower()
-    outputs_text = json.dumps(operation.get("outputs") or {}, sort_keys=True).lower()
-    failure_text = json.dumps(operation.get("failure_modes") or [], sort_keys=True).lower()
-    examples_text = json.dumps(operation.get("examples") or [], sort_keys=True).lower()
-    kind_text = str(operation["kind"]).lower()
+    human_text = _human_searchable(human)
     return {
         "reference": reference_text,
-        "name": name_text,
-        "summary": summary_text,
-        "inputs": inputs_text,
-        "outputs": outputs_text,
-        "failure_modes": failure_text,
-        "examples": examples_text,
-        "kind": kind_text,
-        "all": " ".join(
-            [reference_text, name_text, kind_text, summary_text, inputs_text, outputs_text, failure_text, examples_text]
-        ),
+        "human": human_text,
+        "all": f"{reference_text} {human_text}",
     }
+
+
+def _human_searchable(human: object) -> str:
+    """Build a search record from reader-facing content only."""
+
+    validate_human_mapping(human, owner="search")
+    assert isinstance(human, dict)
+    values = [str(human["title"]), str(human["goal"]), str(human["summary"])]
+
+    def append_section(section: object) -> None:
+        assert isinstance(section, dict)
+        values.append(str(section["heading"]))
+        values.extend(str(item) for item in section.get("items", []))
+        values.extend(str(reference["handle"]) + " " + str(reference["summary"]) for reference in section.get("references", []))
+        for subsection in section.get("subsections", []):
+            append_section(subsection)
+
+    for section in human["sections"]:
+        append_section(section)
+    return " ".join(values).lower()
 
 
 def _operation_search_score(query: str, record: dict[str, str]) -> int:
@@ -6348,42 +6594,51 @@ def _operation_search_score(query: str, record: dict[str, str]) -> int:
     tokens = _search_tokens(query)
     if query in record["reference"]:
         score += 200
-    if query in record["name"]:
-        score += 160
-    if query in record["summary"]:
+    if query in record["human"]:
         score += 120
-    if query in record["outputs"]:
-        score += 100
-    if query in record["inputs"]:
-        score += 90
-    if query in record["examples"]:
-        score += 70
-    if query in record["failure_modes"]:
-        score += 50
     if query in record["all"]:
         score += 20
     for token in tokens:
         if token in record["reference"]:
             score += 20
-        if token in record["name"]:
-            score += 18
-        if token in record["summary"]:
+        if token in record["human"]:
             score += 14
-        if token in record["outputs"]:
-            score += 12
-        if token in record["inputs"]:
-            score += 10
-        if token in record["examples"]:
-            score += 8
-        if token in record["failure_modes"]:
-            score += 6
     return score
+
+
+def _reference_search_score(query: str, name: str, searchable: str) -> int:
+    """Rank a related public reference without exposing its storage classification."""
+
+    score = 0
+    lowered_name = name.lower()
+    if query == lowered_name:
+        score += 400
+    elif query in lowered_name:
+        score += 200
+    if query in searchable:
+        score += 100
+    for token in _search_tokens(query):
+        if token in lowered_name:
+            score += 30
+        if token in searchable:
+            score += 10
+    return score
+
+
+def _keyword_related(query: str, name: str, searchable: str) -> bool:
+    """Keep compact keyword results semantic instead of matching a keyword inside unrelated words."""
+
+    tokens = _search_tokens(query)
+    if len(tokens) != 1:
+        return query in name.lower() or query in searchable
+    token = tokens[0]
+    return token in re.findall(r"[a-z0-9]+", name.lower())
 
 
 def _expand_search_tokens(text: str) -> list[str]:
     expanded: list[str] = []
     for token in _search_tokens(text):
-        if token not in expanded:
+        if "-" not in token and token not in expanded:
             expanded.append(token)
         for segment in re.split(r"[._:/#-]+", token):
             if len(segment) < 2:
@@ -6401,7 +6656,7 @@ def _query_matches(query: str, searchable: str) -> bool:
     tokens = _expand_search_tokens(query)
     if not tokens:
         return False
-    return all(token in searchable for token in tokens if token not in {query})
+    return all(token in searchable for token in tokens)
 
 
 def _search_tokens(text: str) -> list[str]:
@@ -6495,8 +6750,10 @@ def _build_unknown_topic_suggestions(topic: str, *, context: _HelpResponseContex
     return suggestions
 
 
-def render_root_text() -> str:
+def render_root_text(payload: JSONObject | None = None) -> str:
     """Return the human-readable bootstrap screen."""
+
+    return _render_human(build_root_response() if payload is None else payload)
 
     lines = [
         "ordo-help",
@@ -6529,8 +6786,65 @@ def render_root_text() -> str:
     return "\n".join(lines)
 
 
+def _render_human(payload: JSONObject) -> str:
+    """Render only the canonical reader-facing projection for a basic topic."""
+
+    human = human_text(payload, owner=str(payload.get("document_kind", "help")))
+    lines = [human["title"], human["goal"], "", human["summary"]]
+    def render_section(section: dict[str, object], level: int) -> None:
+        if not any(section.get(key) for key in ("body", "items", "references", "examples", "subsections")):
+            return
+        prefix = "  " * level
+        lines.extend(["", f"{prefix}{str(section['heading']).lower()}:"])
+        if section.get("body"):
+            lines.append(f"{prefix}{section['body']}")
+        lines.extend(f"{prefix}- {item}" for item in section.get("items", []))
+        lines.extend(
+            f"{prefix}- Run `ordo-help describe {reference['handle']}`: {reference['summary']}"
+            for reference in section.get("references", [])
+        )
+        lines.extend(f"{prefix}- example: {example}" for example in section.get("examples", []))
+        for subsection in section.get("subsections", []):
+            assert isinstance(subsection, dict)
+            render_section(subsection, level + 1)
+
+    for section in human["sections"]:
+        render_section(section, 0)
+    _append_text_canonical_examples(
+        lines,
+        text_canonical_examples(str(payload.get("name", "")), payload.get("canonical_examples", [])),
+    )
+    return "\n".join(lines)
+
+
+def _validate_human_references(payload: JSONObject, *, context: _HelpResponseContext | None = None) -> None:
+    """Ensure rendered describe links resolve through a public describe target."""
+
+    if "human" not in payload:
+        return
+    owner = str(payload.get("document_kind", "help"))
+    human = human_text(payload, owner=owner)
+    published = set(DESCRIBABLE_TOPICS)
+    published.update(focused_describe_declarations())
+    if context is None:
+        context = _HelpResponseContext()
+    published.update(_feature_keyword_index(context=context))
+    def validate_section(section: dict[str, object]) -> None:
+        for reference in section.get("references", []):
+            if reference["handle"] not in published:
+                raise ValueError(f"{owner}.human references unpublished handle {reference['handle']}")
+        for subsection in section.get("subsections", []):
+            assert isinstance(subsection, dict)
+            validate_section(subsection)
+
+    for section in human["sections"]:
+        validate_section(section)
+
+
 def render_overview_text(payload: JSONObject) -> str:
     """Return the text overview surface."""
+
+    return _render_human(payload)
 
     lines = [
         "overview",
@@ -6600,6 +6914,8 @@ def render_overview_text(payload: JSONObject) -> str:
 def render_capabilities_text(payload: JSONObject) -> str:
     """Return the text capabilities surface."""
 
+    return _render_human(payload)
+
     capabilities = payload["capabilities"]
     lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", GRAPH_GUIDANCE, GRAPH_PRESENTATION, GRAPH_SOURCE_PLACEMENT, GRAPH_CONTEXT_GUIDANCE, GRAPH_PARAMETER_GUIDANCE, GRAPH_ROLE_GUIDANCE, GH_PR_MERGE_GUIDANCE, GH_PR_CREATE_GUIDANCE, SDK_CALL_GUIDANCE, "", "Capability states:"]
     for capability in capabilities:
@@ -6616,6 +6932,8 @@ def render_capabilities_text(payload: JSONObject) -> str:
 
 def render_model_text(payload: JSONObject) -> str:
     """Return the text model surface."""
+
+    return _render_human(payload)
 
     lines = [
         "model",
@@ -6653,6 +6971,8 @@ def render_model_text(payload: JSONObject) -> str:
 def render_features_text(payload: JSONObject) -> str:
     """Return the text features surface."""
 
+    return _render_human(payload)
+
     lines = ["features", payload["purpose"]]
     for cluster in payload["clusters"]:
         lines.extend(["", cluster["name"], f"what: {cluster['summary']}"])
@@ -6679,6 +6999,8 @@ def render_features_text(payload: JSONObject) -> str:
 
 def render_workflow_rules_text(payload: JSONObject) -> str:
     """Return the text workflow-rules surface."""
+
+    return _render_human(payload)
 
     lines = ["workflow-rules", payload["purpose"], "", "Workflow heuristic:"]
     lines.extend(f"- {item}" for item in payload["heuristic"])
@@ -6719,90 +7041,25 @@ def render_workflow_rules_text(payload: JSONObject) -> str:
 def render_command_line_text(payload: JSONObject) -> str:
     """Return the text command-line surface."""
 
-    lines = ["command-line", "Public launch commands and stable flags.", ""]
-    for command in payload["commands"]:
-        lines.extend(
-            [
-                command["name"],
-                command["purpose"],
-                f"usage: {command['usage']}",
-                f"modes: {', '.join(item['name'] for item in command['modes'])}",
-            ]
-        )
-        check_review_passes = command.get("check_review_passes")
-        lines.extend(["", "discovery commands:"])
-        lines.extend(f"- {item['name']}: {item['summary']}" for item in command["discovery_commands"])
-        lines.extend(["", "use when:"])
-        lines.extend(f"- {item}" for item in command["use_when"])
-        lines.extend(["", "review findings surface:", f"- {command['review_findings_surface']}"])
-        if isinstance(check_review_passes, dict):
-            lines.extend(["", "workflow check/review passes:", f"- rule: {check_review_passes['rule']}"])
-            for item in check_review_passes.get("passes", []):
-                lines.append(f"- {item['mode']}: {item['purpose']} ({item['question']})")
-        run_failure_surface = command.get("run_failure_surface")
-        if isinstance(run_failure_surface, dict):
-            lines.extend(
-                [
-                    "",
-                    "run failure surface:",
-                    f"- rule: {run_failure_surface['rule']}",
-                    f"- external payload fields: {', '.join(run_failure_surface['external_payload_fields'])}",
-                ]
-            )
-        lines.extend(["", "flags:"])
-        for flag in command["flags"]:
-            suffix = f" {flag.get('value_shape', '')}".rstrip()
-            lines.append(f"- {flag['name']}{suffix}: {flag['summary']}")
-        lines.extend(["", "input override precedence:"])
-        lines.extend(f"- {item}" for item in command["input_override_precedence"])
-    return "\n".join(lines)
+    return _render_human(payload)
 
 
 def render_operations_text(payload: JSONObject) -> str:
     """Return the text operations surface."""
 
-    lines = ["operations", "Public connector namespaces and operations.", "", GH_PR_MERGE_GUIDANCE, GH_PR_CREATE_GUIDANCE, SDK_CALL_GUIDANCE, ""]
-    for connector in payload["connectors"]:
-        operation_names = ", ".join(operation["name"] for operation in connector["operations"])
-        lines.append(f"- {connector['namespace']}: {operation_names}")
-    return "\n".join(lines)
+    return _render_human(payload)
 
 
 def render_examples_text(payload: JSONObject) -> str:
     """Return the text verified-examples surface."""
 
-    lines = ["examples", "Verified repository examples published for discovery.", ""]
-    for example in payload["examples"]:
-        shows = ", ".join(example["shows"])
-        lines.append(f"- {example['name']}: {example['path']} ({shows})")
-    return "\n".join(lines)
+    return _render_human(payload)
 
 
 def render_operation_text(payload: JSONObject) -> str:
     """Return the text single-operation surface."""
 
-    operation = payload["operation"]
-    lines = [
-        payload["reference"],
-        operation["summary"] or "No summary published.",
-        "",
-        f"kind: {operation['kind']}",
-        f"namespace: {payload['namespace']}",
-        f"maturity: {operation['maturity']}",
-    ]
-    if operation["inputs"]:
-        lines.extend(["", "inputs:"])
-        for name, shape in operation["inputs"].items():
-            lines.append(f"- {name}: {shape}")
-    if operation["outputs"]:
-        lines.extend(["", "outputs:"])
-        for name, shape in operation["outputs"].items():
-            lines.append(f"- {name}: {shape}")
-    if operation["failure_modes"]:
-        lines.extend(["", "failure modes:"])
-        for mode in operation["failure_modes"]:
-            lines.append(f"- {mode}")
-    return "\n".join(lines)
+    return _render_human(payload)
 
 
 def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]) -> None:
@@ -6820,10 +7077,9 @@ def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]
             continue
         if isinstance(example.get("form"), str):
             lines.append(f"  example_for: {example['form']}")
-        language = "python" if example.get("form") == "python_fragment" else "yaml"
-        source_text = example.get(language)
+        source_text = example.get("yaml")
         if isinstance(source_text, str) and source_text:
-            lines.append(f"  {language}:")
+            lines.append("  yaml:")
             for snippet_line in source_text.splitlines():
                 lines.append(f"    {snippet_line}")
 
@@ -7455,41 +7711,62 @@ def render_example_node_text(payload: JSONObject) -> str:
 def render_snippet_coverage_text(payload: JSONObject) -> str:
     """Return the text snippet-coverage surface."""
 
-    lines = ["snippet-coverage", payload["purpose"], "", "Coverage summary:"]
-    coverage_counts = payload["summary"]["coverage_counts"]
-    lines.append(f"- total handles: {payload['summary']['total_handles']}")
-    for coverage in payload["coverage_levels"]:
-        lines.append(f"- {coverage}: {coverage_counts.get(coverage, 0)}")
-    lines.extend(["", "Handles:"])
-    for item in payload["handles"]:
-        lines.append(f"- {item['handle']}: {item['snippet_coverage']}")
-    return "\n".join(lines)
+    return _render_human(payload)
 
 
 def render_search_text(payload: JSONObject) -> str:
     """Return the text search surface."""
 
-    lines = [f"search: {payload['query']}"]
-    if payload["topics"]:
+    def text_command(command: object) -> str:
+        return str(command).removesuffix(" --json")
+
+    lines = [_render_human(payload), "", f"search: {payload['query']}"]
+    keywords = payload.get("keywords", [])
+    related = payload.get("related", [])
+    topics = payload.get("topics", [])
+    facts = payload.get("facts", [])
+    operations = payload.get("operations", [])
+    if keywords:
+        lines.extend(["", "Exact keyword matches:"])
+        for keyword in keywords:
+            targets = keyword["targets"]
+            if len(targets) == 1:
+                target = targets[0]
+                lines.append(f"- {keyword['name']}: {text_command(target['command'])}")
+                continue
+            lines.append(f"- {keyword['name']}:")
+            lines.extend(f"  - {target['name']}: {text_command(target['command'])}" for target in targets)
+    if related:
+        lines.extend(["", "Related matches:"])
+        lines.extend(f"- {item['summary']}: {text_command(item['command'])}" for item in related)
+    if payload.get("broader_results_available", False):
+        lines.extend([
+            "",
+            "Use `ordo-help search " + str(payload["query"]) + " --all` to include broader matches.",
+        ])
+    if topics:
         lines.extend(["", "Topic matches:"])
-        for topic in payload["topics"]:
-            lines.append(f"- {topic['name']}: {topic['command']}")
-    if payload["facts"]:
+        for topic in topics:
+            lines.append(f"- {topic['name']}: {text_command(topic['command'])}")
+    if facts:
         lines.extend(["", "Fact matches:"])
-        for fact in payload["facts"]:
-            lines.append(f"- {fact['name']} ({fact['kind']}): {fact['command']}")
-    if payload["operations"]:
+        for fact in facts:
+            lines.append(f"- {fact['summary']}: {text_command(fact['command'])}")
+    if operations:
         lines.extend(["", "Operation matches:"])
-        for operation in payload["operations"]:
-            lines.append(f"- {operation['reference']}: {operation['command']}")
-    if not payload["topics"] and not payload["facts"] and not payload["operations"]:
+        for operation in operations:
+            lines.append(f"- {operation['reference']}: {text_command(operation['command'])}")
+    if not keywords and not related and not topics and not facts and not operations:
         lines.extend(["", "No topic, fact, or operation matches found."])
     return "\n".join(lines)
 
 
-def _emit_payload(payload: JSONObject, *, as_json: bool, renderer) -> int:
+def _emit_payload(
+    payload: JSONObject, *, as_json: bool, renderer, context: _HelpResponseContext | None = None,
+) -> int:
     """Emit one discovery payload in JSON or text mode."""
 
+    _validate_human_references(payload, context=context)
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
@@ -7541,6 +7818,64 @@ def _emit_unknown_topic(topic: str, *, as_json: bool, context: _HelpResponseCont
     return 1
 
 
+def _feature_keyword_index(*, context: _HelpResponseContext) -> dict[str, JSONObject]:
+    """Return the human-declared keyword index used by public navigation."""
+
+    keywords = human_keywords(build_features_response(context)["human"], owner="features")
+    return {str(keyword["name"]): keyword for keyword in keywords}
+
+
+def _keyword_guide_payload(keyword: str, target: JSONObject, *, context: _HelpResponseContext) -> JSONObject:
+    """Present the target's reader guide under the public keyword used to reach it."""
+
+    source = _focused_target_payload(str(target["handle"]), context=context)
+    assert source is not None
+    payload = deepcopy(source)
+    payload.update({
+        "document_kind": "keyword_guide",
+        "name": keyword,
+        "keyword": keyword,
+        "guide_handle": str(target["handle"]),
+    })
+    human = deepcopy(payload["human"])
+    human["title"] = keyword
+    if target.get("keyword") is not None:
+        human["summary"] = str(target["summary"])
+    payload["human"] = human
+    return payload
+
+
+def _keyword_dispatcher_payload(keyword: str, targets: list[JSONObject]) -> JSONObject:
+    """Present the explicitly declared choices for an ambiguous short keyword."""
+
+    references = [
+        {
+            "handle": str(target.get("keyword", target["handle"])),
+            "summary": str(target["summary"]),
+        }
+        for target in targets
+    ]
+    return {
+        "document_kind": "keyword_dispatcher",
+        "name": keyword,
+        "keyword": keyword,
+        "targets": deepcopy(targets),
+        "human": human_content(keyword_dispatcher_human(keyword, references), owner=f"keyword.{keyword}"),
+    }
+
+
+def _resolve_feature_keyword(topic: str, *, context: _HelpResponseContext) -> tuple[JSONObject, object] | None:
+    """Resolve a normalized keyword to one guide or an explicit dispatcher."""
+
+    entry = _feature_keyword_index(context=context).get(topic)
+    if entry is None:
+        return None
+    targets = list(entry["targets"])
+    if len(targets) == 1:
+        return _keyword_guide_payload(topic, targets[0], context=context), _render_human
+    return _keyword_dispatcher_payload(topic, targets), _render_human
+
+
 def _resolve_public_topic(topic: str, *, context: _HelpResponseContext | None = None) -> tuple[JSONObject, object] | None:
     """Resolve one describable public topic to its payload and renderer."""
 
@@ -7551,7 +7886,7 @@ def _resolve_public_topic(topic: str, *, context: _HelpResponseContext | None = 
     if topic == "model":
         return build_model_response(), render_model_text
     if topic == "features":
-        return build_features_response(), render_features_text
+        return build_features_response(context), render_features_text
     if topic == "workflow-rules":
         return build_workflow_rules_response(), render_workflow_rules_text
     if topic == "capabilities":
@@ -7561,24 +7896,15 @@ def _resolve_public_topic(topic: str, *, context: _HelpResponseContext | None = 
     if topic == "operations":
         return build_operations_response(), render_operations_text
     if topic == "examples":
-        return describe_examples_catalog(), render_examples_text
+        return build_examples_response(), render_examples_text
     if topic == "snippet-coverage":
-        return build_snippet_coverage_response(), render_snippet_coverage_text
-    capability_node = context.lookup("capabilities").get(topic)
-    if capability_node is not None:
-        return capability_node, render_capability_node_text
-    model_node = context.lookup("model").get(topic)
-    if model_node is not None:
-        return model_node, render_model_node_text
-    command_line_node = context.lookup("command-line").get(topic)
-    if command_line_node is not None:
-        return command_line_node, render_command_line_node_text
-    workflow_rules_node = context.lookup("workflow-rules").get(topic)
-    if workflow_rules_node is not None:
-        return workflow_rules_node, render_workflow_rules_node_text
-    example_node = context.lookup("examples").get(topic)
-    if example_node is not None:
-        return example_node, render_example_node_text
+        return build_snippet_coverage_response(context), render_snippet_coverage_text
+    focused = _focused_target_payload(topic, context=context)
+    if focused is not None:
+        return focused, _render_human
+    keyword = _resolve_feature_keyword(topic, context=context)
+    if keyword is not None:
+        return keyword
     return None
 
 
@@ -7627,10 +7953,12 @@ def main(argv: list[str] | None = None) -> int:
 
     search_parser = subparsers.add_parser("search", add_help=False)
     search_parser.add_argument("query")
+    search_parser.add_argument("--all", action="store_true", dest="include_all")
     search_parser.add_argument("--json", action="store_true", dest="as_json")
 
     parsed = parser.parse_args(argv)
     as_json = bool(getattr(parsed, "as_json", False))
+    context = _HelpResponseContext()
 
     if parsed.command is None:
         if as_json:
@@ -7643,38 +7971,42 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if parsed.command == "overview":
-        return _emit_payload(build_overview_response(), as_json=as_json, renderer=render_overview_text)
+        return _emit_payload(build_overview_response(), as_json=as_json, renderer=render_overview_text, context=context)
     if parsed.command == "capabilities":
-        return _emit_payload(build_capabilities_response(), as_json=as_json, renderer=render_capabilities_text)
+        return _emit_payload(build_capabilities_response(), as_json=as_json, renderer=render_capabilities_text, context=context)
     if parsed.command == "model":
-        return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
+        return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text, context=context)
     if parsed.command == "features":
-        return _emit_payload(build_features_response(), as_json=as_json, renderer=render_features_text)
+        return _emit_payload(build_features_response(context), as_json=as_json, renderer=render_features_text, context=context)
     if parsed.command == "workflow-rules":
-        return _emit_payload(build_workflow_rules_response(), as_json=as_json, renderer=render_workflow_rules_text)
+        return _emit_payload(build_workflow_rules_response(), as_json=as_json, renderer=render_workflow_rules_text, context=context)
     if parsed.command == "command-line":
-        return _emit_payload(build_command_line_response(), as_json=as_json, renderer=render_command_line_text)
+        return _emit_payload(build_command_line_response(), as_json=as_json, renderer=render_command_line_text, context=context)
     if parsed.command == "operations":
-        return _emit_payload(build_operations_response(), as_json=as_json, renderer=render_operations_text)
+        return _emit_payload(build_operations_response(), as_json=as_json, renderer=render_operations_text, context=context)
     if parsed.command == "examples":
-        return _emit_payload(describe_examples_catalog(), as_json=as_json, renderer=render_examples_text)
+        return _emit_payload(build_examples_response(), as_json=as_json, renderer=render_examples_text, context=context)
     if parsed.command == "snippet-coverage":
-        return _emit_payload(build_snippet_coverage_response(), as_json=as_json, renderer=render_snippet_coverage_text)
+        return _emit_payload(build_snippet_coverage_response(context), as_json=as_json, renderer=render_snippet_coverage_text, context=context)
     if parsed.command == "operation":
         payload = build_operation_response(parsed.reference)
         if payload is None:
             return _emit_unknown_operation(parsed.reference, as_json=as_json)
-        return _emit_payload(payload, as_json=as_json, renderer=render_operation_text)
+        return _emit_payload(payload, as_json=as_json, renderer=render_operation_text, context=context)
     if parsed.command == "describe":
-        context = _HelpResponseContext()
         resolved_topic = _resolve_describe_topic_alias(parsed.topic, context=context)
         resolved = _resolve_public_topic(resolved_topic, context=context)
         if resolved is None:
             return _emit_unknown_topic(parsed.topic, as_json=as_json, context=context)
         payload, renderer = resolved
-        return _emit_payload(payload, as_json=as_json, renderer=renderer)
+        return _emit_payload(payload, as_json=as_json, renderer=renderer, context=context)
     if parsed.command == "search":
-        return _emit_payload(build_search_response(parsed.query), as_json=as_json, renderer=render_search_text)
+        return _emit_payload(
+            build_search_response(parsed.query, context=context, include_all=bool(parsed.include_all)),
+            as_json=as_json,
+            renderer=render_search_text,
+            context=context,
+        )
 
     parser.error(f"Unsupported command: {parsed.command}")
     return 2

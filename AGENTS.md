@@ -171,13 +171,30 @@ manual command sequence.
   - `ordo-help features`
   - `ordo-help overview`
   - `ordo-help model`
-  - `ordo-help workflow-authoring`
+  - `ordo-help workflow-rules`
   - `ordo-help capabilities`
   - `ordo-help command-line`
   - `ordo-help operations`
   - `ordo-help describe ...`
   - `ordo-help search ...`
 - Do not treat discovery or help updates as optional polish. They are part of the published behavior contract.
+
+### Reader-facing help vocabulary
+
+- Public `ordo-help` text is for people who may know neither Ordo nor its implementation.
+- Write every public help surface in terms of the user's goal, the action to take, and the observable result. Introduce any necessary Ordo-specific term through its purpose before relying on it.
+- Do not expose implementation vocabulary in ordinary help prose: module, class, function, SDK, handler, serializer, fixture, test-harness, internal-state, graph-layout, backend-protocol, or internal diagnostic terminology.
+- Do not use internal identifiers, field names, diagnostic codes, API status codes, or backend query details as the primary explanation. If one is part of a focused public contract or troubleshooting path, first give the reader-facing explanation and place the technical identifier in an explicitly labelled contract or troubleshooting detail.
+- Machine-readable `--json` output may retain stable technical identifiers when they are part of its public contract; this does not justify repeating them in ordinary text help.
+- Before completing a change to any public help surface, generate every affected text surface and review it from the perspective of a person unfamiliar with Ordo and its codebase. Confirm that the surface contains no unnecessary implementation jargon, and report the reviewed surfaces and any deliberate, focused technical exceptions in the completion summary.
+
+### Canonical reader-facing content
+
+- Keep reader-facing content in a `human` mapping beside the canonical contract data that it explains. Do not create a separately maintained site-documentation source.
+- The `human` mapping holds the reader's goal, the action to take, the observable result, boundaries, examples, and structured links to related public surfaces. Keep implementation details in their own contract fields rather than mixing them into `human` prose.
+- Text `ordo-help`, the reader-facing site, and text search must consume `human` content and explicitly permitted public references. They must not fall back to arbitrary contract fields, raw metadata, or serialized JSON when a `human` value is absent.
+- When a public surface changes, update its relevant `human` content in the same change. A new public surface must not enter reader-facing help without the `human` content required for its published role.
+- Treat migration of an existing surface to `human` as a content-preservation task: retain its useful reader-facing meaning, move technical facts to structured contract fields, and do not replace a substantive surface with a generic summary.
 
 ### Features parity
 
@@ -188,7 +205,7 @@ manual command sequence.
 ### Snippet-backed example parity
 
 - After completing a task that changes a public authoring or discovery surface, review whether any relevant snippet-backed examples must be updated in the same work.
-- This applies to help surfaces such as `ordo-help describe ...`, `ordo-help workflow-authoring`, `ordo-help features`, and other published discovery output that teaches or confirms authored shapes.
+- This applies to help surfaces such as `ordo-help describe ...`, `ordo-help workflow-rules`, `ordo-help features`, and other published discovery output that teaches or confirms authored shapes.
 - Any task that changes one or more public `ordo-help describe ...` surfaces must explicitly run those affected describe surfaces against the describe readiness checklist and treat that review as part of the work, not as optional follow-up polish.
 - If one or more affected describe surfaces do not satisfy the checklist cleanly, discuss the gap before closing the work instead of silently accepting a half-ready describe surface.
 - If a relevant verified snippet already exists for the affected surface, update it in the same work so the published example stays aligned with the implemented behavior.

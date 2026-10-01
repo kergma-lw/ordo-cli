@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import import_module
 from pkgutil import iter_modules, walk_packages
 from types import ModuleType
@@ -37,12 +37,15 @@ def assemble_family(*, package_name: str, namespace: str, bootstrap: ConnectorBo
     operations: list[OperationContract] = []
     bootstrap_handler = _load_bootstrap_handler(package_name, namespace=namespace)
 
+    family_human = getattr(import_module(package_name), "OPERATION_HUMAN", {})
     for operation in _load_operations(package_name=f"{package_name}.probes", kind="probe"):
+        operation = _with_family_human(operation, family_human, namespace=namespace)
         operations.append(operation.contract)
         if operation.handler is not None:
             probe_handlers[operation.contract.name] = operation.handler
 
     for operation in _load_operations(package_name=f"{package_name}.actions", kind="action"):
+        operation = _with_family_human(operation, family_human, namespace=namespace)
         operations.append(operation.contract)
         if operation.handler is not None:
             action_handlers[operation.contract.name] = operation.handler
@@ -59,6 +62,14 @@ def assemble_family(*, package_name: str, namespace: str, bootstrap: ConnectorBo
         action_handlers=action_handlers,
         bootstrap_handler=bootstrap_handler,
     )
+
+
+def _with_family_human(operation: _LoadedOperation, family_human: object, *, namespace: str) -> _LoadedOperation:
+    if operation.contract.human is not None:
+        return operation
+    if not isinstance(family_human, dict) or operation.contract.name not in family_human:
+        raise ValueError(f"Published operation '{namespace}.{operation.contract.name}' must declare source-owned human content")
+    return replace(operation, contract=replace(operation.contract, human=family_human[operation.contract.name]))
 
 
 def discover_family_modules() -> tuple[ModuleType, ...]:
@@ -153,6 +164,7 @@ def _contract_from_published(published: "PublishedOperation", *, package_name: s
         replaced_by=published.replaced_by,
         invalidates_observations=published.invalidates_observations,
         preflight_observations=published.preflight_observations,
+        human=published.human,
     )
 
 

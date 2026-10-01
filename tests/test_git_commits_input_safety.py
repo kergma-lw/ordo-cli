@@ -139,7 +139,7 @@ def test_ordinary_steps_remain_static_outside_run(mode, bootstrap_only):
     result = mode(commits_workflow(OPTION_REVISION, "ordinary"), connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
     assert result.status == RuntimeStatus.OK
-    assert INVALID_REV not in repr(result)
+    assert not any(diagnostic.code == INVALID_REV for diagnostic in result.diagnostics)
     bootstrap_only.assert_not_called()
 
 

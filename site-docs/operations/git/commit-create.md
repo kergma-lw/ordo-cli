@@ -1,138 +1,53 @@
-# git.commit.create
+# Git commit create
 
-Create a new Git commit from the current index.
+A workflow has already staged the intended changes and now needs one normal commit creation step rather than history rewriting.
 
-Use this when a workflow needs Git state or Git side effects. In practice: create a new Git commit from the current index.
+Create one new Git commit from the current index with one non-empty commit message and return the new commit id plus the current branch context.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this to capture the current index as one new commit and publish the resulting commit id for later steps.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the staged changes become one new commit and the resulting revision is available to later steps.
+- When there is nothing to commit, history is unchanged; this is distinct from a successful commit.
+- If Git blocks commit creation, no successful commit result is reported.
+- Returns commit and branch. Empty messages, nothing to commit, or a blocked commit leave no successful commit result.
 
-```json
-{
-  "message": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `message`: required; describe the staged change clearly enough for repository history. Review the staged change first because this action records all staged content in one commit.
 
-```json
-{
-  "branch": "string | null",
-  "commit": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Rewriting the current HEAD commit; use connector.git.commit.amend for amend-style history rewriting.
+- Undoing one existing commit with a compensating revert commit; use connector.git.commit.revert for that distinct history-preserving action.
 
-- create a new commit from the current index
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `message_invalid`
-- `nothing_to_commit`
-- `commit_blocked`
 
-## Requirements
+- [`connector.git.commit.amend`](commit-amend.md): Sibling action for rewriting the current HEAD commit instead of creating a fresh one
+- [`connector.git.commit.revert`](commit-revert.md): Sibling action for creating a compensating revert commit instead of recording newly staged changes
+- [`connector.git.commits`](commits.md): Read recent commit texts before or after commit creation
+- [`connector.git.worktree`](worktree.md): Read broader worktree state when commit readiness depends on unstaged or staged changes
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.commit.create --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_commit_create_step
 
-### `git.commit.create`
+Create one ordinary Git commit from the current index after the staged changes are ready.
 
-```json
-{
-  "message": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "create a new commit from the current index"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "message": "string"
-        },
-        "reference": "git.commit.create"
-      }
-    ],
-    "failure_modes": [
-      "message_invalid",
-      "nothing_to_commit",
-      "commit_blocked"
-    ],
-    "inputs": {
-      "message": "string"
-    },
-    "invalidates_observations": [
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "commit.create",
-    "outputs": {
-      "branch": "string | null",
-      "commit": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.commit.create'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "commit.create",
-  "reference": "git.commit.create",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: create-commit
+        if: inputs.operation == "create"
+        uses: git.commit.create
+        with:
+          message: inputs.commit_message
 ```

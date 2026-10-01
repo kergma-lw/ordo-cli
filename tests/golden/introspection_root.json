@@ -7,14 +7,18 @@
           "must_not_infer": [],
           "name": "workflow.local_expressions",
           "related_capabilities": [],
-          "related_model_nodes": [],
+          "related_model_nodes": [
+            "workflow.local_expression.filter",
+            "workflow.local_expression.builtin",
+            "workflow.local_expression.adapter"
+          ],
           "related_negative_rules": [],
           "scope": "workflow",
           "status": "supported"
         },
         {
           "must_not_infer": [],
-          "name": "workflow.local_expression.adapters",
+          "name": "workflow.local_expression.adapter",
           "related_capabilities": [
             "workflow.local_expressions"
           ],
@@ -29,6 +33,81 @@
           ],
           "related_negative_rules": [],
           "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "workflow.state_bindings",
+          "related_capabilities": [],
+          "related_model_nodes": [
+            "playbook.states",
+            "state.workflow_surface.state_binding_field",
+            "state.workflow_surface.storage_targets_field",
+            "workflow.step.state_set",
+            "workflow.step.state_delete"
+          ],
+          "related_negative_rules": [],
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "workflow.state_needs",
+          "related_capabilities": [
+            "workflow.state_bindings"
+          ],
+          "related_model_nodes": [
+            "state.workflow_surface.state_needs_field",
+            "playbook.states",
+            "state.workflow_surface.state_binding_field"
+          ],
+          "related_negative_rules": [],
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "workflow.step.state_set",
+          "related_capabilities": [
+            "workflow.state_bindings"
+          ],
+          "related_model_nodes": [
+            "state.workflow_surface.step_state_set_field",
+            "workflow.step_forms.state_set"
+          ],
+          "related_negative_rules": [
+            "state_set.single_target_entry"
+          ],
+          "scope": "workflow.step",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "workflow.step.state_delete",
+          "related_capabilities": [
+            "workflow.state_bindings"
+          ],
+          "related_model_nodes": [
+            "state.workflow_surface.step_state_delete_field",
+            "workflow.step_forms.state_delete"
+          ],
+          "related_negative_rules": [],
+          "scope": "workflow.step",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "workflow.step.value",
+          "related_capabilities": [
+            "workflow.local_expressions"
+          ],
+          "related_model_nodes": [
+            "workflow.step_forms.value",
+            "workflow.step.result",
+            "workflow.step.publish"
+          ],
+          "related_negative_rules": [],
+          "scope": "workflow.step",
           "status": "supported"
         },
         {
@@ -48,51 +127,6 @@
           ],
           "related_negative_rules": [],
           "scope": "workflow",
-          "status": "supported"
-        },
-        {
-          "must_not_infer": [],
-          "name": "workflow.state_needs",
-          "related_capabilities": [],
-          "related_model_nodes": [],
-          "related_negative_rules": [],
-          "scope": "workflow",
-          "status": "supported"
-        },
-        {
-          "must_not_infer": [],
-          "name": "workflow.state_bindings",
-          "related_capabilities": [],
-          "related_model_nodes": [],
-          "related_negative_rules": [],
-          "scope": "workflow",
-          "status": "supported"
-        },
-        {
-          "must_not_infer": [],
-          "name": "workflow.step.state_set",
-          "related_capabilities": [],
-          "related_model_nodes": [],
-          "related_negative_rules": [],
-          "scope": "workflow.step",
-          "status": "supported"
-        },
-        {
-          "must_not_infer": [],
-          "name": "workflow.step.state_delete",
-          "related_capabilities": [],
-          "related_model_nodes": [],
-          "related_negative_rules": [],
-          "scope": "workflow.step",
-          "status": "supported"
-        },
-        {
-          "must_not_infer": [],
-          "name": "workflow.step.value",
-          "related_capabilities": [],
-          "related_model_nodes": [],
-          "related_negative_rules": [],
-          "scope": "workflow.step",
           "status": "supported"
         },
         {
@@ -136,7 +170,10 @@
           "status": "deprecated"
         },
         {
-          "must_not_infer": [],
+          "must_not_infer": [
+            "one shared boolean condition surface means if and gate do the same semantic job",
+            "if is the catch-all control mechanism for applicability, admission, and local branching"
+          ],
           "name": "workflow.step.condition",
           "related_capabilities": [
             "workflow.step.register",
@@ -144,12 +181,15 @@
           ],
           "related_model_nodes": [
             "workflow.step.if",
+            "workflow.step.gate",
             "workflow.step.register",
             "workflow.step_forms.operation_call",
+            "workflow.step_forms.gate_checkpoint",
             "workflow.step_forms.value"
           ],
           "related_negative_rules": [
-            "workflow_step.if_conflicts_with_register"
+            "workflow_step.if_conflicts_with_register",
+            "workflow_step.gate_conflicts_with_register"
           ],
           "scope": "workflow.step",
           "status": "supported"
@@ -171,22 +211,37 @@
           ],
           "related_negative_rules": [
             "workflow_step.register_requires_uses",
-            "workflow_step.if_conflicts_with_register"
+            "workflow_step.if_conflicts_with_register",
+            "workflow_step.gate_conflicts_with_register"
           ],
           "scope": "workflow.step",
           "status": "supported"
         },
         {
-          "must_not_infer": [],
+          "must_not_infer": [
+            "step outputs are ambient global context instead of explicit reads from named or registered steps"
+          ],
           "name": "workflow.step.outputs",
-          "related_capabilities": [],
-          "related_model_nodes": [],
+          "related_capabilities": [
+            "workflow.step.register",
+            "workflow.step.value"
+          ],
+          "related_model_nodes": [
+            "workflow.step.name",
+            "workflow.step.register",
+            "workflow.step.value",
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.run_invocation"
+          ],
           "related_negative_rules": [],
           "scope": "workflow.step",
           "status": "supported"
         },
         {
-          "must_not_infer": [],
+          "must_not_infer": [
+            "branching support means if should carry workflow applicability or admission decisions",
+            "workflow branching is best modeled by stretching if across every conditional concern"
+          ],
           "name": "workflow.branching",
           "related_capabilities": [
             "workflow.step.condition",
@@ -281,12 +336,15 @@
             "is_boolean",
             "in",
             "field",
+            "lookup",
             "only",
             "flatten",
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "name": "guard_expression",
           "roots": [
@@ -320,12 +378,15 @@
             "is_boolean",
             "in",
             "field",
+            "lookup",
             "only",
             "flatten",
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "name": "step_condition",
           "roots": [
@@ -362,12 +423,15 @@
             "is_boolean",
             "in",
             "field",
+            "lookup",
             "only",
             "flatten",
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "name": "embedded_value_expression",
           "roots": [
@@ -410,7 +474,9 @@
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "name": "include_binding_expression",
           "roots": [
@@ -452,7 +518,9 @@
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "name": "state_key_expression",
           "roots": [
@@ -550,6 +618,12 @@
         },
         {
           "argument_count": 1,
+          "input_type": "json",
+          "name": "lookup",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 1,
           "authored_form": "only(field=value) / only(field!=value)",
           "input_type": "json",
           "name": "only",
@@ -584,6 +658,19 @@
           "input_type": "json",
           "name": "unique",
           "output_type": "json"
+        },
+        {
+          "argument_count": 2,
+          "authored_form": "catch([\"issue_not_found\", \"*_not_found\"], false)",
+          "input_type": "json",
+          "name": "catch",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "not_found",
+          "output_type": "boolean"
         }
       ],
       "negative_rules": [
@@ -662,7 +749,7 @@
         },
         {
           "name": "workflow_step.register_requires_uses",
-          "reason": "the MVP publishes registered step results only for operation-call steps, reusable run invocations, and pure value steps",
+          "reason": "Only operation-call steps, reusable run invocations, and value steps produce results that can be named for later reads",
           "related_capabilities": [
             "workflow.step.register",
             "workflow.step.value",
@@ -685,7 +772,7 @@
         },
         {
           "name": "workflow_step.if_conflicts_with_register",
-          "reason": "the MVP avoids publishing synthetic registered step results for skipped conditional steps",
+          "reason": "A skipped optional step has no result to name for later reads",
           "related_capabilities": [
             "workflow.step.condition",
             "workflow.step.register",
@@ -701,7 +788,29 @@
             "workflow.step_forms.operation_call",
             "workflow.step_forms.value"
           ],
-          "rule": "The if and register fields cannot be used together in the MVP",
+          "rule": "The if and register fields cannot be used together",
+          "surface": "workflow_step"
+        },
+        {
+          "name": "workflow_step.gate_conflicts_with_register",
+          "reason": "gate admission should stay separate from step-result publication so blocked steps never need to imply a registered output surface",
+          "related_capabilities": [
+            "workflow.step.condition",
+            "workflow.step.register",
+            "workflow.step.value"
+          ],
+          "related_codes": [
+            "validation.workflow.step.gate_register_conflict",
+            "load.step.gate_register_conflict"
+          ],
+          "related_model_nodes": [
+            "workflow.step.gate",
+            "workflow.step.register",
+            "workflow.step_forms.gate_checkpoint",
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.value"
+          ],
+          "rule": "The gate and register fields cannot be used together; split the gate into a standalone checkpoint step before the registered step",
           "surface": "workflow_step"
         },
         {
@@ -761,7 +870,7 @@
         },
         {
           "name": "workflow_state_storage.relevant_identity_required",
-          "reason": "validation must precede observations and effects; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access; individual child validation is not a cross-invocation or cross-iteration guarantee, and no new loop mutation ban is added",
+          "reason": "Checks happen before observations and effects, so uncertain context alone does not reject read-only, read-before-write, or known-disjoint access. Checking one child workflow does not establish safety across separate calls or repeated work.",
           "related_capabilities": [],
           "related_codes": [
             "validation.workflow.state_storage.identity_unresolved"
@@ -867,13 +976,17 @@
         {
           "code_prefixes": [
             "runtime.value.input_",
+            "runtime.value.reference_",
             "runtime.state.input_",
+            "runtime.state.reference_",
             "runtime.state.binding_",
             "runtime.state.key_"
           ],
           "example_codes": [
             "runtime.value.input_missing",
+            "runtime.value.reference_unknown",
             "runtime.state.input_missing",
+            "runtime.state.reference_unknown",
             "runtime.state.binding_missing",
             "runtime.state.key_invalid"
           ],
@@ -938,6 +1051,7 @@
       "document_kind": "examples_catalog",
       "examples": [
         {
+          "definition": "Minimal workflow example that composes one published operation into one small end-to-end workflow shape.",
           "name": "minimal",
           "path": "examples/minimal.yaml",
           "related_topics": [
@@ -952,6 +1066,7 @@
           "verified": true
         },
         {
+          "definition": "Issue inspection example that uses a guard before loading one published GitHub issue probe.",
           "name": "inspect-issue",
           "path": "examples/inspect-issue.yaml",
           "related_topics": [
@@ -966,6 +1081,7 @@
           "verified": true
         },
         {
+          "definition": "Pull-request inspection example that composes the published PR metadata, diff, comments, reviews, checks, and timeline surfaces into one summary.",
           "name": "inspect-pr",
           "path": "examples/inspect-pr.yaml",
           "related_topics": [
@@ -981,6 +1097,7 @@
           "verified": true
         },
         {
+          "definition": "Native task-activation sequence that checks project policy, updates status, fetches and fast-forwards the base, selects a task branch, and remembers task state, with an optional explicit trusted-code hook.",
           "name": "set-active-task-from-gitx",
           "path": "examples/set-active-task-from-gitx.yaml",
           "related_topics": [
@@ -998,6 +1115,7 @@
           "verified": true
         },
         {
+          "definition": "Launcher selection example that shows one step-level launcher override inside a profile-scoped execution context.",
           "name": "launcher-step",
           "path": "examples/launcher-step.yaml",
           "related_topics": [
@@ -1014,6 +1132,7 @@
           "verified": true
         },
         {
+          "definition": "Workflow include example that reuses one plain fragment without passing include arguments.",
           "name": "include-plain",
           "path": "examples/include-plain.yaml",
           "related_topics": [
@@ -1027,6 +1146,7 @@
           "verified": true
         },
         {
+          "definition": "Workflow include example that passes explicit arguments into one reusable fragment contract.",
           "name": "include-args",
           "path": "examples/include-args.yaml",
           "related_topics": [
@@ -1042,6 +1162,39 @@
           "verified": true
         },
         {
+          "definition": "Playbook workflow catalog example that shows one published workflow entry with defaults, profiles, and state bindings.",
+          "name": "playbook-workflows",
+          "path": "examples/playbook-workflows.yaml",
+          "related_topics": [
+            "features",
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "playbook_workflow_catalog",
+            "workflow_entry_guidance",
+            "entry_state_bindings"
+          ],
+          "verified": true
+        },
+        {
+          "definition": "Playbook top-level example that shows the required version marker together with repository-wide connector defaults before workflow and profile activation.",
+          "name": "playbook-connectors",
+          "path": "examples/playbook-connectors.yaml",
+          "related_topics": [
+            "features",
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "playbook_version_marker",
+            "playbook_connector_defaults",
+            "profile_override_boundary"
+          ],
+          "verified": true
+        },
+        {
+          "definition": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs.",
           "name": "playbook-pre-run",
           "path": "examples/playbook-pre-run.yaml",
           "related_topics": [
@@ -1057,6 +1210,23 @@
           "verified": true
         },
         {
+          "definition": "Run-invocation example that contrasts named run-target fan-out with inline repeated steps, including outer if, gate, with, and register fields.",
+          "name": "run-fan-out",
+          "path": "examples/run-fan-out.yaml",
+          "related_topics": [
+            "model",
+            "examples",
+            "workflow-rules"
+          ],
+          "shows": [
+            "run_target_invocation",
+            "bounded_fan_out",
+            "inline_repeated_steps"
+          ],
+          "verified": true
+        },
+        {
+          "definition": "Text adapter example that projects, searches, and rewrites line-oriented text through the published text adapter surface.",
           "name": "text-adapter",
           "path": "examples/text-adapter.yaml",
           "related_topics": [
@@ -1072,6 +1242,7 @@
           "verified": true
         },
         {
+          "definition": "Local-expression filter example that demonstrates type predicates, membership tests, and boolean flow over embedded values.",
           "name": "local-expression-filters",
           "path": "examples/local-expression-filters.yaml",
           "related_topics": [
@@ -1086,6 +1257,7 @@
           "verified": true
         },
         {
+          "definition": "Workflow-local named expressions reuse input defaults in a boolean guard and publish a lowercased branch label as data, without running a shell command or creating a Git branch.",
           "name": "let-bindings",
           "path": "examples/let-bindings.yaml",
           "related_topics": [
@@ -1101,6 +1273,7 @@
           "verified": true
         },
         {
+          "definition": "Project-items example that binds one collection probe through let and then filters it by field values.",
           "name": "project-items-let",
           "path": "examples/project-items-let.yaml",
           "related_topics": [
@@ -1582,7 +1755,7 @@
               "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
+              "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
               "tags": [
                 "git",
                 "probe"
@@ -2092,7 +2265,7 @@
               "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Action operation 'git.sync.fetch'",
+              "summary": "Fetch from a configured remote name, not a direct URL, path, or option",
               "tags": [
                 "git",
                 "action"
@@ -2150,7 +2323,7 @@
               ],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Action operation 'git.sync.push'",
+              "summary": "Push to a configured remote name; omitted or null remote uses the upstream-derived name, validated against configured names",
               "tags": [
                 "git",
                 "action"
@@ -2285,7 +2458,7 @@
               "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Probe operation 'git.upstream'",
+              "summary": "Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
               "tags": [
                 "git",
                 "probe"
@@ -2416,6 +2589,58 @@
               "tags": [
                 "compose",
                 "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "remove the materialized runtime instance for one Compose service"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "service": "string"
+                  },
+                  "reference": "compose.remove"
+                }
+              ],
+              "failure_modes": [
+                "service_not_declared",
+                "service_running",
+                "project_invalid",
+                "orchestrator_unavailable",
+                "runtime_remove_failed",
+                "remove_failed"
+              ],
+              "inputs": {
+                "service": "string"
+              },
+              "invalidates_observations": [
+                "compose.*"
+              ],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "remove",
+              "outputs": {
+                "changed": "boolean",
+                "state": "string",
+                "target": "string",
+                "target_kind": "string"
+              },
+              "preflight_observations": [
+                {
+                  "probe": "compose.service",
+                  "with": {
+                    "service": "{service}"
+                  }
+                }
+              ],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Remove one stopped materialized Compose service instance.",
+              "tags": [
+                "compose",
+                "action"
               ]
             },
             {
@@ -2571,7 +2796,8 @@
             "context_fields": [
               "host",
               "viewer",
-              "scopes"
+              "scopes",
+              "repository"
             ],
             "prerequisites": [
               "gh binary available",
@@ -2636,7 +2862,7 @@
               "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.",
+              "summary": "Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are GitHub observations, not immutable event snapshots.",
               "tags": [
                 "gh",
                 "probe"
@@ -3314,8 +3540,7 @@
               "examples": [
                 {
                   "inputs": {
-                    "pull_number": 42,
-                    "repository": "owner/repo"
+                    "pull_number": 42
                   },
                   "reference": "gh.pr.diff"
                 }
@@ -4298,6 +4523,176 @@
                 "gh",
                 "probe"
               ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "gh.repo"
+                }
+              ],
+              "failure_modes": [
+                "repository_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "repo",
+              "outputs": {
+                "archived": "boolean",
+                "default_branch": "string | null",
+                "id": "string",
+                "is_fork": "boolean",
+                "parent_repository": "string | null",
+                "repository": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read normalized GitHub repository identity and fork facts.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "gh.repo.actions.permissions"
+                }
+              ],
+              "failure_modes": [
+                "repository_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "repo.actions.permissions",
+              "outputs": {
+                "allowed_actions": "string | null",
+                "enabled": "boolean",
+                "repository": "string",
+                "sha_pinning_required": "boolean | null"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read GitHub Actions permissions for one repository.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set the GitHub Actions enabled state for one repository"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "enabled": false
+                  },
+                  "reference": "gh.repo.actions.permissions.set"
+                }
+              ],
+              "failure_modes": [
+                "repository_not_found",
+                "set_blocked"
+              ],
+              "inputs": {
+                "enabled": "boolean",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "repo.actions.permissions.set",
+              "outputs": {
+                "changed": "boolean",
+                "enabled": "boolean",
+                "repository": "string"
+              },
+              "preflight_observations": [
+                {
+                  "fields": [
+                    "enabled"
+                  ],
+                  "probe": "gh.repo.actions.permissions",
+                  "with": {}
+                }
+              ],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Set the GitHub Actions enabled state for one repository.",
+              "tags": [
+                "gh",
+                "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "sync one fork repository default branch from its parent repository"
+              ],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "gh.repo.sync"
+                }
+              ],
+              "failure_modes": [
+                "repository_not_found",
+                "not_a_fork",
+                "archived_repository",
+                "default_branch_unavailable",
+                "sync_blocked"
+              ],
+              "inputs": {
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "repo.sync",
+              "outputs": {
+                "branch": "string",
+                "repository": "string",
+                "synced": "boolean",
+                "upstream_repository": "string"
+              },
+              "preflight_observations": [
+                {
+                  "fields": [
+                    "is_fork",
+                    "default_branch",
+                    "parent_repository",
+                    "archived"
+                  ],
+                  "probe": "gh.repo",
+                  "with": {}
+                }
+              ],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Sync one GitHub fork repository default branch from its parent repository.",
+              "tags": [
+                "gh",
+                "action"
+              ]
             }
           ]
         },
@@ -4385,8 +4780,11 @@
               "maturity": "stable",
               "name": "file",
               "outputs": {
+                "basename": "string",
                 "content": "string",
                 "exists": "boolean",
+                "extension": "string",
+                "filename_without_extension": "string",
                 "group": "string",
                 "kind": "string",
                 "line_count": "integer",
@@ -4399,7 +4797,7 @@
               "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Observe one filesystem path as one file snapshot with canonical content and file metadata.",
+              "summary": "Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.",
               "tags": [
                 "fs",
                 "probe"
@@ -4461,6 +4859,7 @@
           "item_type": "pre_run_entry",
           "launch_context_boundary": "playbook_owned",
           "optional": [
+            "with",
             "state_bindings"
           ],
           "requires": [
@@ -4480,6 +4879,7 @@
         },
         "workflow_entries": {
           "optional": [
+            "with",
             "description",
             "category",
             "when",
@@ -4524,6 +4924,14 @@
           "name": "file",
           "required": true,
           "type": "string"
+        },
+        {
+          "documentation_role": "playbook_owned_pre_run_invocation_inputs",
+          "name": "with",
+          "required": false,
+          "runtime_effect": "supplies_playbook_owned_pre_run_inputs",
+          "type": "object",
+          "value_surface": "static_yaml_values_only"
         },
         {
           "documentation_role": "playbook_owned_pre_run_state_bindings",
@@ -4590,6 +4998,23 @@
           "name": "file",
           "required": true,
           "type": "string"
+        },
+        {
+          "caller_slot_forms": [
+            {
+              "meaning": "caller_must_supply_input_via_cli_or_activation_override",
+              "shape": "key:"
+            },
+            {
+              "meaning": "caller_may_supply_input_via_cli_or_activation_override",
+              "shape": "key?:"
+            }
+          ],
+          "name": "with",
+          "required": false,
+          "runtime_effect": "supplies_playbook_owned_workflow_entry_inputs_or_declares_required_or_optional_caller_slots",
+          "type": "object",
+          "value_surface": "static_yaml_values_or_blank_required_slots_or_blank_optional_question_suffix_slots"
         },
         {
           "documentation_role": "project_local_workflow_summary",
@@ -4962,7 +5387,30 @@
         "supports_hyphenated_roles": true,
         "supports_nested_fields": true
       },
+      "preflight": {
+        "boundary": "Nested analysis does not defer mutations. A reached run or loop after deferral halts with state_deferral_invocation_barrier; profile switches cannot resume that barrier.",
+        "classification": "effectful",
+        "planning": "Retain ordered nodes with reuse_policy not_reusable and planned_probe_result null; execute admitted mutations once in order, with divergence_status not_applicable for deferred nodes.",
+        "rule": "Check conditions and gates first, then defer eligible top-level mutations without mutation, simulation, outputs, registers, or reusable observations; continue to independent guards.",
+        "top_level_status": "deferred",
+        "verification_scope": "Validate individual workflows and children, not flattened caller-child access streams. Cross-invocation and cross-iteration guarantees remain deferred; this is not a full composed-run or cross-run proof."
+      },
       "runtime_rules": [
+        {
+          "error_code": "validation.workflow.state_role.write_before_last_read",
+          "message": "Before binding, authoring validation requires writes or deletes of a logical state role only after its final read, regardless of key or field. Bound validation instead compares actual storage in each access context. Use step registers for per-run dataflow.",
+          "name": "write_after_last_read"
+        },
+        {
+          "error_code": "validation.workflow.state_storage.write_before_last_read",
+          "message": "After binding, write or delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field. Resolve relative paths in each access context; normalized paths, symlinks, and existing hardlinks can alias. The same role may access different files and be valid.",
+          "name": "bound_storage_write_after_last_read"
+        },
+        {
+          "error_code": "validation.workflow.state_storage.identity_unresolved",
+          "message": "Conservatively reject early only relevant write/later-read pairs whose storage identity cannot be established without execution or observations. This is not a proven ordering violation; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access. Cross-invocation and cross-iteration guarantees remain deferred, without a new loop mutation ban.",
+          "name": "relevant_storage_identity_required"
+        },
         {
           "error_code": "runtime.state.binding_missing",
           "message": "state role must be bound before runtime access",
@@ -5118,6 +5566,20 @@
         "access_surface": "inputs.name",
         "declaration_fields": [
           {
+            "authoring_role": "input_requiredness",
+            "default_when_omitted": true,
+            "name": "required",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "authoring_role": "input_default_value",
+            "name": "default",
+            "required": false,
+            "runtime_effect": "applies_when_input_is_missing",
+            "type": "json"
+          },
+          {
             "authoring_role": "input_meaning",
             "name": "description",
             "required": false,
@@ -5132,10 +5594,16 @@
           }
         ],
         "declaration_shape": "mapping",
-        "declared_keys_required_at_activation": true,
+        "declared_keys_required_at_activation": false,
+        "default_semantics": {
+          "default_makes_input_optional": true,
+          "legacy_empty_object_shorthand_required": true,
+          "legacy_scalar_shorthand_supported": true
+        },
         "empty_string_is_distinct_value": true,
         "null_is_distinct_from_missing": true,
         "rejects_unknown_activation_inputs": true,
+        "requiredness_surface": "per_input_required_field",
         "scope": "global",
         "validated_by": "runtime"
       },
@@ -5159,9 +5627,38 @@
           },
           {
             "authoring_role": "caller_scoped_invocation_condition",
+            "list_semantics": "implicit_all",
             "name": "if",
             "required": false,
-            "type": "string"
+            "structured_operators": [
+              "all",
+              "any",
+              "not"
+            ],
+            "surface": "expression_or_structured_condition",
+            "type": "condition"
+          },
+          {
+            "authoring_role": "caller_scoped_step_admission_condition",
+            "list_semantics": "implicit_all",
+            "name": "gate",
+            "required": false,
+            "structured_operators": [
+              "all",
+              "any",
+              "not"
+            ],
+            "structured_optional_fields": [
+              {
+                "authoring_role": "gate_failure_diagnostic_context",
+                "evaluation_timing": "only_when_gate_verdict_is_failed",
+                "name": "on_fail",
+                "type": "object",
+                "value_surface": "step_local_read_only_expression_or_literal"
+              }
+            ],
+            "surface": "expression_or_structured_condition",
+            "type": "condition"
           },
           {
             "authoring_role": "fragment_argument_bindings",
@@ -5185,12 +5682,14 @@
         "caller_scoped_binding_surface": [
           "inputs",
           "state",
-          "step"
+          "step",
+          "probe"
         ],
         "caller_scoped_condition_surface": [
           "inputs",
           "state",
-          "step"
+          "step",
+          "probe"
         ],
         "directive_field": "run",
         "execution_semantics": "runtime_scoped_fragment_invocation",
@@ -5206,7 +5705,8 @@
             "inputs",
             "state",
             "step",
-            "item"
+            "item",
+            "probe"
           ],
           "item_binding": "item",
           "outer_if_scope": "whole_invocation_step",
@@ -5220,7 +5720,8 @@
             "inputs",
             "state",
             "args",
-            "step"
+            "step",
+            "probe"
           ],
           "let_scope": "callee_local_only",
           "step_scope": "callee_local_only"
@@ -5230,6 +5731,7 @@
       },
       "step_form_rules": [
         {
+          "exception": "a standalone gate-only checkpoint step may omit a body form",
           "fields": [
             "uses",
             "run",
@@ -5273,6 +5775,15 @@
           "requires": [
             "for_each"
           ]
+        },
+        {
+          "fields": [
+            "gate",
+            "register"
+          ],
+          "kind": "conflict",
+          "message": "A workflow step must not define both gate and register. Split this into a standalone gate checkpoint step followed by a separate step that declares register.",
+          "name": "gate_forbids_register"
         }
       ],
       "step_forms": [
@@ -5280,10 +5791,17 @@
           "deprecated_optional_fields": [
             "launcher"
           ],
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "operation_call",
           "optional_fields": [
             "if",
+            "gate",
             "with",
             "register",
             "launcher"
@@ -5299,10 +5817,17 @@
         },
         {
           "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "run_invocation",
           "optional_fields": [
             "if",
+            "gate",
             "with",
             "for_each",
             "register"
@@ -5315,10 +5840,17 @@
         },
         {
           "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "inline_fan_out_invocation",
           "optional_fields": [
             "if",
+            "gate",
             "register"
           ],
           "required_fields": [
@@ -5328,10 +5860,17 @@
           ]
         },
         {
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "profile_switch",
           "optional_fields": [
-            "if"
+            "if",
+            "gate"
           ],
           "required_fields": [
             "name",
@@ -5339,10 +5878,17 @@
           ]
         },
         {
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "value",
           "optional_fields": [
             "if",
+            "gate",
             "register"
           ],
           "required_fields": [
@@ -5352,10 +5898,17 @@
           "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "result",
           "optional_fields": [
-            "if"
+            "if",
+            "gate"
           ],
           "required_fields": [
             "name",
@@ -5364,10 +5917,17 @@
           "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "publish",
           "optional_fields": [
-            "if"
+            "if",
+            "gate"
           ],
           "required_fields": [
             "name",
@@ -5376,10 +5936,17 @@
           "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "state_set",
           "optional_fields": [
-            "if"
+            "if",
+            "gate"
           ],
           "required_fields": [
             "name",
@@ -5387,19 +5954,56 @@
           ]
         },
         {
-          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
           "name": "state_delete",
           "optional_fields": [
-            "if"
+            "if",
+            "gate"
           ],
           "required_fields": [
             "name",
             "state_delete"
           ]
+        },
+        {
+          "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+          "if_list_semantics": "implicit_all",
+          "if_structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
+          "name": "gate_checkpoint",
+          "optional_fields": [
+            "if"
+          ],
+          "required_fields": [
+            "name",
+            "gate"
+          ]
         }
       ],
       "surface_constraints": {
         "authored_surfaces": {
+          "condition_field_forms": {
+            "expression_embedded_string": "deprecated_compatibility",
+            "expression_string": "native_local_expression",
+            "gate_structured_optional_fields": [
+              "on_fail"
+            ],
+            "structured_list": "implicit_all",
+            "structured_object_operators": [
+              "all",
+              "any",
+              "not"
+            ]
+          },
           "expression_first_value_fields": [
             "with",
             "value",
@@ -5430,7 +6034,8 @@
           "native_condition_fields": [
             "let",
             "guards",
-            "if"
+            "if",
+            "gate"
           ]
         },
         "guard_expression": {
@@ -5452,12 +6057,15 @@
             "is_boolean",
             "in",
             "field",
+            "lookup",
             "only",
             "flatten",
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "allowed_roots": [
             "inputs",
@@ -5499,12 +6107,15 @@
             "is_boolean",
             "in",
             "field",
+            "lookup",
             "only",
             "flatten",
             "first",
             "last",
             "length",
-            "unique"
+            "unique",
+            "catch",
+            "not_found"
           ],
           "allowed_roots": [
             "inputs",
@@ -5532,7 +6143,15 @@
           "type": "string"
         },
         {
-          "activation_requirement": "all_declared_keys_required",
+          "activation_timing": "before_guard_evaluation",
+          "applicability": "internal_project_bound_workflows_only",
+          "authoring_role": "workflow_owned_execution_profile_binding",
+          "name": "profile",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "activation_requirement": "per_input_required_or_default_semantics",
           "authoring_role": "declares_global_activation_inputs",
           "name": "inputs",
           "required": false,

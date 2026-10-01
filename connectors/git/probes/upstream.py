@@ -3,11 +3,43 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git upstream',
+  'goal': 'A workflow needs to know whether the current branch has a tracked branch before comparing divergence or deciding whether publishing makes sense.',
+   'summary': 'Observe the current branch tracking relationship, including whether one exists and the related remote and branch names.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to know whether the current branch tracks one upstream before comparing '
+                         'ahead/behind state or deciding whether pushing makes sense.',
+                           'Later logic needs the tracked branch relationship for the current branch rather than a repository-wide inventory.']},
+               {'heading': 'Do not use for',
+                'items': ['Reading repository-root or default-branch facts; use connector.git.repo for '
+                          'repository-level context.',
+                         'Comparing current branch divergence against its upstream; use connector.git.range when the '
+                         'workflow needs ahead/behind math after choosing base and head endpoints.',
+                           'Determining destinations, access, or publication safety.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.repo',
+                                'summary': 'Read repository-level facts before or alongside '
+                                          'upstream-tracking inspection'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current branch identity when the workflow first needs the '
+                                          'branch name itself'},
+                              {'handle': 'connector.git.range',
+                                'summary': 'Compare ahead/behind and merge-base facts after an upstream '
+                                          'target is known'},
+                              {'handle': 'connector.git.sync.push',
+                                'summary': 'Push once upstream-tracking context '
+                                          'has been confirmed'}]},
+              ]})
 
 def info():
     return probe(
         name="upstream",
+        human=git_human(HUMAN, provide="No inputs are required; use the current checkout whose tracked branch relationship matters.", result="Returns configured, branch, upstream_ref, remote, remote_branch, and repository_root. A detached checkout or branch without tracking is reported with configured=false; unavailable or inconsistent tracking information fails without a guessed result."),
         summary="Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
         outputs={
             "configured": "boolean",

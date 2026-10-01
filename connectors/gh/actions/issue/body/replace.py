@@ -7,11 +7,41 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub issue body replace',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow should rewrite '
+         'one issue body there by issue number.',
+ 'summary': 'Replace the entire GitHub issue body with one new body string and report whether the resulting body '
+            'changed. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit '
+            'repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'should rewrite one issue body there by issue number.',
+                         'The workflow owns the canonical issue description and should rewrite the full body '
+                         'deterministically.']},
+              {'heading': 'Do not use for',
+               'items': ['Preserving the current body and merely adding one extra section; use '
+                         'connector.gh.issue.body.append for that narrower update.',
+                         'Thread-style follow-up notes; use connector.gh.issue.comment.add when the update belongs in '
+                         'conversation history rather than the body.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.issue.body.append',
+                               'summary': 'Append one extra fragment while preserving the rest of the current body'},
+                              {'handle': 'connector.gh.issue.comment.add',
+                               'summary': 'Add a conversational note instead of rewriting the body'},
+                              {'handle': 'connector.gh.issue',
+                               'summary': 'Probe the current issue body before deciding whether a full rewrite is '
+                                          'appropriate'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue.body.append', 'connector.gh.issue.comment.add', 'connector.gh.issue']}]})
 
 def info():
     return action(
         name="issue.body.replace",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "body": "string"},
         effects=("replace GitHub issue body",),
         outputs={"issue_ref": "string", "url": "string", "body": "string", "changed": "boolean"},

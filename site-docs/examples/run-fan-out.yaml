@@ -1,0 +1,31 @@
+version: 0
+workflow: run-fan-out
+inputs:
+  enabled: {}
+  issue_numbers: {}
+blocks:
+- steps:
+  - name: review-each-issue
+    run: examples/fragments/check-issue.yaml
+    with:
+      repository: "acme/widgets"
+      issue_number: item
+    for_each: inputs.issue_numbers
+    if: inputs.enabled
+    register: reviewed_issues
+  - name: guard-review-fan-out
+    run: examples/fragments/check-issue.yaml
+    with:
+      repository: "acme/widgets"
+      issue_number: inputs.issue_numbers | first
+    gate:
+      all:
+        - inputs.enabled
+        - inputs.issue_numbers | length != 0
+  - name: publish-each-issue
+    for_each: inputs.issue_numbers
+    if: inputs.enabled
+    steps:
+    - name: publish-item
+      publish:
+        issue_number: item

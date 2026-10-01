@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from connectors.gh._repository import normalize_repository_value, resolve_repository_target
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, probe
+from ordo.model.human import declare_human
 
 
 _MAX_PAGES = 100
@@ -30,9 +31,144 @@ _ITEM_FIELDS = {
 }
 
 
+_LEGACY_HUMAN = declare_human({'title': 'GitHub pr list',
+ 'goal': 'GitHub candidate discovery: gh.pr.list observes a full filtered REST pull-request collection, not the search '
+         'index. repository is optional with the standard connector_contexts.gh.repository default and explicit '
+         'OWNER/REPO override. state is required: open|closed|all. Prefer state: all for find/create-oriented '
+         'inspection, optionally narrowed by head/head_owner/base. head_owner is the head repository owner (user or '
+         'organization), not PR author, and requires head; owner plus branch is not exact repository identity. Compare '
+         'returned head_repository for exact fork matching. Internal pagination has no public page/cursor/limit; '
+         'incomplete traversal fails. head with head_owner composes server owner:branch; bare head is matched exactly '
+         'locally across all state/base pages because GitHub does not guarantee bare-head filtering. Missing head_ref '
+         'for local filtering fails. The 100-page ceiling applies before local filtering. GitHub.com only, matching '
+         'bootstrap authentication. Full traversal is not an atomic snapshot or a total remote count guarantee. Empty '
+         'success means no matches within the supplied filters; one result is a candidate, not automatically the '
+         'correct PR. Workflow rules classify none, one open, multiple open, and closed history; unknown facts block '
+         'dependent decisions. Closed/merged history may require additional workflow rules. Listing does not authorize '
+         'creation, reopening, or merge. gh.pr reads detailed facts by pull_number; gh.pr.create is a separate action '
+         'with its own mandatory open check. Inspect connector.gh.pr.list for canonical filtered classification '
+         'fragments.',
+ 'summary': 'Probe one full filtered GitHub pull-request collection through REST list PRs, with minimal lifecycle and '
+            'head/base identity facts for workflow-owned candidate classification.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['GitHub candidate discovery: gh.pr.list observes a full filtered REST pull-request '
+                         'collection, not the search index. repository is optional with the standard '
+                         'connector_contexts.gh.repository default and explicit OWNER/REPO override. state is '
+                         'required: open|closed|all. Prefer state: all for find/create-oriented inspection, optionally '
+                         'narrowed by head/head_owner/base. head_owner is the head repository owner (user or '
+                         'organization), not PR author, and requires head; owner plus branch is not exact repository '
+                         'identity. Compare returned head_repository for exact fork matching. Internal pagination has '
+                         'no public page/cursor/limit; incomplete traversal fails. head with head_owner composes '
+                         'server owner:branch; bare head is matched exactly locally across all state/base pages '
+                         'because GitHub does not guarantee bare-head filtering. Missing head_ref for local filtering '
+                         'fails. The 100-page ceiling applies before local filtering. GitHub.com only, matching '
+                         'bootstrap authentication. Full traversal is not an atomic snapshot or a total remote count '
+                         'guarantee. Empty success means no matches within the supplied filters; one result is a '
+                         'candidate, not automatically the correct PR. Workflow rules classify none, one open, '
+                         'multiple open, and closed history; unknown facts block dependent decisions. Closed/merged '
+                         'history may require additional workflow rules. Listing does not authorize creation, '
+                         'reopening, or merge. gh.pr reads detailed facts by pull_number; gh.pr.create is a separate '
+                         'action with its own mandatory open check. Inspect connector.gh.pr.list for canonical '
+                         'filtered classification fragments.',
+                         'The repository argument is optional: a valid explicit ASCII OWNER/REPO overrides the '
+                         'bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed '
+                         'explicit values fail without fallback, and no resolved repository is an error.',
+                         'Supply required state explicitly as open, closed, or all. head is an optional branch filter, '
+                         'head_owner an optional user/org qualifier requiring head, and base an optional base branch '
+                         'filter. Narrowing head/base is workflow policy, not an operation requirement.',
+                         'Items expose number, url, state, draft, merged, merged_at, head_repository, '
+                         'head_repository_key, head_owner, head_ref, head_sha, base_repository, base_ref, base_sha, '
+                         'and pull_ref. Preserve these identities for exact fork matching before detailed gh.pr '
+                         'inspection.',
+                         'GitHub repository identity is case-insensitive. Raw head_repository preserves API case; '
+                         'nullable head_repository_key is the lowercase identity. Gate on a known nonnull key, then '
+                         'match with only(head_repository_key=inputs.head_repository | lower). Raw case-sensitive '
+                         'comparison could falsely report no PR when API/input case differs; unknown keys block '
+                         'dependent decisions.',
+                         'The list API supplies merged_at: a known merge timestamp derives merged=true, explicitly '
+                         'present null merged_at derives false, and missing or indeterminate evidence derives null. '
+                         'Never turn unknown into false or infer merged merely from closed state.',
+                         'An item with state: open and nonnull merged_at is contradictory and fails the observation.',
+                         'With head and head_owner, compose the server head filter as owner:branch. Without '
+                         'head_owner, send only state/base server filters and apply exact head matching locally across '
+                         'all pages; GitHub docs do not guarantee bare-head filtering. Missing head_ref when local '
+                         'filtering is required fails rather than silently discarding the item.',
+                         'Success requires full filtered traversal; transport, normalization, or pagination failure '
+                         'cannot publish partial success. A protective cap of 100 pages of 100 items applies to the '
+                         'traversed collection before local filtering and fails if more pages remain, even with few '
+                         'matches; it is not a public result limit.',
+                         'A subprocess timeout (subprocess.TimeoutExpired) returns pull_list_unavailable with no '
+                         'partial outputs.',
+                         'GitHub.com only, matching the bootstrap authentication host. Pagination accepts validated '
+                         'repository-name and numeric /repositories/id/pulls paths, validates repository IDs and '
+                         'pagination parameters, and constructs requests locally; never follow response URLs '
+                         'directly.']},
+              {'heading': 'Do not use for',
+               'items': ['A generic correct-PR selector, creation authorization, reopening, or merge decisions. '
+                         'gh.pr.create performs a separate mandatory open-duplicate check after workflow-owned history '
+                         'policy.',
+                         'Detailed facts for a known pull_number; use gh.pr. List facts are minimal and unavailable '
+                         'facts must remain unknown.',
+                         'PR author filtering: head_owner means head repository owner. One owner can own multiple '
+                         'repositories with the same branch; owner plus branch is not an exact repository guarantee.',
+                         'Public page, cursor, or limit controls, partial-success truncation, search-index '
+                         'completeness, atomic concurrency completeness, or a total remote count guarantee.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh',
+                               'summary': 'Parent GitHub family and repository context rules'},
+                              {'handle': 'connector.gh.pr',
+                               'summary': 'Detailed pull-request snapshot by number after workflow-owned candidate '
+                                          'classification'},
+                              {'handle': 'connector.gh.pr.create',
+                               'summary': 'Create after workflow-owned history policy, with a separate mandatory exact '
+                                          'open-duplicate check'},
+                              {'handle': 'workflow-rules',
+                               'summary': 'Own identity, ambiguity, closed history, and unknown-fact decisions in '
+                                          'workflow logic'}]},
+              {'heading': 'Examples',
+               'items': ['gh.pr.list with inputs {"base": "main", "head": "feature/topic", "head_owner": "acme", '
+                         '"state": "all"}',
+                         'gh.pr.list with inputs {"state": "all"}']},
+               {'heading': 'Inspect next', 'items': ['connector.gh.pr', 'connector.gh', 'workflow-rules']}]})
+
+HUMAN = declare_human({
+    'title': 'GitHub pr list',
+    'goal': 'Find pull requests matching a repository, branch, and lifecycle state before the workflow makes its own decision.',
+    'summary': 'Use gh.pr.list to list matching pull requests with the identity and lifecycle facts needed for workflow decisions.',
+    'sections': [
+        {'heading': 'Use when', 'items': [
+            'Supply state as open, closed, or all; optionally narrow the list with head, head_owner, or base.',
+            'Use the GitHub context repository or supply an explicit OWNER/REPO. head_owner identifies the source repository owner, not the pull request author.',
+            'Each result item provides number, pull_ref, and url; state and draft; merged and merged_at; and head_repository, head_repository_key, head_owner, head_ref, head_sha, base_repository, base_ref, and base_sha. Use complete and count before relying on items. Compare head_repository_key with the intended source repository for exact fork matching, head_ref and head_sha for the source revision, and base_repository, base_ref, and base_sha for the destination. One match is a candidate, not automatic authorization.',
+            'A closed pull request is not necessarily merged. Use the returned merged state when it is known; do not infer a merge from closed state, and treat an unknown merged state as unavailable evidence.',
+            'The result is a current observation, not an atomic snapshot. Unknown or incomplete facts must block a dependent decision.',
+        ]},
+        {'heading': 'What to provide', 'items': [
+            'Provide required `state` as `open`, `closed`, or `all`. Provide `repository` only to override the workflow GitHub repository context.',
+            'Optionally provide `head`, `head_owner`, and `base` to narrow the collection. `head_owner` requires `head` and identifies a source repository owner, not the pull request author.',
+        ]},
+        {'heading': 'Result and boundary', 'items': [
+            'A complete result has `complete=true`, `count`, and `items`. Each item exposes `pull_ref`, `number`, `url`, state and merge facts, source identity and `head_sha`, and destination identity and `base_sha` for later workflow decisions.',
+            'The probe fails rather than returning a partial collection. A complete collection is still not an atomic snapshot or automatic PR selection; concurrent changes and unknown item facts require another observation or a workflow decision.',
+        ]},
+        {'heading': 'Do not use for', 'items': [
+            'Selecting the correct pull request automatically, authorizing creation, reopening, or merging.',
+            'Detailed facts for a known pull request number; use gh.pr instead.',
+            'Pull request author filtering; a repository owner can have several repositories with the same branch name.',
+        ]},
+        {'heading': 'Related references', 'body': 'Use these related operations when the workflow needs a neighboring decision or observation.', 'references': [
+            {'handle': 'connector.gh.pr', 'summary': 'Inspect one known pull request by number.'},
+            {'handle': 'connector.gh.pr.create', 'summary': 'Create a new pull request after a workflow decision.'},
+            {'handle': 'workflow-rules', 'summary': 'Keep identity, ambiguity, and history decisions in workflow logic.'},
+        ]},
+    ],
+})
+
 def info():
     return probe(
         name="pr.list",
+        human=HUMAN,
         summary="List GitHub.com REST pull requests by explicit state (open|closed|all) and optional branches; bare head is filtered locally across all pages. Complete traversal is not an atomic snapshot.",
         inputs={"repository": "string", "head": "string", "head_owner": "string", "base": "string", "state": "string"},
         outputs={

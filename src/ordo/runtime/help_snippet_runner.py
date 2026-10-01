@@ -109,14 +109,6 @@ def verify_help_snippet(
             verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
         )
 
-    if world == "gh-sdk-probe-call" or insertion_mode == "sdk_probe_fragment":
-        from .help_sdk_snippet_runner import execute_sdk_probe_fragment
-
-        return execute_sdk_probe_fragment(
-            snippet=snippet, world=world, insertion_mode=insertion_mode,
-            target=target, effective_world=effective_world,
-        )
-
     if world == "gh-pr-create-new-only":
         return _execute_gh_pr_create_snippet(
             snippet=snippet, world=world, insertion_mode=insertion_mode,

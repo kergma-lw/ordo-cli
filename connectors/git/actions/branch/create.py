@@ -4,11 +4,52 @@ from __future__ import annotations
 
 from connectors.git.actions._shared import BRANCH_INVENTORY_INVALIDATION, head_commit, require_branch_name, require_commit, require_local_branch
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git branch create',
+ 'goal': 'A workflow needs to create a local working branch before switching to it or using it in later Git '
+         'operations.',
+ 'summary': 'Create one new local Git branch, optionally from an explicit start point, without switching the current '
+            'checkout automatically.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to create a local working branch before switching to it or using it in '
+                          'later Git operations.',
+                           'Use this to create a branch, not for a broader repository clone, fetch, or '
+                          'checkout workflow.']},
+              {'heading': 'Result and boundary',
+               'items': ['On success, the named local branch exists at the selected starting revision while the current '
+                         'checkout stays where it was.',
+                         'An existing branch, missing starting revision, or other Git block does not produce a new '
+                         'branch result.']},
+              {'heading': 'Do not use for',
+               'items': ['Switching the current checkout to the new or existing branch; use '
+                         'connector.git.branch.switch for that mutation.',
+                         'Inspecting whether a branch already exists; use connector.git.branches or connector.git.ref '
+                         'when the workflow only needs a read path.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.branch',
+                                'summary': 'Read current-branch context before or after '
+                                          'branch creation'},
+                              {'handle': 'connector.git.branch.switch',
+                               'summary': 'Typical follow-up action for moving the current checkout onto the created '
+                                          'branch'},
+                              {'handle': 'connector.git.branches',
+                                'summary': 'List branches before or after creation'},
+                              {'handle': 'connector.git.ref',
+                                'summary': 'Check one explicit ref when a full branch '
+                                          'inventory is unnecessary'}]},
+              {'heading': 'Examples',
+               'items': ['git.branch.create with inputs {"branch": "feature/demo", "start_point": "HEAD"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.branch.switch', 'connector.git.branches', 'connector.git.branch']}]})
 
 def info():
     return action(
         name="branch.create",
+        human=git_human(HUMAN, provide="`branch`: required. `start_point`: optional; provide a revision or null, or omit it to begin at the current head.", result="Returns branch and start_point. Existing names, missing start points, or blocks do not create a branch, and the current checkout remains unchanged on success."),
         inputs={"branch": "string", "start_point": "string | null"},
         effects=("create a new local branch",),
         outputs={"branch": "string", "start_point": "string"},

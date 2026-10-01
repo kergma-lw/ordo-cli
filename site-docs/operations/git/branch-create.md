@@ -1,132 +1,52 @@
-# git.branch.create
+# Git branch create
 
-Create a new local Git branch.
+A workflow needs to create a local working branch before switching to it or using it in later Git operations.
 
-Use this when a workflow needs Git state or Git side effects. In practice: create a new local Git branch.
+Create one new local Git branch, optionally from an explicit start point, without switching the current checkout automatically.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this to create a branch, not for a broader repository clone, fetch, or checkout workflow.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the named local branch exists at the selected starting revision while the current checkout stays where it was.
+- An existing branch, missing starting revision, or other Git block does not produce a new branch result.
+- Returns branch and start_point. Existing names, missing start points, or blocks do not create a branch, and the current checkout remains unchanged on success.
 
-```json
-{
-  "branch": "string",
-  "start_point": "string | null"
-}
-```
+## What to provide
 
-## Outputs
+- `branch`: required. `start_point`: optional; provide a revision or null, or omit it to begin at the current head.
 
-```json
-{
-  "branch": "string",
-  "start_point": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Switching the current checkout to the new or existing branch; use connector.git.branch.switch for that mutation.
+- Inspecting whether a branch already exists; use connector.git.branches or connector.git.ref when the workflow only needs a read path.
 
-- create a new local branch
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `invalid_branch`
-- `branch_exists`
-- `start_point_not_found`
-- `create_blocked`
 
-## Requirements
+- [`connector.git.branch`](branch.md): Read current-branch context before or after branch creation
+- [`connector.git.branch.switch`](branch-switch.md): Typical follow-up action for moving the current checkout onto the created branch
+- [`connector.git.branches`](branches.md): List branches before or after creation
+- [`connector.git.ref`](ref.md): Check one explicit ref when a full branch inventory is unnecessary
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.branch.create --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.branches`
-- `git.ref.*`
+## Canonical Examples
 
-## Example inputs
+### git_branch_create_step
 
-### `git.branch.create`
+Create one new local feature branch from HEAD without switching the current checkout automatically.
 
-```json
-{
-  "branch": "string",
-  "start_point": "string | null"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "create a new local branch"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "branch": "string",
-          "start_point": "string | null"
-        },
-        "reference": "git.branch.create"
-      }
-    ],
-    "failure_modes": [
-      "invalid_branch",
-      "branch_exists",
-      "start_point_not_found",
-      "create_blocked"
-    ],
-    "inputs": {
-      "branch": "string",
-      "start_point": "string | null"
-    },
-    "invalidates_observations": [
-      "git.branches",
-      "git.ref.*"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "branch.create",
-    "outputs": {
-      "branch": "string",
-      "start_point": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.branch.create'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "branch.create",
-  "reference": "git.branch.create",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: create-feature-branch
+        uses: git.branch.create
+        with:
+          branch: inputs.branch_name
+          start_point: "HEAD"
 ```

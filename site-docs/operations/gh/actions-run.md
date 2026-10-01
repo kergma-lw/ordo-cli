@@ -1,79 +1,72 @@
-# gh.actions.run
+# GitHub actions run
 
-Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.
-
-Use this when a workflow needs to inspect or change GitHub state. In practice: observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.
-
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
-
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "attempt": "integer",
-  "check_suite_id": "integer",
-  "repository": "string",
-  "run_id": "integer"
-}
-```
-
-## Outputs
-
-```json
-{
-  "check_suite_id": "integer",
-  "conclusion": "string",
-  "created_at": "string",
-  "event": "string",
-  "found": "boolean",
-  "head_branch": "string",
-  "head_sha": "string",
-  "pull_requests": [
-    {
-      "base_sha": "string",
-      "head_sha": "string",
-      "number": "integer"
-    }
-  ],
-  "repository": "string",
-  "run_attempt": "integer",
-  "run_id": "integer",
-  "run_started_at": "string",
-  "status": "string",
-  "updated_at": "string",
-  "url": "string",
-  "workflow_id": "integer",
-  "workflow_path": "string"
-}
-```
-
-## Authoring contract
+Supply exactly one non-null positive integer run_id or check_suite_id. Optional positive integer attempt selects that numbered attempt; omitted/null attempt reads the latest observed run_attempt, then retrieves the pinned numbered attempt. Booleans are not integer identifiers.
 
 Observe one GitHub Actions run attempt, selected by a run ID or a check suite's direct Actions association.
 
-- Supply exactly one non-null positive integer run_id or check_suite_id. Optional positive integer attempt selects that numbered attempt; omitted/null attempt reads the latest observed run_attempt, then retrieves the pinned numbered attempt. Booleans are not integer identifiers.
-- repository is optional and nullable: explicit valid literal ASCII OWNER/REPO overrides bootstrapped connector_contexts.gh.repository; omitted/null uses context. Malformed explicit values fail without fallback; no resolved target is input_error. Bootstrap requires an available authenticated gh CLI with repository access on github.com. Context is a default, not an authorization allowlist.
-- For check_suite_id, resolve the REST suite node then query GraphQL CheckSuite.workflowRun directly, validating repository, node type, suite identity and backreference. No repository-wide run scan is used. A validated null association returns found=false, requested check_suite_id, repository, pull_requests=[], and all other run fields null. Missing nodes/fields or GraphQL errors fail, not normal absence.
-- On found=true, outputs include repository, run_id, check_suite_id, run_attempt, workflow_id, workflow_path, event, status, conclusion, head_sha, head_branch, url, created_at, updated_at, run_started_at, and pull_requests with number/head_sha/base_sha. Optional API facts remain null; missing pull_requests becomes []. Present SHAs are full hexadecimal values. Output run_attempt becomes the explicit attempt input to gh.actions.run.jobs.
-- Invalid selectors, attempt or repository resolution produce input_error. API/transport failures, malformed responses and repository/run/attempt/suite mismatches produce actions_run_unavailable with reason diagnostics and raw request evidence. HTTP 404 is not found=false; shared bootstrap failures can precede operation execution.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+## Use when
 
-### Boundaries
+- Repository is optional and nullable. Leave it out to use the workflow's GitHub repository context, or provide a valid ASCII OWNER/REPO value to inspect another repository. An invalid explicit value is rejected rather than falling back to the workflow target. The selected repository must be accessible to the authenticated GitHub command-line session.
+- For check_suite_id, resolve its directly associated Actions run and confirm the repository and suite identity. No repository-wide run scan is used. A known null association returns found=false, requested check_suite_id, repository, pull_requests=[], and all other run fields null. Missing association details fail, not normal absence.
+- On found=true, outputs include repository, run_id, check_suite_id, run_attempt, workflow_id, workflow_path, event, status, conclusion, head_sha, head_branch, url, created_at, updated_at, run_started_at, and pull_requests with number/head_sha/base_sha. Optional GitHub facts remain null; missing pull_requests becomes []. Present SHAs are full hexadecimal values. Output run_attempt becomes the explicit attempt input to gh.actions.run.jobs.
+- Invalid selectors, attempts, or repository values are rejected. If the selected run cannot be read, is inconsistent with the selected repository or suite, or returns incomplete data, the result is unavailable. A missing run is not found=false; found=false only describes a check suite with no associated Actions run.
+
+## What to provide
+
+- Provide exactly one required positive integer: `run_id` or `check_suite_id`. Do not provide both. `attempt` is optional; when omitted or null, the operation observes the latest attempt and then pins that numbered attempt.
+- Provide `repository` only to override the workflow GitHub repository context. Use `check_suite_id` from a pull request check when the workflow needs its directly associated Actions run.
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `run_id`: conditional.
+- `check_suite_id`: conditional.
+- `attempt`: optional.
+
+## Result and boundary
+
+- When `found=true`, later steps can use `run_id`, `check_suite_id`, `run_attempt`, `head_sha`, lifecycle facts, and `pull_requests`. Pass `run_id` and the returned `run_attempt` to `gh.actions.run.jobs`.
+- For a known check suite without an associated run, `found=false` is the result; it is not a failed run. Unknown or unavailable observations fail rather than reporting absence. The latest-then-pinned lookup is non-atomic and does not establish merge policy.
+- Usable result fact: `repository`.
+- Usable result fact: `workflow_id`.
+- Usable result fact: `workflow_path`.
+- Usable result fact: `event`.
+- Usable result fact: `status`.
+- Usable result fact: `conclusion`.
+- Usable result fact: `head_branch`.
+- Usable result fact: `url`.
+- Usable result fact: `created_at`.
+- Usable result fact: `updated_at`.
+- Usable result fact: `run_started_at`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
 
 - Run triggering, reruns, cancellation, polling, log retrieval, required-job selection, or merge policy. This is read-only observation.
-- A tested-SHA attestation or immutable event snapshot: PR head/base SHAs are API observations, not proof of worker checkout. Latest-then-pinned retrieval is non-atomic and does not promise the newest attempt at return time.
+- An immutable event snapshot: PR head/base SHAs are GitHub observations. Latest-then-pinned retrieval is non-atomic and does not promise the newest attempt at return time.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.actions.run.jobs`](actions-run-jobs.md): Full jobs traversal using the observed run_id and explicit attempt=run_attempt
+- [`connector.gh.pr.checks`](pr-checks.md): PR-attached check runs expose nullable check_suite_id as the selector bridge
+- [`connector.gh.repo.actions.permissions`](repo-actions-permissions.md): Repository Actions permission settings, not run observations
+- `ordo-help describe connector.gh`: GitHub access requirements and family operation boundaries
+
+## Inspect next
+
+- connector.gh.actions.run.jobs
+- connector.gh.pr.checks
+- connector.gh
+
+## Exact machine contract
+
+Use `ordo-help operation gh.actions.run --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_actions_direct
 
-Observe a known run, then pass its registered run_id and latest observed run_attempt to pinned jobs. Require complete collection before publishing every job; count=0 is valid. Exact YAML executes with normalized fixtures only: this verifies workflow handoff, not HTTP source acquisition, GraphQL association, pagination, worker checkout, atomic snapshots, or merge policy.
+Observe a known run, then pass its registered run_id and latest observed run_attempt to pinned jobs. Require complete collection before publishing every job; count=0 is valid. The workflow keeps run and attempt identities explicit, requires a complete job collection, and does not establish an atomic snapshot or merge policy.
 
 ```yaml
 version: 0
@@ -109,10 +102,9 @@ blocks:
           complete: step.jobs.outputs.complete
 
 ```
-
 ### gh_actions_bridge
 
-Read complete PR checks, select check runs by explicit check_suite_id (several checks may share a suite), resolve the suite through gh.actions.run, gate on found, and pass registered run_id/run_attempt to complete jobs. No run ID is guessed from a check ID or URL. Exact YAML executes with normalized fixtures only: this verifies workflow handoff, not HTTP source acquisition, GraphQL association, pagination, worker checkout, atomic snapshots, or merge policy.
+Read complete PR checks, select check runs by explicit check_suite_id (several checks may share a suite), resolve the suite through gh.actions.run, gate on found, and pass registered run_id/run_attempt to complete jobs. No run ID is guessed from a check ID or URL. The workflow keeps run and attempt identities explicit, requires a complete job collection, and does not establish an atomic snapshot or merge policy.
 
 ```yaml
 version: 0
@@ -165,10 +157,9 @@ blocks:
           complete: step.jobs.outputs.complete
 
 ```
-
 ### gh_actions_null_suite
 
-The same bridge gates before run lookup when the suite selector is null. Nullable check_suite_id is normal; it cannot identify an Actions run. Exact YAML executes with normalized fixtures only: this verifies workflow handoff, not HTTP source acquisition, GraphQL association, pagination, worker checkout, atomic snapshots, or merge policy.
+The same bridge gates before run lookup when the suite selector is null. Nullable check_suite_id is normal; it cannot identify an Actions run. The workflow keeps run and attempt identities explicit, requires a complete job collection, and does not establish an atomic snapshot or merge policy.
 
 ```yaml
 version: 0
@@ -221,10 +212,9 @@ blocks:
           complete: step.jobs.outputs.complete
 
 ```
-
 ### gh_actions_no_run
 
-The same bridge stops at the found gate when the suite has no associated Actions run (found=false). Jobs never receives a guessed run or null attempt. Exact YAML executes with normalized fixtures only: this verifies workflow handoff, not HTTP source acquisition, GraphQL association, pagination, worker checkout, atomic snapshots, or merge policy.
+The same bridge stops at the found gate when the suite has no associated Actions run (found=false). Jobs never receives a guessed run or null attempt. The workflow keeps run and attempt identities explicit, requires a complete job collection, and does not establish an atomic snapshot or merge policy.
 
 ```yaml
 version: 0
@@ -276,119 +266,4 @@ blocks:
           count: step.jobs.outputs.count
           complete: step.jobs.outputs.complete
 
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `input_error`
-- `actions_run_unavailable`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.actions.run`
-
-```json
-{
-  "attempt": "integer",
-  "check_suite_id": "integer",
-  "repository": "string",
-  "run_id": "integer"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "attempt": "integer",
-          "check_suite_id": "integer",
-          "repository": "string",
-          "run_id": "integer"
-        },
-        "reference": "gh.actions.run"
-      }
-    ],
-    "failure_modes": [
-      "input_error",
-      "actions_run_unavailable"
-    ],
-    "inputs": {
-      "attempt": "integer",
-      "check_suite_id": "integer",
-      "repository": "string",
-      "run_id": "integer"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "actions.run",
-    "outputs": {
-      "check_suite_id": "integer",
-      "conclusion": "string",
-      "created_at": "string",
-      "event": "string",
-      "found": "boolean",
-      "head_branch": "string",
-      "head_sha": "string",
-      "pull_requests": [
-        {
-          "base_sha": "string",
-          "head_sha": "string",
-          "number": "integer"
-        }
-      ],
-      "repository": "string",
-      "run_attempt": "integer",
-      "run_id": "integer",
-      "run_started_at": "string",
-      "status": "string",
-      "updated_at": "string",
-      "url": "string",
-      "workflow_id": "integer",
-      "workflow_path": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "actions.run",
-  "reference": "gh.actions.run",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

@@ -1,50 +1,51 @@
-# gh.repo.sync
+# GitHub repo sync
 
-Sync one GitHub fork repository default branch from its parent repository.
+the workflow's GitHub repository context already names the normal fork target and the workflow needs to keep its canonical default branch current with the parent repository.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: sync one GitHub fork repository default branch from its parent repository.
+Sync one GitHub fork repository's default branch from its parent repository and return the synced branch together with the resolved upstream repository name. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "branch": "string",
-  "repository": "string",
-  "synced": "boolean",
-  "upstream_repository": "string"
-}
-```
-
-## Authoring contract
-
-Sync one GitHub fork repository's default branch from its parent repository and return the synced branch together with the resolved upstream repository name. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.
-
-- connector_contexts.gh.repository already names the normal fork target and the workflow needs to keep its canonical default branch current with the parent repository.
 - The authored intent is the GitHub-native fork sync operation itself, not a local git fetch/merge sequence or a repository-settings mutation helper.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+
+## Result and boundary
+
+- Usable result fact: `repository`.
+- Usable result fact: `branch`.
+- Usable result fact: `upstream_repository`.
+- Usable result fact: `synced`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails. Required preflight facts must be established before the change is submitted.
+
+## Do not use for
 
 - Inspecting whether the repository is a fork or what its default branch is; use connector.gh.repo for that read-only fact surface first or separately.
 - Local checkout synchronization or worktree mutation; use connector.git.* when the real target is the local repository rather than GitHub-hosted fork state.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.repo`](repo.md): Parent repository probe for fork identity and default-branch facts before or after sync
+- [`connector.git.sync.fetch`](../git/sync-fetch.md): Sibling local Git action for fetching refs into a local clone rather than syncing a hosted GitHub fork
+- [`connector.git.repo`](../git/repo.md): Sibling local Git probe when later workflow logic needs local repository state after remote fork sync
+- [`connector.gh.pr`](pr.md): Sibling GitHub probe for PR-level follow-up work once repository sync is complete
+
+## Inspect next
+
+- connector.gh.repo
+- connector.git.sync.fetch
+- connector.git.repo
+
+## Exact machine contract
+
+Use `ordo-help operation gh.repo.sync --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_repo_sync_step
 
@@ -54,123 +55,4 @@ Sync one hosted GitHub fork repository's default branch from its parent reposito
   - name: sync-default-branch
     uses: gh.repo.sync
     register: sync_result
-```
-
-## Effects
-
-- sync one fork repository default branch from its parent repository
-
-## Failure modes
-
-- `repository_not_found`
-- `not_a_fork`
-- `archived_repository`
-- `default_branch_unavailable`
-- `sync_blocked`
-
-## Requirements
-
-- None
-
-## Preflight observations
-
-```json
-[
-  {
-    "fields": [
-      "is_fork",
-      "default_branch",
-      "parent_repository",
-      "archived"
-    ],
-    "probe": "gh.repo",
-    "with": {}
-  }
-]
-```
-
-## Example inputs
-
-### `gh.repo.sync`
-
-```json
-{}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "sync one fork repository default branch from its parent repository"
-    ],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "gh.repo.sync"
-      }
-    ],
-    "failure_modes": [
-      "repository_not_found",
-      "not_a_fork",
-      "archived_repository",
-      "default_branch_unavailable",
-      "sync_blocked"
-    ],
-    "inputs": {
-      "repository": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "repo.sync",
-    "outputs": {
-      "branch": "string",
-      "repository": "string",
-      "synced": "boolean",
-      "upstream_repository": "string"
-    },
-    "preflight_observations": [
-      {
-        "fields": [
-          "is_fork",
-          "default_branch",
-          "parent_repository",
-          "archived"
-        ],
-        "probe": "gh.repo",
-        "with": {}
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Sync one GitHub fork repository default branch from its parent repository.",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "repo.sync",
-  "reference": "gh.repo.sync",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

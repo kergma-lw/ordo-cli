@@ -12,11 +12,43 @@ from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_iden
 from connectors.gh._pr_stack import normalize_pr_stack, valid_pr_identity
 from connectors.gh._pr_commit_evidence import observe_pr_commit
 from ordo.plugin_sdk import OperationContext, OperationOutcome, action, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub pr merge',
+  'goal': 'Request a merge for one accepted pull request while preserving the exact source revision that checks accepted.',
+  'summary': 'Submit one asynchronous GitHub merge request for a standalone pull request, bound to the source revision accepted by the workflow.',
+  'sections': [{'heading': 'Use when',
+                'items': ['Provide the pull request number, merge method (merge, squash, or rebase), and expected_head_sha. Use the workflow\'s GitHub repository context normally, or name another repository explicitly when needed.',
+                           'expected_head_sha is the full 40-character commit ID of the pull request source revision whose checks the workflow accepted. Take it from gh.pr.head_sha or gh.pr.checks.head_sha at that decision point, save it, and pass the saved value unchanged. Do not replace it with a later read.',
+                           'The pull request must be a standalone pull request with a known scope. The action does not submit a merge when that cannot be established or when its current head differs from expected_head_sha.',
+                           'Save request_id with the repository and pull request number for gh.pr.merge.request. Later decisions can use submission, state, merged, merge_sha, observed_head_sha, stack_scope, and request_id. A submitted or queued request is not proof of completion.',
+                           'A result can confirm that the request was submitted, that the pull request was already merged or queued, or that GitHub refused it. An unknown result confirms none of these outcomes: inspect the saved request and the pull request before deciding whether to try again.']},
+               {'heading': 'What to provide',
+                 'items': ['`pull_number`: required. `merge_method`: required and is `merge`, `squash`, or `rebase`. `expected_head_sha`: required and is the accepted pull request head as a full 40-character commit ID.',
+                            '`repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow\'s playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call. Retain the accepted head before this action; do not substitute a newer observation.']},
+               {'heading': 'Result and boundary',
+                'items': ['Later steps can use `repository`, `pull_number`, `request_id`, `state`, `merged`, `merge_sha`, `merge_method`, `merge_action`, `expected_head_sha`, `message`, `submission`, `request_compatibility`, `stack_scope`, and `observed_head_sha`. `request_id` with the repository and pull number identifies the submitted request for `gh.pr.merge.request`.',
+                          '`submission=accepted` or `existing` confirms a compatible request, not completion. `already_enqueued` is not merged. An unknown result is not proof of submission or non-submission. Head mismatch, unsupported or unknown stack scope, and failed preflight reading submit no merge.',
+                          'The source revision guard does not lock the target branch or stack membership; concurrent changes require a new workflow decision.']},
+                 {'heading': 'Do not use for',
+                'items': ['No atomic base or stack guarantee is provided: the source revision guard does not freeze the target branch or prevent a later stack change. Stacked and unknown scope are rejected.',
+                          'Waiting for completion, managing a queue, changing merge settings, or deleting branches.',
+                          'Treating submission as completion. Use gh.pr.merge.request to observe the saved request, and gh.pr when the workflow needs the pull request\'s current state.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.pr', 'summary': 'Observe PR identity and stack scope'},
+                              {'handle': 'connector.gh.pr.checks',
+                               'summary': 'Observe CI evidence whose accepted head must be retained'},
+                              {'handle': 'connector.gh.pr.merge.request',
+                               'summary': 'Observe the saved request UUID once after submission'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.pr.checks', 'connector.gh.pr', 'connector.gh.pr.merge.request']}]})
 
 def info():
     return action(
         name="pr.merge",
+        human=HUMAN,
         summary="Request a SHA-guarded direct async merge; save request_id for gh.pr.merge.request. Acceptance is not completion.",
         inputs={**PULL_IDENTITY_INPUTS, "merge_method": "string", "expected_head_sha": "string"},
         outputs={**MERGE_OUTPUTS, "submission": "string", "request_compatibility": "string", "stack_scope": "string", "observed_head_sha": "string"},

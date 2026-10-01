@@ -1,148 +1,51 @@
-# git.branch.switch
+# Git branch switch
 
-Switch the current checkout to a local Git branch.
+A workflow needs to move the current checkout onto one known local branch before later repository actions run.
 
-Use this when a workflow needs Git state or Git side effects. In practice: switch the current checkout to a local Git branch.
+Switch the current Git checkout to one existing local branch and report whether the checkout actually changed.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this to move the checkout, with explicit reporting about whether the branch was already current.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the requested local branch is current, with an explicit result when it was already checked out.
+- Local changes that would be overwritten, unresolved repository state, or other Git blocks do not produce a completed switch result.
+- Returns branch and changed, where changed=false means it was already current. Missing branch, conflicting local changes, unresolved state, or other blocks do not report a completed switch.
 
-```json
-{
-  "branch": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `branch`: required; provide an existing local branch. Confirm that switching the current checkout to this branch is safe for the next workflow step.
 
-```json
-{
-  "branch": "string",
-  "changed": "boolean"
-}
-```
+## Do not use for
 
-## Effects
+- Creating a new branch before switching; use connector.git.branch.create first when the target branch may not exist yet.
+- Inspecting current branch state without mutating checkout; use connector.git.branch for the read-only checkout lookup.
 
-- switch current checkout to a local branch
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `branch_not_found`
-- `worktree_change_conflict`
-- `unresolved_state`
-- `switch_blocked`
 
-## Requirements
+- [`connector.git.branch`](branch.md): Read current-branch context before or after switching
+- [`connector.git.branch.create`](branch-create.md): Sibling action for creating a branch before switching to it
+- [`connector.git.worktree`](worktree.md): Read broader worktree cleanliness when switch safety depends on local changes
+- [`connector.git.state`](state.md): Read broader repository state when branch switching is only part of the decision
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.branch.switch --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.branch`
-- `git.branches`
-- `git.upstream`
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.repo`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_branch_switch_step
 
-### `git.branch.switch`
+Switch the current checkout onto the created feature branch before later branch-specific work begins.
 
-```json
-{
-  "branch": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "switch current checkout to a local branch"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "branch": "string"
-        },
-        "reference": "git.branch.switch"
-      }
-    ],
-    "failure_modes": [
-      "branch_not_found",
-      "worktree_change_conflict",
-      "unresolved_state",
-      "switch_blocked"
-    ],
-    "inputs": {
-      "branch": "string"
-    },
-    "invalidates_observations": [
-      "git.branch",
-      "git.branches",
-      "git.upstream",
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.repo",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "branch.switch",
-    "outputs": {
-      "branch": "string",
-      "changed": "boolean"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.branch.switch'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "branch.switch",
-  "reference": "git.branch.switch",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: switch-to-feature-branch
+        uses: git.branch.switch
+        with:
+          branch: inputs.branch_name
 ```

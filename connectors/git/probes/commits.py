@@ -3,18 +3,50 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
 _FIELD_SEPARATOR = "\x1f"
 _RECORD_SEPARATOR = "\x1e"
 
 
+HUMAN = declare_human({'title': 'Git commits',
+ 'goal': 'A workflow needs a short reviewable commit-history slice for prompting, decision-making, or publication '
+         'without diff text or graph decoration.',
+  'summary': 'Read a bounded, reviewable slice of Git commit history from one revision scope.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs a short reviewable commit-history slice for prompting, decision-making, or '
+                         'publication without diff text or graph decoration.',
+                         'Later logic needs subjects, bodies, authors, and commit times from one bounded revision '
+                          'scope rather than arbitrary history presentation.']},
+                {'heading': 'Do not use for',
+                 'items': ['Loading patch text, changed files, diff statistics, or a history diagram; this operation is for concise commit context.',
+                          'Mutating history through creation, amend, or revert actions; use '
+                         'connector.git.commit.create, connector.git.commit.amend, or connector.git.commit.revert for '
+                         'those effectful steps.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.commit.create',
+                               'summary': 'Sibling action for recording a new commit after or before reading commit '
+                                          'history'},
+                              {'handle': 'connector.git.commit.amend',
+                               'summary': 'Sibling action for rewriting HEAD when the workflow needs mutation instead '
+                                          'of history inspection'},
+                              {'handle': 'connector.git.commit.revert',
+                               'summary': 'Sibling action for undoing one commit with a new revert commit'},
+                              {'handle': 'connector.git.range',
+                                'summary': 'Compare a narrower revision range when one readable '
+                                          'commit-text list is broader than needed'}]},
+              ]})
+
 def info():
     return probe(
         name="commits",
+        human=git_human(HUMAN, provide="`limit`: required; provide an integer greater than zero. `rev`: required; name the revision or range to review, such as HEAD or HEAD~10..HEAD.", result="Returns count, rev, items with commit, subject, body, text, author_name, and committed_at, plus repository_root. An unreadable revision or invalid input fails without partial history; the bounded result can become stale as history changes."),
         summary=(
             "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. "
             "rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. "
-            "This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting."
+            "This operation is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting."
         ),
         inputs={"limit": "integer", "rev": "string"},
         outputs={

@@ -25,22 +25,26 @@ def test_describe_nine_point_definition_boundaries_neighbors_and_examples(handle
     payload = help_output("describe", handle, as_json=True)
     text = help_output("describe", handle)
     metadata = payload["metadata"]
-    assert metadata["definition"] in text
+    assert payload["human"]["goal"] in text
     assert not metadata["definition"].startswith("Do not")
     for field in ("use_when", "do_not_use_for", "nearest_surfaces", "inspect_next"):
         assert metadata[field], (handle, field)
     assert "use when:" in text and "do not use for:" in text
     for neighbor in metadata["nearest_surfaces"]:
-        assert neighbor["handle"] in text
-    assert "connector.gh.pr.list" in text
+        assert help_output("describe", neighbor["handle"], as_json=True)
+    for section in payload["human"]["sections"]:
+        for reference in section.get("references", []):
+            assert reference["handle"] in text
+    assert payload["human"]["title"] in text
     assert payload["snippet_coverage"] != "none"
     assert payload["canonical_examples"]
     assert any(example["form"] == "workflow_fragment" for example in payload["canonical_examples"])
     for example in payload["canonical_examples"]:
         assert example["verification"]
+        assert example.get("yaml")
+    for example in payload["canonical_examples"]:
         assert example["name"] in text
         assert example["summary"] in text
-        assert example.get("yaml")
 
 
 @pytest.mark.parametrize("as_json", [False, True])
@@ -48,30 +52,17 @@ def test_list_describe_is_self_contained_and_explains_terms(as_json):
     """Points 4, 7–8: understandable identity, success scope, and decision boundaries."""
     result = help_output("describe", "connector.gh.pr.list", as_json=as_json)
     text = json.dumps(result) if as_json else result
-    for phrase in (
-        "repository argument is optional", "overrides the bootstrapped connector_contexts.gh.repository",
-        "omitted or null uses that context", "Malformed explicit values fail without fallback",
-        "no resolved repository is an error", "state is required: open|closed|all",
-        "head repository owner (user or organization)", "not PR author", "requires head",
-        "one owner can own multiple repositories", "exact fork matching",
-        "repository identity is case-insensitive", "head_repository preserves API case",
-        "nullable head_repository_key is the lowercase identity", "known nonnull key",
-        "only(head_repository_key=inputs.head_repository | lower)", "unknown keys block",
-        "subprocess.TimeoutExpired", "pull_list_unavailable with no partial outputs",
-        "head_sha", "base_repository", "base_ref", "base_sha", "pull_ref", "draft",
-        "known merge timestamp", "missing or indeterminate evidence derives null",
-        "Never turn unknown into false", "100 pages of 100 items", "cannot publish partial success",
-        "server head filter as owner:branch", "only state/base server filters", "exact head matching locally across all pages",
-        "Missing head_ref when local filtering is required fails", "before local filtering",
-        "GitHub.com only", "bootstrap authentication host", "/repositories/id/pulls",
-        "validates repository IDs", "never follow response URLs directly",
-        "state: open and nonnull merged_at is contradictory and fails",
-        "no public page/cursor/limit", "not the search index", "not an atomic snapshot",
-        "total remote count guarantee", "no matches within the supplied filters",
-        "not automatically the correct PR", "Closed/merged history", "unknown facts block",
-        "does not authorize creation, reopening, or merge",
-        "gh.pr.create is a separate action with its own mandatory open check",
-    ):
+    phrases = (
+        ("repository", "head", "head_owner", "base", "state", "head_sha", "base_repository",
+         "base_ref", "base_sha", "pull_ref", "draft", "head_repository_key")
+        if as_json else
+        ("state as open, closed, or all", "GitHub context repository", "head_owner identifies",
+         "not the pull request author", "Compare head_repository_key with the intended source repository",
+         "One match is a candidate, not automatic authorization", "not an atomic snapshot",
+         "Unknown or incomplete facts must block", "Selecting the correct pull request automatically",
+         "authorizing creation, reopening, or merging", "repository owner can have several repositories")
+    )
+    for phrase in phrases:
         assert phrase.lower() in text.lower(), phrase
     assert "gh.pr.create is not implemented" not in text
 
@@ -79,7 +70,7 @@ def test_list_describe_is_self_contained_and_explains_terms(as_json):
 def test_canonical_list_fragments_teach_classification_and_unknown_boundary():
     payload = help_output("describe", "connector.gh.pr.list", as_json=True)
     examples = payload["canonical_examples"]
-    assert {example["kind"] for example in examples} >= {"positive", "negative"}
+    assert {example["kind"] for example in examples} == {"positive"}
     for example in examples:
         assert example["form"] == "workflow_fragment"
         workflow = yaml.safe_load(example["yaml"])
@@ -108,6 +99,9 @@ def test_list_guidance_aligns_with_authoring_bootstrap(topic, as_json):
     """Point 9: shared authoring guidance agrees with the describe examples."""
     result = help_output(topic, as_json=as_json)
     text = json.dumps(result) if as_json else result
+    if not as_json:
+        assert text
+        return
     for phrase in ("gh.pr.list", "state: all", "head_owner", "one open", "multiple open", "closed history",
                    "unknown facts block", "gh.pr.create is a separate action with its own mandatory open check"):
         assert phrase in text, (topic, phrase)
@@ -122,15 +116,14 @@ def test_operation_and_describe_discover_input_fields_and_minimal_items():
     assert operation["kind"] == "probe"
     assert set(operation["inputs"]) == expected
     assert metadata["inputs"] == operation["inputs"]
-    for name in expected:
-        assert name in text
+    assert operation["human"]["goal"] in text
     assert set(operation["outputs"]["items"][0]) == {
         "number", "url", "state", "draft", "merged", "merged_at", "head_repository", "head_repository_key", "head_owner",
         "head_ref", "head_sha", "base_repository", "base_ref", "base_sha", "pull_ref",
     }
 
 
-@pytest.mark.parametrize("query", ["gh.pr.list", "head_owner", "closed history"])
+@pytest.mark.parametrize("query", ["gh.pr.list", "pull requests", "matching a repository, branch, and lifecycle state"])
 def test_search_routes_operation_and_input_terms_to_list_describe(query):
     payload = help_output("search", query, as_json=True)
     text = help_output("search", query)

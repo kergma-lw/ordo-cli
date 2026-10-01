@@ -7,11 +7,56 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub project issue',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs project '
+         'membership for one issue there.',
+ 'summary': 'Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized '
+            'membership item id plus the common project field values that Ordo reads from that membership. Prefer '
+            'connector_contexts.gh.repository as the normal repository target and use an explicit repository argument '
+            'only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'needs project membership for one issue there.',
+                         'A workflow needs to know whether one issue is already in the target project before deciding '
+                         'to add it or update its project fields.',
+                         'Later logic needs one compact project-membership snapshot such as Status, Type, Priority, '
+                         'Iteration, Size, or Estimate for one issue in one project.']},
+              {'heading': 'Do not use for',
+               'items': ['Scanning many project items or filtering project membership collections; use '
+                         'connector.gh.project.items or connector.gh.project.items.details for collection-shaped '
+                         'project inspection.',
+                         'Adding the issue to the project or mutating project field values; use '
+                          'connector.gh.project.issue.add or connector.gh.project.issue.field_single_select.set, '
+                          'connector.gh.project.issue.field_number.set, or connector.gh.project.issue.field_iteration.set '
+                          'for those effectful changes.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.project',
+                               'summary': 'Parent project probe for confirming the target project identity before '
+                                          'issue-membership inspection'},
+                              {'handle': 'connector.gh.project.issue.add',
+                               'summary': 'Sibling action for attaching the issue to the project when this probe '
+                                          'reports exists=false'},
+                              {'handle': 'connector.gh.project.items',
+                               'summary': 'Sibling probe for project-wide membership scans instead of one '
+                                          'issue-specific membership lookup'},
+                              {'handle': 'connector.gh.project.issue.field_single_select.set',
+                               'summary': 'Sibling action for mutating one project field after membership inspection '
+                                          'confirms the target issue context'}]},
+              {'heading': 'Examples',
+               'items': ['gh.project.issue with inputs {"issue_number": 42, "project_id": "PVT_kwDOExample"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.project.issue.add',
+                         'connector.gh.project.issue.field_single_select.set',
+                         'connector.gh.project.items']}]})
 
 def info():
     return probe(
         name="project.issue",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string"},
         outputs={
             "exists": "boolean",

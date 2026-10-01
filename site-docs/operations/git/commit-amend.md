@@ -1,140 +1,52 @@
-# git.commit.amend
+# Git commit amend
 
-Amend the current Git commit.
+A workflow intentionally needs amend semantics for the current HEAD commit rather than creating another follow-up commit.
 
-Use this when a workflow needs Git state or Git side effects. In practice: amend the current Git commit.
+Rewrite the current HEAD commit, optionally replacing its message, and return both the new commit id and the previous commit id.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs both the rewritten commit id and the previous HEAD id to describe what changed in history.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the previous HEAD is replaced by a new revision, and both revisions are available to later steps.
+- With no commit to amend, or when Git blocks the rewrite, the action does not report a replaced HEAD.
+- Returns commit, previous_commit, and branch. No existing commit or a blocked rewrite has no replaced-head result; rewritten history may require coordination before publication.
 
-```json
-{
-  "message": "string | null"
-}
-```
+## What to provide
 
-## Outputs
+- `message`: optional; provide it to replace the current message, or omit it or use null to retain the message.
 
-```json
-{
-  "branch": "string | null",
-  "commit": "string",
-  "previous_commit": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Creating an ordinary new commit from staged changes; use connector.git.commit.create when history should advance without rewriting HEAD.
+- Undoing an older commit through a new compensating commit; use connector.git.commit.revert for that history-preserving action.
 
-- rewrite the current HEAD commit
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `message_invalid`
-- `nothing_to_amend`
-- `amend_blocked`
 
-## Requirements
+- [`connector.git.commit.create`](commit-create.md): Sibling action for ordinary new commit creation instead of rewriting HEAD
+- [`connector.git.commit.revert`](commit-revert.md): Sibling action for reverting one target commit instead of rewriting the current one
+- [`connector.git.commits`](commits.md): Read recent commit texts around the commit that was amended
+- [`connector.git.branch`](branch.md): Read current branch context before or after the amend
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.commit.amend --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_commit_amend_step
 
-### `git.commit.amend`
+Amend the current HEAD commit when the workflow intentionally wants history rewriting instead of another follow-up commit.
 
-```json
-{
-  "message": "string | null"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "rewrite the current HEAD commit"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "message": "string | null"
-        },
-        "reference": "git.commit.amend"
-      }
-    ],
-    "failure_modes": [
-      "message_invalid",
-      "nothing_to_amend",
-      "amend_blocked"
-    ],
-    "inputs": {
-      "message": "string | null"
-    },
-    "invalidates_observations": [
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "commit.amend",
-    "outputs": {
-      "branch": "string | null",
-      "commit": "string",
-      "previous_commit": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.commit.amend'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "commit.amend",
-  "reference": "git.commit.amend",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: amend-head-commit
+        if: inputs.operation == "amend"
+        uses: git.commit.amend
+        with:
+          message: "Tighten commit wording"
 ```

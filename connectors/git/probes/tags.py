@@ -8,11 +8,48 @@ import re
 from ordo.model.json import JSONValue
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git tags',
+ 'goal': 'A workflow needs to inspect several tags at once, optionally narrowing them by release naming conventions '
+         'such as v* or one semantic-version regex.',
+  'summary': 'List Git tags as a version-sorted collection, optionally narrowed by glob or regex '
+            'matching, and return matching tags plus the first match as latest in that sorted order.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to inspect several tags at once, optionally narrowing them by release '
+                         'naming conventions such as v* or one semantic-version regex.',
+                         'Later logic needs both the full matching tag list and the first version-sorted match, not '
+                         'just one named tag existence check.']},
+              {'heading': 'Do not use for',
+               'items': ['Checking only one specific tag by exact name; use connector.git.tag for that simpler '
+                          'single-tag lookup.',
+                          'Treating latest as newest by creation date; this operation orders by descending version '
+                         'refname, not by tag creation time.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.tag',
+                                'summary': 'Check one exact tag instead of listing the inventory'},
+                              {'handle': 'connector.git.range',
+                                'summary': 'Compare a revision range when tag inventory is broader than '
+                                          'needed'},
+                              {'handle': 'connector.git.commits',
+                                'summary': 'Read commit history after a tag inventory decision '
+                                          'chooses a revision scope'},
+                              {'handle': 'connector.git.ref',
+                                'summary': 'Check explicit refs when the workflow does not '
+                                          'need tag-specific inventory semantics'}]},
+              {'heading': 'Examples',
+               'items': ['git.tags with inputs {"match": "v*", "match_kind": "glob"}',
+                         'git.tags with inputs {"match": "^v?[0-9]+\\\\.[0-9]+\\\\.[0-9]+$", "match_kind": "regex"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.tag', 'connector.git.range', 'connector.git.commits']}]})
 
 def info():
     return probe(
         name="tags",
+        human=git_human(HUMAN, provide="`match`: optional; provide it to narrow tags. `match_kind`: conditional; when `match` is supplied, provide `glob` or `regex`. Omit both to inspect all tags.", result="Returns count, matching items, latest, and repository_root. latest is the first matching tag in descending version order, or null when no tag matches; it is not based on creation time. Invalid matching input or unreadable tags has no partial result."),
         summary=(
             "Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; "
             "for annotated tags this means the referenced object oid rather than the tag object oid. "
@@ -29,12 +66,7 @@ def info():
                     "annotated": "boolean",
                 }
             ],
-            "latest": {
-                "name": "string",
-                "ref": "string",
-                "oid": "string",
-                "annotated": "boolean",
-            },
+            "latest": "object | null",
             "repository_root": "string",
         },
         failure_modes=("probe_failed",),

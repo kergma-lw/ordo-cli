@@ -4,13 +4,9 @@ inputs:
   scanner:
     default: all
     description: Run all configured checks or one named scanner; a single selection is not a full publication audit.
-  allow_dependency_lookup:
-    default: false
-    description: Permit sending installed runtime dependency names and versions to the PyPI vulnerability service; no source files are uploaded.
 blocks:
 - guards:
   - inputs.scanner | in(["all", "gitleaks-tree", "gitleaks-history", "gitleaks-metadata", "bandit", "semgrep", "pip-audit", "shellcheck", "inventory"])
-  - inputs.allow_dependency_lookup | is_boolean
   - git.repo.exists
 - steps:
   - name: Audit tracked worktree files with Gitleaks
@@ -53,9 +49,6 @@ blocks:
     if: inputs.scanner == "all" or inputs.scanner == "semgrep"
     publish:
       semgrep: step.semgrep_audit.outputs.data
-  - name: Require permission for dependency vulnerability lookup
-    if: inputs.scanner == "all" or inputs.scanner == "pip-audit"
-    gate: inputs.allow_dependency_lookup
   - name: Audit installed runtime dependency vulnerabilities
     if: inputs.scanner == "all" or inputs.scanner == "pip-audit"
     uses: routine.audit.pip-audit

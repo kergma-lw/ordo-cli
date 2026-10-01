@@ -5,6 +5,7 @@ from __future__ import annotations
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_graphql_payload, normalize_author, resolve_limit
 from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
 _QUERY = (
     "query($owner:String!,$repo:String!,$number:Int!,$limit:Int!){"
@@ -15,9 +16,38 @@ _QUERY = (
 )
 
 
+HUMAN = declare_human({'title': 'GitHub pr reviews',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs submitted '
+         'review records there by pull number.',
+ 'summary': 'Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and '
+            'optional reviewed commit id. Prefer connector_contexts.gh.repository as the normal repository target and '
+            'use an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'needs submitted review records there by pull number.',
+                         'The workflow needs reviewer decisions such as APPROVED or CHANGES_REQUESTED without '
+                         'reconstructing them from comments or timeline events.']},
+              {'heading': 'Do not use for',
+               'items': ['Free-form top-level discussion; use connector.gh.pr.comments when the workflow needs '
+                         'ordinary PR conversation.',
+                         'Per-line feedback details; use connector.gh.pr.review_comments for code-anchored remarks.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.pr',
+                               'summary': 'Parent PR snapshot that carries only aggregate review decision, not the '
+                                          'individual submitted reviews'},
+                              {'handle': 'connector.gh.pr.review_comments',
+                               'summary': 'Sibling probe for detailed line-level review discussion'},
+                              {'handle': 'connector.gh.pr.timeline',
+                               'summary': 'Sibling probe for lifecycle events that may surround review activity'}]},
+              {'heading': 'Examples', 'items': ['gh.pr.reviews with inputs {"limit": 20, "pull_number": 42}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.pr.review_comments', 'connector.gh.pr.timeline', 'connector.gh.pr']}]})
+
 def info():
     return probe(
         name="pr.reviews",
+        human=HUMAN,
         summary="Read submitted reviews from a GitHub pull request.",
         inputs={**PULL_IDENTITY_INPUTS, "limit": "integer"},
         outputs={"pull_ref": "string", "total_count": "integer", "reviews": ["object"]},

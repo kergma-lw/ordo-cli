@@ -3,11 +3,35 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git remote',
+  'goal': 'A workflow needs the recorded destinations for one named remote before deciding whether to synchronize or publish.',
+  'summary': 'Observe one named remote, including whether it exists, its fetch and push destinations, and whether it mirrors.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['Use this before fetch or push when a workflow needs to select a local remote by name.',
+                          'Later logic needs the recorded destination facts, not proof that a network operation will succeed.']},
+               {'heading': 'Do not use for',
+                'items': ['Destination safety or policy; decide whether an observed destination is acceptable.',
+                           'Reachability, access, remote identity, or proof of a later push destination.',
+                          'Repository-root facts, current-branch tracking, or publication itself; use '
+                          'connector.git.repo, connector.git.upstream, or connector.git.sync.push respectively.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.repo',
+                               'summary': 'Local repository-root, git-dir, and default-branch facts'},
+                              {'handle': 'connector.git.upstream',
+                               'summary': "Current branch's configured tracking remote and tracking ref"},
+                              {'handle': 'connector.git.sync.push',
+                               'summary': "Publish a branch to a configured remote after the caller's decision"}]},
+              ]})
 
 def info():
     return probe(
         name="remote",
+        human=git_human(HUMAN, provide="`remote`: required; provide a recorded remote name, such as origin or team/origin. It identifies a saved destination rather than a destination to invent.", result="Returns name, exists, fetch_urls, push_urls, and mirror. A missing name is reported with exists=false; recorded destinations are descriptive only and may change, while invalid or unreadable information fails without partial facts."),
         summary=(
             "Inspect a configured remote's effective fetch and push URLs and mirror setting without network access. "
             "Git applies URL rewrites; returned URLs are preserved verbatim. "

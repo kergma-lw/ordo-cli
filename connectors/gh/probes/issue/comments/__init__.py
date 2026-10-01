@@ -7,6 +7,7 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
 COMMENTS_OUTPUTS = {
     "issue_ref": "string",
@@ -15,9 +16,37 @@ COMMENTS_OUTPUTS = {
 }
 
 
+HUMAN = declare_human({'title': 'GitHub issue comments',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and workflow logic now needs '
+         'prior discussion for one issue there.',
+ 'summary': 'Probe the comment thread of one GitHub issue as a typed list of recent comments plus total count '
+            'metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit '
+            'repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and workflow '
+                         'logic now needs prior discussion for one issue there.',
+                         'Workflow logic needs to inspect prior discussion, count comments, or publish a compact '
+                         'conversation summary before taking another step.']},
+              {'heading': 'Do not use for',
+               'items': ["Reading the issue's main body, labels, or state; use connector.gh.issue for the broader "
+                         'issue snapshot.',
+                         'Posting a new comment; use connector.gh.issue.comment.add for that effectful change.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.issue',
+                               'summary': 'Sibling probe for the issue snapshot rather than its comment list'},
+                              {'handle': 'connector.gh.issue.comment.add',
+                               'summary': 'Action for appending one new comment to the same thread'},
+                              {'handle': 'connector.gh.issue.body.append',
+                               'summary': 'Issue-body mutation surface when the update belongs in the issue body '
+                                          'rather than the comment thread'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue', 'connector.gh.issue.comment.add', 'connector.gh.issue.body.append']}]})
+
 def info():
     return probe(
         name="issue.comments",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "limit": "integer"},
         outputs=COMMENTS_OUTPUTS,
         failure_modes=("issue_not_found", "limit_invalid", "probe_failed"),

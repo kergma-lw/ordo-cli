@@ -7,11 +7,42 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub issue close',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow now needs to '
+         'close one issue there by issue number.',
+ 'summary': 'Close one existing GitHub issue by repository and issue number. Prefer connector_contexts.gh.repository '
+            'as the normal repository target and use an explicit repository argument only as a one-off override; '
+            'review warns when it differs from the current gh context repository.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'now needs to close one issue there by issue number.',
+                         'A workflow has already decided that the issue should be closed and needs one typed action '
+                         'result instead of a shell-level command.']},
+              {'heading': 'Do not use for',
+               'items': ['Explaining the closure in conversation text; add a comment first when the workflow should '
+                         'leave a human-facing note.',
+                         'Closing a pull request; use the pull-request connector family for PR-specific lifecycle '
+                         'actions.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.issue',
+                               'summary': 'Probe the issue first when closure depends on current issue state or '
+                                          'metadata'},
+                              {'handle': 'connector.gh.issue.comment.add',
+                               'summary': 'Leave one final note on the issue before or instead of closing it'},
+                              {'handle': 'connector.gh.issue.body.append',
+                               'summary': 'Append a closing note to the body when the workflow needs body mutation '
+                                          'rather than state transition'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue', 'connector.gh.issue.comment.add', 'connector.gh.issue.body.append']}]})
 
 def info():
     return action(
         name="issue.close",
+        human=HUMAN,
         inputs=ISSUE_IDENTITY_INPUTS,
         effects=("close GitHub issue",),
         outputs={"issue_ref": "string", "state": "string", "closed": "boolean"},

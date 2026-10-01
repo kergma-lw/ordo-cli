@@ -1,123 +1,60 @@
-# gh.project.field.option
+# GitHub project field option
 
-Check whether a GitHub Project field exposes a named option.
+A workflow needs one explicit yes/no check that a candidate value such as Done is valid before publishing or applying it elsewhere.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: check whether a GitHub Project field exposes a named option.
+Probe whether one named selectable value exists inside one GitHub Project field when that field publishes an allowed-value set.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- A guard or preparatory step should fail early when one expected project field option is missing but the full field metadata is not otherwise needed later.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `project_id`: required.
+- `field`: required.
+- `option`: required.
 
-```json
-{
-  "field": "string",
-  "option": "string",
-  "project_id": "string"
-}
-```
+## Result and boundary
 
-## Outputs
+- Usable result fact: `exists`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
 
-```json
-{
-  "exists": "boolean"
-}
-```
+## Do not use for
 
-## Effects
+- Inspecting the field's broader metadata such as kind or the full option list; use connector.gh.project.field for the parent field surface.
+- Mutating an issue's project field value; use connector.gh.project.issue.field_single_select.set when the workflow should actually set the value after validation.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `project_not_found`
-- `probe_failed`
 
-## Requirements
+- [`connector.gh.project.field`](project-field.md): Parent field probe that returns the field kind and full option list instead of only one boolean option check
+- [`connector.gh.project.issue.field_single_select.set`](project-issue-field-single-select-set.md): Action for setting one single-select project field value after the option check succeeds
+- [`connector.gh.project.issue.field_iteration.set`](project-issue-field-iteration-set.md): Action for setting one iteration field value when the project field is iteration-backed rather than free-form
 
-- None
+## Inspect next
 
-## Example inputs
+- connector.gh.project.field
+- connector.gh.project.issue.field_single_select.set
+- connector.gh.project.issue.field_iteration.set
 
-### `gh.project.field.option`
+## Exact machine contract
 
-```json
-{
-  "field": "string",
-  "option": "string",
-  "project_id": "string"
-}
-```
+Use `ordo-help operation gh.project.field.option --json` when you need the exact machine-readable input and result contract for this operation.
 
-## Full JSON reference
+## Canonical Examples
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "field": "string",
-          "option": "string",
-          "project_id": "string"
-        },
-        "reference": "gh.project.field.option"
-      }
-    ],
-    "failure_modes": [
-      "project_not_found",
-      "probe_failed"
-    ],
-    "inputs": {
-      "field": "string",
-      "option": "string",
-      "project_id": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project.field.option",
-    "outputs": {
-      "exists": "boolean"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Return whether one named allowed value exists in one GitHub Project field when that field exposes a selectable value set",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "project.field.option",
-  "reference": "gh.project.field.option",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+### gh_project_field_option_probe_step
+
+Check whether one named selectable value is valid for the inspected GitHub Project field.
+
+```yaml
+      - name: check-done-option
+        uses: gh.project.field.option
+        with:
+          project_id: inputs.project_id
+          field: "Status"
+          option: "Done"
+        register: done_option
 ```

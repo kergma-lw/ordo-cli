@@ -4,11 +4,53 @@ from __future__ import annotations
 
 from connectors.git.actions._shared import BRANCH_INVENTORY_INVALIDATION, current_branch, map_nonzero, require_local_branch
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git branch delete',
+ 'goal': 'A workflow is intentionally cleaning up one stale local branch rather than switching branches or resetting '
+         'repository state broadly.',
+  'summary': 'Delete one local non-default Git branch. Optional strictly boolean force defaults to false: omitted or '
+             'false keeps the merged-branch safety check; true bypasses it.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow is intentionally cleaning up one stale local branch rather than switching '
+                          'branches or resetting repository state broadly.',
+                          'Use the normal merged-branch safety check for ordinary cleanup. Force deletion only after '
+                          'the workflow has independently established that removing unmerged local history is intended.',
+                          'The action protects the repository default branch and branches checked out in any worktree.']},
+              {'heading': 'Result and boundary',
+               'items': ['On success, the selected local branch no longer exists.',
+                         'A protected, checked-out, or unmerged branch remains in place unless an intentional forced '
+                         'deletion is allowed. Other Git blocks do not report that deletion completed.']},
+              {'heading': 'Do not use for',
+               'items': ['Switching away from the current branch before deletion; use connector.git.branch.switch '
+                         'first when the current checkout must move.',
+                          'Deleting tags, remote refs, or arbitrary refs; this operation only covers local branch '
+                         'cleanup.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.branch',
+                                'summary': 'Check whether the target branch is '
+                                          'currently active'},
+                              {'handle': 'connector.git.branches',
+                                'summary': 'List local and remote branches before '
+                                          'deletion'},
+                              {'handle': 'connector.git.branch.switch',
+                               'summary': 'Sibling action for moving off the target branch before deletion if needed'},
+                              {'handle': 'connector.git.repo',
+                                'summary': 'Read repository-level facts such as the protected default '
+                                          'branch'}]},
+              {'heading': 'Examples',
+               'items': ['git.branch.delete with inputs {"branch": "stale/demo"}',
+                         'git.branch.delete with inputs {"branch": "squash/demo", "force": true}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.branches', 'connector.git.branch.switch', 'connector.git.branch']}]})
 
 def info():
     return action(
         name="branch.delete",
+        human=git_human(HUMAN, provide="`branch`: required. `force`: optional; omit it or use false for ordinary merged-branch safety, and use true only after confirming unmerged history may be removed.", result="Returns branch after deletion. Missing, default, checked-out, or unmerged branches remain present unless intentional force applies; blocks do not report deletion."),
         summary="Delete a local non-default branch; optional boolean force defaults to false (-d), true uses -D.",
         inputs={"branch": "string", "force": "boolean"},
         effects=("delete a local non-default branch",),

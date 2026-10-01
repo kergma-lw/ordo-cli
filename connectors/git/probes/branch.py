@@ -3,11 +3,47 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git branch',
+  'goal': 'A workflow needs current checkout context before deciding whether branch-specific actions or branch '
+         'guards are appropriate.',
+  'summary': 'Read the currently checked out local Git branch and report whether the repository is on a named branch '
+            'or in detached HEAD state.',
+ 'sections': [{'heading': 'Use when',
+                'items': ['A workflow needs current checkout context before deciding whether branch-specific '
+                         'actions or branch guards are appropriate.',
+                         'Later logic only needs the current branch name, ref, or detached flag rather than a full '
+                         'branch inventory.']},
+              {'heading': 'Do not use for',
+               'items': ['Listing many local and remote branches; use connector.git.branches for the inventory '
+                          'operation.',
+                         'Creating, deleting, or switching branches; use the narrower connector.git.branch.create, '
+                         'connector.git.branch.delete, or connector.git.branch.switch actions for mutation.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.branches',
+                                'summary': 'List all branches instead of only the current '
+                                          'checkout context'},
+                              {'handle': 'connector.git.branch.switch',
+                                'summary': 'Change the current checkout after confirming '
+                                          'the current branch context'},
+                              {'handle': 'connector.git.repo',
+                                'summary': 'Read repository-level facts such as root path and default '
+                                          'branch'},
+                              {'handle': 'connector.git.state',
+                                'summary': 'Read broader worktree state when branch name alone is not '
+                                          'enough'}]},
+              {'heading': 'Examples', 'items': ['git.branch with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.branches', 'connector.git.branch.switch', 'connector.git.state']}]})
 
 def info():
     return probe(
         name="branch",
+        human=git_human(HUMAN, provide="No inputs are required; run from the checkout whose current branch later steps depend on.", result="Returns value, ref, detached, and repository_root. In detached state value and ref are null rather than a branch name; unreadable repository state has no successful result."),
         outputs={
             "value": "string | null",
             "ref": "string | null",

@@ -3,11 +3,49 @@
 from __future__ import annotations
 
 from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git worktrees',
+ 'goal': 'A workflow needs to reason about multiple checkouts of the same repository, such as locating the current '
+         'worktree, finding detached sibling worktrees, or checking whether another branch is already checked out '
+         'elsewhere.',
+  'summary': "List the repository's Git worktrees and return every attached path together with its "
+            'HEAD, branch or detached status, bare flag, and which path is current.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow needs to reason about multiple checkouts of the same repository, such as locating '
+                         'the current worktree, finding detached sibling worktrees, or checking whether another branch '
+                         'is already checked out elsewhere.',
+                         'Later logic needs the explicit multi-worktree topology itself rather than only the current '
+                         'checkout branch or current worktree cleanliness.']},
+              {'heading': 'Do not use for',
+               'items': ["Inspecting only the current checkout's dirty files or staging state; use "
+                         'connector.git.worktree for live path-level cleanliness details in one worktree.',
+                         'Reading only one repository snapshot for the current checkout; use connector.git.state or '
+                         'connector.git.branch when the workflow does not need sibling worktree inventory.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.worktree',
+                                'summary': 'Read current dirty-path details inside one worktree instead of '
+                                          'the repository-wide worktree inventory'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current checkout branch identity when the workflow does '
+                                          'not need multi-worktree topology'},
+                              {'handle': 'connector.git.repo',
+                                'summary': 'Read repository root and default-branch context before or '
+                                          'alongside multi-worktree inspection'},
+                              {'handle': 'connector.git.state',
+                                'summary': 'Read one broader current-checkout summary instead of listing '
+                                          'every attached worktree'}]},
+              {'heading': 'Examples', 'items': ['git.worktrees with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.worktree', 'connector.git.branch', 'connector.git.repo']}]})
 
 def info():
     return probe(
         name="worktrees",
+        human=git_human(HUMAN, provide="No inputs are required; run from the repository whose attached checkouts must be considered.", result="Returns count, current_path, items with path, head, branch, bare, current, and detached, plus repository_root. An unreadable inventory has no partial result, and worktrees may be added, removed, or switched after this point-in-time inventory."),
         outputs={
             "count": "integer",
             "current_path": "string | null",

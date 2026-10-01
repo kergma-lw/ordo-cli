@@ -1,142 +1,52 @@
-# git.integrate.cherry_pick
+# Git integrate cherry-pick
 
-Cherry-pick a Git commit onto the current checkout.
+A workflow needs one targeted commit transplant such as backporting one fix without merging or rebasing the larger branch that originally contained it.
 
-Use this when a workflow needs Git state or Git side effects. In practice: cherry-pick a Git commit onto the current checkout.
+Apply one existing non-merge Git commit onto the current checkout as a new commit, without integrating the whole source ref history.
 
-- Namespace: `git`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Use this for one chosen commit identity, not to integrate a whole ref tip or replaying a branch range onto a new base.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Result and boundary
 
-## Inputs
+- On success, the current checkout gains a new commit containing the selected commit's change, and reports the resulting head revision.
+- Conflicts, unsupported merge commits, or other Git blocks do not produce a completed transplant result.
+- Returns picked_commit, head_commit, and branch. A missing or merge commit, conflict, or other block does not produce a completed transplant; resolve conflicts before further integration.
 
-```json
-{
-  "commit": "string"
-}
-```
+## What to provide
 
-## Outputs
+- `commit`: required; provide the one non-merge commit to transplant.
 
-```json
-{
-  "branch": "string | null",
-  "head_commit": "string",
-  "picked_commit": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Integrating a whole branch tip or preserving branch topology; use connector.git.integrate.merge or connector.git.integrate.merge_ff_only when the unit of integration is one ref rather than one commit.
+- Cherry-picking merge commits or rewriting one topic branch onto a new base; this operation rejects merge commits and is narrower than connector.git.integrate.rebase_onto.
 
-- apply a target commit onto the current checkout as a new commit
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `commit_not_found`
-- `merge_commit_not_supported`
-- `cherry_pick_conflict`
-- `cherry_pick_blocked`
 
-## Requirements
+- [`connector.git.integrate.merge`](integrate-merge.md): Sibling action for integrating a whole target ref instead of transplanting one selected commit
+- [`connector.git.integrate.rebase_onto`](integrate-rebase-onto.md): Sibling action for replaying a branch range onto a new base rather than copying one chosen commit
+- [`connector.git.commits`](commits.md): Read commit history before choosing which commit to cherry-pick
+- [`connector.git.ref`](ref.md): Resolve an exact ref when the workflow still needs to identify the source commit or source branch first
 
-- None
+## Exact machine contract
 
-## Invalidated observations
+Use `ordo-help operation git.integrate.cherry_pick --json` when you need the exact machine-readable input and result contract for this operation.
 
-- `git.ref.*`
-- `git.tag`
-- `git.tags`
-- `git.worktree`
-- `git.worktrees`
-- `git.state`
-- `git.range`
-- `git.commits`
+## Canonical Examples
 
-## Example inputs
+### git_integrate_cherry_pick_step
 
-### `git.integrate.cherry_pick`
+Cherry-pick one chosen commit when the workflow wants a targeted backport-style transplant instead of integrating the whole source ref.
 
-```json
-{
-  "commit": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "apply a target commit onto the current checkout as a new commit"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "commit": "string"
-        },
-        "reference": "git.integrate.cherry_pick"
-      }
-    ],
-    "failure_modes": [
-      "commit_not_found",
-      "merge_commit_not_supported",
-      "cherry_pick_conflict",
-      "cherry_pick_blocked"
-    ],
-    "inputs": {
-      "commit": "string"
-    },
-    "invalidates_observations": [
-      "git.ref.*",
-      "git.tag",
-      "git.tags",
-      "git.worktree",
-      "git.worktrees",
-      "git.state",
-      "git.range",
-      "git.commits"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "integrate.cherry_pick",
-    "outputs": {
-      "branch": "string | null",
-      "head_commit": "string",
-      "picked_commit": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'git.integrate.cherry_pick'",
-    "tags": [
-      "git",
-      "action"
-    ]
-  },
-  "operation_name": "integrate.cherry_pick",
-  "reference": "git.integrate.cherry_pick",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: cherry-pick-target-commit
+        if: inputs.strategy == "cherry-pick"
+        uses: git.integrate.cherry_pick
+        with:
+          commit: inputs.target_commit
 ```

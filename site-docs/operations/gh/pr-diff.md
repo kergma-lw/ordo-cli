@@ -1,53 +1,51 @@
-# gh.pr.diff
+# GitHub pr diff
 
-Read normalized change content from a GitHub pull request.
+the workflow's GitHub repository context already names the normal repository target and the workflow needs changed-file detail there for one PR number.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read normalized change content from a GitHub pull request.
+Probe one GitHub pull request diff as normalized changed-file summaries with patch excerpts, rename metadata, and binary/truncation signals. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "limit": "integer",
-  "pull_number": "integer",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "files": [
-    "object"
-  ],
-  "pull_ref": "string",
-  "total_files": "integer"
-}
-```
-
-## Authoring contract
-
-Probe one GitHub pull request diff as normalized changed-file summaries with patch excerpts, rename metadata, and binary/truncation signals. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs changed-file detail there for one PR number.
 - The workflow needs to reason about which files changed or inspect bounded patch content without parsing raw git output itself.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `pull_number`: required.
+- `limit`: optional.
+
+## Result and boundary
+
+- Usable result fact: `pull_ref`.
+- Usable result fact: `total_files`.
+- Usable result fact: `files`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
 
 - Overall PR headline facts such as title, branch refs, or review decision; use connector.gh.pr for that metadata snapshot.
 - Conversation or review decision surfaces; use comments, review_comments, or reviews when the workflow is about discussion rather than code changes.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.pr`](pr.md): Parent PR snapshot probe that reports change totals but not per-file diff content
+- [`connector.gh.pr.review_comments`](pr-review-comments.md): Sibling probe for line-level reviewer feedback that may reference files from this diff
+- [`connector.git.range`](../git/range.md): Repository-local git diff surface when the workflow needs local git ranges instead of remote PR normalization
+
+## Inspect next
+
+- connector.gh.pr.review_comments
+- connector.git.range
+- connector.gh.pr
+
+## Exact machine contract
+
+Use `ordo-help operation gh.pr.diff --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_pr_diff_step
 
@@ -61,96 +59,4 @@ Inspect changed files and bounded diff content from one pull request before reac
       pull_number: inputs.pull_number
       limit: 20
     register: pr_diff
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `pull_not_found`
-- `limit_invalid`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.pr.diff`
-
-```json
-{
-  "pull_number": 42
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "pull_number": 42
-        },
-        "reference": "gh.pr.diff"
-      }
-    ],
-    "failure_modes": [
-      "pull_not_found",
-      "limit_invalid",
-      "probe_failed"
-    ],
-    "inputs": {
-      "limit": "integer",
-      "pull_number": "integer",
-      "repository": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "pr.diff",
-    "outputs": {
-      "files": [
-        "object"
-      ],
-      "pull_ref": "string",
-      "total_files": "integer"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Read normalized change content from a GitHub pull request.",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "pr.diff",
-  "reference": "gh.pr.diff",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

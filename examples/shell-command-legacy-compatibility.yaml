@@ -1,14 +1,12 @@
 version: 0
 workflow: legacy-shell-command-compatibility
-inputs:
-  command_text: {}
 blocks:
   - guards: []
   - steps:
       - name: run-legacy-shell-command
         uses: shell.command
         with:
-          command: inputs.command_text
+          command: "printf 'legacy check'"
         register: shell_result
       - name: publish-summary
         publish:

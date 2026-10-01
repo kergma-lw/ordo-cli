@@ -6,23 +6,54 @@ import time
 
 from connectors.compose._shared import compose_command, map_start_failure, observe_project, observe_service
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
+from ordo.model.human import declare_human
 
 
 _START_FAILURE_GRACE_SECONDS = 5
 
 
+HUMAN = declare_human({'title': 'Start Compose project or service',
+ 'goal': 'You need the requested Compose target running before later workflow steps continue.',
+ 'summary': 'Request that one Compose project or declared service run, then report the state observed after the request.',
+ 'sections': [{'heading': 'Use when',
+                'items': ['A project-wide startup or one declared service must be asked to run before another step.']},
+              {'heading': 'What to provide',
+                'items': ['`service`: optional; omit it to start the project, or provide one declared service name to target only '
+                          'that service.']},
+               {'heading': 'Result and boundary',
+                 'items': ['After Compose accepts the request, the action observes the target once. A `running` result means that observation found the requested target running; `degraded` means it found only partial operation. Neither result proves application-level readiness for a later step.',
+                          'If the Compose command exits nonzero, the action makes one delayed recovery observation. It can still succeed when that observation finds `running`, `starting`, or `degraded`; it does not keep waiting or repeatedly recheck after reporting the result.',
+                          'For readiness beyond this action, inspect connector.compose.project or connector.compose.service again and continue only when the returned state and health facts meet the downstream step\'s needs.',
+                          'Later steps can use `target_kind`, `state`, and `changed`: whether the request targeted a project or service, the reported result state, and whether this call changed orchestration state. Service-targeted results also include `target`.']},
+              {'heading': 'Do not use for',
+               'items': ['Pure observation; use connector.compose.project or connector.compose.service when you only '
+                         'need state.',
+                         'Removing stopped runtime instances; use connector.compose.remove for that cleanup action.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.compose', 'summary': 'Parent Compose connector family'},
+                              {'handle': 'connector.compose.project',
+                               'summary': 'Project-level observation that can precede a start decision'},
+                               {'handle': 'connector.compose.service',
+                                'summary': 'Service-level readiness and health observation after a start'},
+                               {'handle': 'connector.compose.stop',
+                                'summary': 'Sibling lifecycle action for bringing a running target down'}]},
+              {'heading': 'Examples',
+               'items': ['compose.start with inputs {}', 'compose.start with inputs {"service": "api"}']},
+               {'heading': 'Inspect next',
+                'items': ['connector.compose.project', 'connector.compose.service', 'connector.compose.stop']}]})
+
 def info():
     return action(
         name="start",
+        human=HUMAN,
         summary="Bring one Compose project or service into operational running state.",
         inputs={"service": "string | null"},
         effects=("bring the requested Compose target into operational running state",),
         outputs={
             "target_kind": "string",
-            "target": "string",
             "state": "string",
             "changed": "boolean",
-            "changed_services": "array[string]",
         },
         failure_modes=(
             "service_not_declared",

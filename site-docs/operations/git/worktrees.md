@@ -1,126 +1,69 @@
-# git.worktrees
+# Git worktrees
 
-List Git worktrees.
+A workflow needs to reason about multiple checkouts of the same repository, such as locating the current worktree, finding detached sibling worktrees, or checking whether another branch is already checked out elsewhere.
 
-Use this when a workflow needs Git state or Git side effects. In practice: list Git worktrees.
+List the repository's Git worktrees and return every attached path together with its HEAD, branch or detached status, bare flag, and which path is current.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs the explicit multi-worktree topology itself rather than only the current checkout branch or current worktree cleanliness.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Inspecting only the current checkout's dirty files or staging state; use connector.git.worktree for live path-level cleanliness details in one worktree.
+- Reading only one repository snapshot for the current checkout; use connector.git.state or connector.git.branch when the workflow does not need sibling worktree inventory.
 
-```json
-{}
+## What to provide
+
+- No inputs are required; run from the repository whose attached checkouts must be considered.
+
+## Result and boundary
+
+- Returns count, current_path, items with path, head, branch, bare, current, and detached, plus repository_root. An unreadable inventory has no partial result, and worktrees may be added, removed, or switched after this point-in-time inventory.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.worktree`](worktree.md): Read current dirty-path details inside one worktree instead of the repository-wide worktree inventory
+- [`connector.git.branch`](branch.md): Read current checkout branch identity when the workflow does not need multi-worktree topology
+- [`connector.git.repo`](repo.md): Read repository root and default-branch context before or alongside multi-worktree inspection
+- [`connector.git.state`](state.md): Read one broader current-checkout summary instead of listing every attached worktree
+
+## Exact machine contract
+
+Use `ordo-help operation git.worktrees --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_worktrees_probe_step
+
+Inspect the repository-wide worktree inventory before later steps reason about current versus sibling checkouts.
+
+```yaml
+      - name: inspect-worktrees
+        uses: git.worktrees
+        register: worktree_inventory
 ```
+### git_worktree_inventory_flow
 
-## Outputs
+Inspect repository worktrees together with current-worktree cleanliness so the workflow can distinguish repository-wide topology from local dirty-state details.
 
-```json
-{
-  "count": "integer",
-  "current_path": "string | null",
-  "items": [
-    {
-      "bare": "boolean",
-      "branch": "string | null",
-      "current": "boolean",
-      "detached": "boolean",
-      "head": "string",
-      "path": "string"
-    }
-  ],
-  "repository_root": "string"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `git.worktrees`
-
-```json
-{}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.worktrees"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "worktrees",
-    "outputs": {
-      "count": "integer",
-      "current_path": "string | null",
-      "items": [
-        {
-          "bare": "boolean",
-          "branch": "string | null",
-          "current": "boolean",
-          "detached": "boolean",
-          "head": "string",
-          "path": "string"
-        }
-      ],
-      "repository_root": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'git.worktrees'",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "worktrees",
-  "reference": "git.worktrees",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: inspect-git-worktree-inventory
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-worktrees
+        uses: git.worktrees
+        register: worktree_inventory
+      - name: inspect-current-worktree
+        uses: git.worktree
+        register: current_worktree
+      - name: publish-summary
+        publish:
+          current_path: step.worktree_inventory.outputs.current_path
+          worktree_count: step.worktree_inventory.outputs.count
 ```

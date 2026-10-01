@@ -153,9 +153,9 @@ workflows:
     when: Use for a local secrets audit; excludes Git history, staged-only contents, and untracked files.
   audit-publication:
     file: workflows/audit-publication.yml
-    description: Run isolated secret, Python, dependency, shell, and publication-inventory checks through one audit workflow
+    description: Run isolated secret, Python, dependency vulnerability lookup, shell, and publication-inventory checks through one audit workflow
     category: verify
-    when: Use scanner=all or select one scanner; dependency lookup requires explicit consent. Success never authorizes publication.
+    when: Use scanner=all or select one scanner; all and pip-audit include dependency vulnerability lookup. Success never authorizes publication.
   stories-backlog:
     file: workflows/stories-backlog.yml
     description: Show Story issues that are in Backlog in the project

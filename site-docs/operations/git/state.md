@@ -1,116 +1,75 @@
-# git.state
+# Git state
 
-Read the current Git working-state summary.
+A workflow needs one compact readiness snapshot before deciding whether committing, switching, syncing, or publishing repository state makes sense.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read the current Git working-state summary.
+Read one combined Git repository-state snapshot from current-branch context, worktree cleanliness flags, and stash count.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs branch, detached, worktree-cleanliness, and stash-count facts together rather than one path-level worktree inventory alone.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Inspecting the exact dirty path list or keeping staged-versus-unstaged file paths visible; use connector.git.worktree for that narrower path-level check.
+- Listing stash entries themselves or mutating staging state; use connector.git.stash for stash inventory and connector.git.index.add_all for full-worktree staging.
 
-```json
-{}
+## What to provide
+
+- No inputs are required; run from the checkout whose readiness the workflow must decide.
+
+## Result and boundary
+
+- Returns branch, detached, worktree_clean, has_untracked, has_staged_changes, has_unstaged_changes, stash_count, and repository_root. It combines point-in-time observations, so a later action must not assume they remain unchanged.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.git.worktree`](worktree.md): Read path-level worktree details instead of one combined repository snapshot
+- [`connector.git.branch`](branch.md): Read only the current checkout branch when broader cleanliness and stash context are unnecessary
+- [`connector.git.stash`](stash.md): List stash entries instead of only the stash count summary
+- [`connector.git.index.add_all`](index-add-all.md): Sibling action for staging the whole current worktree after this summary confirms the repository is ready
+
+## Exact machine contract
+
+Use `ordo-help operation git.state --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### git_state_probe_step
+
+Inspect one combined Git repository-state snapshot after staging decisions need branch, cleanliness, and stash facts together.
+
+```yaml
+      - name: inspect-repository-state
+        uses: git.state
+        register: repo_state
 ```
+### git_worktree_staging_flow
 
-## Outputs
+Inspect the dirty worktree, stage the full batch, then read one combined repository-state snapshot so the workflow keeps path-level and summary-level Git checks distinct.
 
-```json
-{
-  "branch": "string | null",
-  "detached": "boolean",
-  "has_staged_changes": "boolean",
-  "has_unstaged_changes": "boolean",
-  "has_untracked": "boolean",
-  "repository_root": "string",
-  "stash_count": "integer",
-  "worktree_clean": "boolean"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `git.state`
-
-```json
-{}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.state"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "state",
-    "outputs": {
-      "branch": "string | null",
-      "detached": "boolean",
-      "has_staged_changes": "boolean",
-      "has_unstaged_changes": "boolean",
-      "has_untracked": "boolean",
-      "repository_root": "string",
-      "stash_count": "integer",
-      "worktree_clean": "boolean"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'git.state'",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "state",
-  "reference": "git.state",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: inspect-and-stage-git-worktree
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-worktree-before-staging
+        uses: git.worktree
+        register: worktree_before
+      - name: stage-all-worktree-changes
+        uses: git.index.add_all
+        register: stage_all
+      - name: inspect-repository-state
+        uses: git.state
+        register: repo_state
+      - name: publish-summary
+        publish:
+          dirty_paths_before: step.worktree_before.outputs.dirty_paths
+          staged_all: step.stage_all.outputs.staged
+          has_staged_changes: step.repo_state.outputs.has_staged_changes
+          stash_count: step.repo_state.outputs.stash_count
+          summary: "Git worktree staging workflow prepared"
 ```

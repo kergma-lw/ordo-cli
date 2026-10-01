@@ -268,9 +268,6 @@
     "connector.runtime.profile.use": {
       "describe_readiness": "ready"
     },
-    "routine": {
-      "describe_readiness": "ready"
-    },
     "routine_contract": {
       "describe_readiness": "ready"
     },
@@ -797,6 +794,69 @@
       "describe_readiness": "ready"
     },
     "workflow_step.with_requires_uses": {
+      "describe_readiness": "ready"
+    },
+    "command-line.ordo-playbook.flag.progress_steps": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.actions.run": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.actions.run.jobs": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.repo": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.repo.actions.permissions": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.repo.actions.permissions.set": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.repo.sync": {
+      "describe_readiness": "ready"
+    },
+    "connector.git": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.remote": {
+      "describe_readiness": "ready"
+    },
+    "state": {
+      "describe_readiness": "ready"
+    },
+    "state.workflow_surface.storage_targets_field": {
+      "describe_readiness": "ready"
+    },
+    "workflow.blocks": {
+      "describe_readiness": "ready"
+    },
+    "workflow.branching": {
+      "describe_readiness": "ready"
+    },
+    "workflow.let": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.catch": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.not_found": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run_contract": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.gate_checkpoint": {
+      "describe_readiness": "ready"
+    },
+    "workflow.value_expression_root.args": {
+      "describe_readiness": "ready"
+    },
+    "workflow_state_storage.relevant_identity_required": {
+      "describe_readiness": "ready"
+    },
+    "workflow_state_storage.write_after_last_read": {
       "describe_readiness": "ready"
     }
   }

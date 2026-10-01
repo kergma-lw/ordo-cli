@@ -22,25 +22,17 @@ defaults to `all`; selection is fail-fast, not a promise that every check runs.
 | `gitleaks-metadata` | Raw commit and annotated tag objects | Action |
 | `bandit` | Production Python, medium severity/confidence or higher | Probe |
 | `semgrep` | Production Python, four local review-cue rules | Probe |
-| `pip-audit` | Installed runtime dependency closure, consent-gated lookup | Probe |
+| `pip-audit` | Installed runtime dependency closure, PyPI vulnerability lookup | Probe |
 | `shellcheck` | Tracked shell files | Probe |
 | `inventory` | Privacy and artifact candidates for manual review | Action |
 
 Select one check with `--input scanner=bandit`, for example. Values other than
-`all` and the eight selectors above are rejected. `allow_dependency_lookup`
-must be an explicit boolean and defaults to `false`. Network lookup requires
-consent through this input:
-
-```text
-ordo-playbook run audit-publication --input scanner=pip-audit --input allow_dependency_lookup=true
-```
-
-Consent authorizes sending installed runtime package names and versions to the
-PyPI vulnerability service, not repository files. Tool installation is separate
-from lookup consent. For `all` or `pip-audit`, the gate blocks before pip-audit
-invocation without consent; the adapter also enforces authorization. Earlier
-checks may finish before the gate, but ShellCheck and inventory follow it and
-are not reached if it blocks. Selected offline checks bypass the gate.
+`all` and the eight selectors above are rejected. `all` and `pip-audit` look up
+installed runtime package names and versions through the PyPI vulnerability
+service; repository files are not uploaded. Tool installation is separate from
+the lookup. Earlier checks may finish before pip-audit; ShellCheck and inventory
+follow it and are not reached if it fails. Selected offline checks do not run
+the lookup.
 
 ## Tool baseline
 

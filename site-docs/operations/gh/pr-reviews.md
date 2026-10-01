@@ -1,53 +1,51 @@
-# gh.pr.reviews
+# GitHub pr reviews
 
-Read submitted reviews from a GitHub pull request.
+the workflow's GitHub repository context already names the normal repository target and the workflow needs submitted review records there by pull number.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read submitted reviews from a GitHub pull request.
+Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and optional reviewed commit id. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "limit": "integer",
-  "pull_number": "integer",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "pull_ref": "string",
-  "reviews": [
-    "object"
-  ],
-  "total_count": "integer"
-}
-```
-
-## Authoring contract
-
-Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and optional reviewed commit id. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs submitted review records there by pull number.
 - The workflow needs reviewer decisions such as APPROVED or CHANGES_REQUESTED without reconstructing them from comments or timeline events.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `pull_number`: required.
+- `limit`: optional.
+
+## Result and boundary
+
+- Usable result fact: `pull_ref`.
+- Usable result fact: `total_count`.
+- Usable result fact: `reviews`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
 
 - Free-form top-level discussion; use connector.gh.pr.comments when the workflow needs ordinary PR conversation.
 - Per-line feedback details; use connector.gh.pr.review_comments for code-anchored remarks.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.pr`](pr.md): Parent PR snapshot that carries only aggregate review decision, not the individual submitted reviews
+- [`connector.gh.pr.review_comments`](pr-review-comments.md): Sibling probe for detailed line-level review discussion
+- [`connector.gh.pr.timeline`](pr-timeline.md): Sibling probe for lifecycle events that may surround review activity
+
+## Inspect next
+
+- connector.gh.pr.review_comments
+- connector.gh.pr.timeline
+- connector.gh.pr
+
+## Exact machine contract
+
+Use `ordo-help operation gh.pr.reviews --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_pr_reviews_step
 
@@ -61,100 +59,4 @@ Inspect submitted pull-request reviews with one explicit limit before interpreti
       pull_number: inputs.pull_number
       limit: 20
     register: pr_reviews
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `pull_not_found`
-- `limit_invalid`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.pr.reviews`
-
-```json
-{
-  "limit": "integer",
-  "pull_number": "integer",
-  "repository": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "limit": "integer",
-          "pull_number": "integer",
-          "repository": "string"
-        },
-        "reference": "gh.pr.reviews"
-      }
-    ],
-    "failure_modes": [
-      "pull_not_found",
-      "limit_invalid",
-      "probe_failed"
-    ],
-    "inputs": {
-      "limit": "integer",
-      "pull_number": "integer",
-      "repository": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "pr.reviews",
-    "outputs": {
-      "pull_ref": "string",
-      "reviews": [
-        "object"
-      ],
-      "total_count": "integer"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Read submitted reviews from a GitHub pull request.",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "pr.reviews",
-  "reference": "gh.pr.reviews",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

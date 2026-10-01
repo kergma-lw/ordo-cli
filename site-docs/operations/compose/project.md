@@ -1,115 +1,100 @@
-# compose.project
+# Inspect Compose project
 
-Observe one Compose project as an orchestration unit.
+You need project-level runtime state before deciding whether to start, stop, or inspect one service.
 
-Use this when a workflow needs this exact operation surface. In practice: observe one Compose project as an orchestration unit.
+Probe one Compose project as a single orchestration unit.
 
-- Namespace: `compose`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- A lifecycle decision concerns the project as a whole rather than one declared service.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `Compose target`: context-defaulted; this operation accepts no operation-local target, so it uses the Compose directory, file, and project name selected by the workflow's playbook or profile settings. To inspect a different project, select settings with different Compose values; this operation has no per-call override.
 
-```json
-{}
-```
+## Result and boundary
 
-## Outputs
+- Later steps can use `project`, `declared_services` (the declared services), `state`, `service_counts`, and `services` from the per-service snapshot.
+- This is an observation, not a lock: another process can change Compose state after it is read. It fails when the project cannot be inspected or the orchestration tool is unavailable.
 
-```json
-{
-  "declared_services": "array[string]",
-  "project": "string",
-  "service_counts": "object",
-  "services": "object",
-  "state": "string"
-}
-```
+## Do not use for
 
-## Effects
+- Service-specific health or container details; use connector.compose.service for that narrower observation.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `project_invalid`
-- `orchestrator_unavailable`
-- `observation_failed`
 
-## Requirements
+- `ordo-help describe connector.compose`: Parent Compose connector family
+- `ordo-help describe connector.compose.service`: Sibling probe for one declared service
+- `ordo-help describe connector.compose.start`: Lifecycle action that commonly follows a project-level observation
 
-- None
+## Examples
 
-## Example inputs
+- compose.project with inputs {}
 
-### `compose.project`
+## Inspect next
 
-```json
-{}
-```
+- connector.compose.service
+- connector.compose.start
+- operations
 
-## Full JSON reference
+## Exact machine contract
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "project_directory",
-      "compose_file",
-      "project_name"
-    ],
-    "prerequisites": [
-      "docker compose available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "compose",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "compose.project"
-      }
-    ],
-    "failure_modes": [
-      "project_invalid",
-      "orchestrator_unavailable",
-      "observation_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project",
-    "outputs": {
-      "declared_services": "array[string]",
-      "project": "string",
-      "service_counts": "object",
-      "services": "object",
-      "state": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Observe one Compose project as an orchestration unit.",
-    "tags": [
-      "compose",
-      "probe"
-    ]
-  },
-  "operation_name": "project",
-  "reference": "compose.project",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+Use `ordo-help operation compose.project --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### compose_lifecycle_decisions
+
+Inspect the configured Compose project, make the start decision explicit, then save and check the action result before moving to service cleanup.
+
+```yaml
+version: 0
+workflow: compose-lifecycle-decisions
+inputs:
+  service: {}
+  start_project: {}
+  remove_service: {}
+blocks:
+- steps:
+  - name: inspect-project
+    uses: compose.project
+    register: project
+  - name: require-project-start-decision
+    gate: inputs.start_project and step.project.outputs.state != "running"
+  - name: start-project
+    uses: compose.start
+    register: started
+  - name: require-project-running
+    gate: step.started.outputs.state == "running"
+  - name: inspect-service
+    uses: compose.service
+    with:
+      service: inputs.service
+    register: service_before_cleanup
+  - name: require-service-cleanup-decision
+    gate: inputs.remove_service
+  - name: stop-service
+    uses: compose.stop
+    with:
+      service: inputs.service
+    register: stopped
+  - name: require-service-stopped
+    gate: step.stopped.outputs.state == "stopped"
+  - name: remove-service
+    uses: compose.remove
+    with:
+      service: inputs.service
+    register: removed
+  - name: require-service-absent
+    gate: step.removed.outputs.state == "absent"
+  - name: publish-lifecycle-results
+    publish:
+      project_state_before_start: step.project.outputs.state
+      started_project: step.started.outputs.changed
+      service_state_before_cleanup: step.service_before_cleanup.outputs.state
+      stopped_service: step.stopped.outputs.changed
+      removed_service: step.removed.outputs.changed
 ```

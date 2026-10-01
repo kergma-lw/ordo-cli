@@ -8,13 +8,48 @@ from connectors.gh.actions._shared import ISSUE_INVENTORY_INVALIDATION
 from connectors.gh._external import command_text, fail_github_command
 from connectors.gh._repository import REPOSITORY_INPUTS, fetch_repository_payload, resolve_repository_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
+from ordo.model.human import declare_human
 
 _ISSUE_URL_RE = re.compile(r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/issues/(?P<number>\d+)$")
 
 
+HUMAN = declare_human({'title': 'Create GitHub issue',
+ 'goal': 'Open a new issue in the workflow\'s normal GitHub repository or in one deliberate repository override.',
+ 'summary': 'Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL '
+            'for later workflow steps. Prefer connector_contexts.gh.repository as the normal repository target and use '
+            'an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['The workflow must open a new issue and then reuse the returned issue number or URL in later '
+                          'steps.']},
+              {'heading': 'What to provide',
+               'items': ['Provide a non-empty issue title. Optionally provide body text; omit it when the issue should '
+                          'start without a body.',
+                         'Use the workflow\'s GitHub repository context normally. Name a repository only for a deliberate '
+                          'one-off target change.']},
+              {'heading': 'Result and boundary',
+               'items': ['Later steps can use the created issue\'s repository-qualified reference, number, title, or URL.',
+                         'Creation can succeed before a later step fails and is not rolled back. It fails when the target '
+                          'repository cannot be used, the title is blank, or GitHub blocks creation.']},
+              {'heading': 'Do not use for',
+               'items': ['Editing or commenting on an already existing issue; use the narrower body or comment actions '
+                         'for that follow-up work.',
+                         'Reading current issue metadata before deciding whether creation is necessary; use '
+                         'connector.gh.issue or other probe surfaces first when the issue already exists.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.issue',
+                               'summary': 'Probe the created issue later when you need its full current snapshot'},
+                              {'handle': 'connector.gh.issue.comment.add',
+                               'summary': 'Add a follow-up comment to an existing issue instead of creating a new one'},
+                              {'handle': 'connector.gh.issue.body.replace',
+                               'summary': 'Rewrite the body of an existing issue instead of creating a fresh issue'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue', 'connector.gh.issue.comment.add', 'connector.gh.issue.body.append']}]})
+
 def info():
     return action(
         name="issue.create",
+        human=HUMAN,
         inputs={**REPOSITORY_INPUTS, "title": "string", "body": "string | null"},
         effects=("create GitHub issue",),
         outputs={"issue_ref": "string", "repository": "string", "number": "integer", "url": "string", "title": "string"},

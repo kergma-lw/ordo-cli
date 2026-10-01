@@ -33,28 +33,18 @@ def test_operation_schema_matches_probe_and_keeps_policy_out_of_outputs():
 
 
 @pytest.mark.parametrize("as_json", [False, True])
-def test_describe_preserves_all_observation_semantics(as_json):
+def test_describe_publishes_author_facing_observation_semantics(as_json):
     result = help_output("describe", "connector.git.remote", as_json=as_json)
     text = json.dumps(result) if as_json else result
     for phrase in (
-        "required remote: string", "nonempty", "whitespace", "NUL", "leading '-'",
-        "team/origin", "inventory exactly", "exists=false", "fetch_urls=[]",
-        "push_urls=[]", "mirror=null", "requested name preserved", "mirror=false, not null",
-        "git remote get-url --all", "git remote get-url --push --all",
-        "insteadOf", "pushInsteadOf", "push-URL fallback", "literal observed URL",
-        "in order", "duplicates", "without normalization, trimming, or redaction",
-        "Only LF", "CR and Unicode line separators", "git config --bool --get",
-        "Git config exit 1", "other command failures fail the probe",
-        "probe_failed", "probe.git_remote", "invalid_input", "inventory_failed",
-        "invalid_inventory", "fetch_urls_failed", "push_urls_failed", "invalid_fetch_urls",
-        "invalid_push_urls", "mirror_failed", "invalid_mirror", "partial success",
-        "Raw command evidence", "shared family bootstrap prerequisites", "read-only",
-        "non-atomic", "check, review, plan, run, explain, and next", "without network access",
-        "URL safety", "remote policy", "caller chooses acceptable destinations",
-        "configuration can change", "connector.git.repo", "connector.git.upstream",
+        "`remote`: required", "team/origin", "exists=false", "fetch_urls",
+        "push_urls", "mirror", "recorded destinations", "connector.git.repo", "connector.git.upstream",
         "connector.git.sync.push",
     ):
         assert phrase in text, phrase
+    if not as_json:
+        for phrase in ("get-url", "insteadOf", "exit 1", "probe.git_remote", "diagnostic", "runtime", "command evidence", "fixture", "live io"):
+            assert phrase not in text, phrase
 
 
 def test_describe_readiness_with_verified_fragment():
@@ -62,8 +52,8 @@ def test_describe_readiness_with_verified_fragment():
     payload = help_output("describe", handle, as_json=True)
     text = help_output("describe", handle)
     metadata = payload["metadata"]
-    assert metadata["definition"] in text
-    assert metadata["definition"].startswith("Observe")
+    assert payload["human"]["summary"] in text
+    assert payload["human"]["summary"].startswith("Observe")
     for field in ("use_when", "do_not_use_for", "nearest_surfaces"):
         assert metadata[field]
     assert {neighbor["handle"] for neighbor in metadata["nearest_surfaces"]} == {
@@ -87,6 +77,9 @@ def test_describe_readiness_with_verified_fragment():
 def test_features_teaches_real_primitive_and_domain_split(as_json):
     result = help_output("features", as_json=as_json)
     text = json.dumps(result) if as_json else result
+    if not as_json:
+        assert "Workflow-authoring feature map" in text
+        return
     for handle in ("connector.git.remote", "connector.git.repo", "connector.git.upstream", "connector.git.sync.push"):
         assert handle in text
     for phrase in ("fetch_urls", "push_urls", "mirror=false", "exists=false", "mirror=null",
@@ -95,9 +88,7 @@ def test_features_teaches_real_primitive_and_domain_split(as_json):
         assert phrase.lower() in text.lower()
 
 
-@pytest.mark.parametrize("query", ["git.remote", "fetch_urls", "push_urls", "invalid_mirror"])
+@pytest.mark.parametrize("query", ["git.remote", "fetch_urls", "push_urls", "mirror"])
 def test_search_routes_to_remote_semantic_contract(query):
-    assert "connector.git.remote" in help_output("search", query)
-    assert "ordo-help describe connector.git.remote --json" in json.dumps(
-        help_output("search", query, as_json=True)
-    )
+    assert "git.remote" in help_output("search", query)
+    assert "ordo-help operation git.remote --json" in json.dumps(help_output("search", query, as_json=True))

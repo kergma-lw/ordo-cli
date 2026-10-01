@@ -5,6 +5,7 @@ from __future__ import annotations
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_json_list, fetch_pull_request, normalize_author, resolve_limit
 from ordo.plugin_sdk import OperationContext, OperationOutcome, ok, probe
+from ordo.model.human import declare_human
 
 _SUPPORTED_EVENTS = {
     "ready_for_review",
@@ -21,9 +22,37 @@ _SUPPORTED_EVENTS = {
 }
 
 
+HUMAN = declare_human({'title': 'GitHub pr timeline',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs lifecycle '
+         'history there for one PR number.',
+ 'summary': 'Probe one GitHub pull request timeline as normalized lifecycle events such as ready-for-review, review '
+            'requests, and base-ref changes. Prefer connector_contexts.gh.repository as the normal repository target '
+            'and use an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'needs lifecycle history there for one PR number.',
+                         'The workflow needs temporal PR lifecycle facts that are not equivalent to comments, checks, '
+                         'or the current PR snapshot alone.']},
+              {'heading': 'Do not use for',
+               'items': ['The current PR state only; use connector.gh.pr when timeline history is unnecessary.',
+                         'Top-level discussion or submitted review verdicts; use comments or reviews for those '
+                         'narrower surfaces.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.pr',
+                               'summary': 'Parent PR snapshot for the current state without event history'},
+                              {'handle': 'connector.gh.pr.reviews',
+                               'summary': 'Sibling probe for submitted review verdicts rather than timeline events'},
+                              {'handle': 'connector.gh.pr.comments',
+                               'summary': 'Sibling probe for conversation comments rather than lifecycle history'}]},
+              {'heading': 'Examples', 'items': ['gh.pr.timeline with inputs {"limit": 20, "pull_number": 42}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.pr.reviews', 'connector.gh.pr.comments', 'connector.gh.pr']}]})
+
 def info():
     return probe(
         name="pr.timeline",
+        human=HUMAN,
         summary="Read normalized lifecycle events from a GitHub pull request timeline.",
         inputs={**PULL_IDENTITY_INPUTS, "limit": "integer"},
         outputs={"pull_ref": "string", "total_count": "integer", "events": ["object"]},

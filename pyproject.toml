@@ -16,12 +16,13 @@ dependencies = [
 [project.scripts]
 ordo-playbook = "ordo.cli:main"
 ordo-help = "ordo.help_cli:main"
+ordo-human-help-audit = "ordo.human_help_audit:main"
 
 [tool.setuptools]
 package-dir = {ordo = "src/ordo", connectors = "connectors"}
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src", "."]
 include = ["ordo*", "connectors*"]
 exclude = ["tests*"]
 

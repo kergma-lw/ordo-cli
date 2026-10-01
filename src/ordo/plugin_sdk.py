@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from ordo.external_failures import build_external_failure_details, classify_external_command_failure
 from ordo.model.connector import PreflightObservation
+from ordo.model.human import HumanDeclaration, complete_gh_operation_human
 from ordo.model.diagnostic import Diagnostic as RuntimeDiagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
@@ -66,6 +67,7 @@ class PublishedOperation:
     replaced_by: tuple[str, ...] = ()
     invalidates_observations: tuple[str, ...] = ()
     preflight_observations: tuple[PreflightObservation, ...] = ()
+    human: HumanDeclaration | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +222,7 @@ def probe(
     maturity: str = "stable",
     deprecated: bool = False,
     replaced_by: tuple[str, ...] = (),
+    human: HumanDeclaration | None = None,
 ) -> PublishedOperation:
     return PublishedOperation(
         name=name,
@@ -235,6 +238,10 @@ def probe(
         maturity=maturity,
         deprecated=deprecated,
         replaced_by=replaced_by,
+        human=complete_gh_operation_human(
+            human, name=name, inputs={} if inputs is None else dict(inputs), outputs={} if outputs is None else dict(outputs),
+            is_action=False,
+        ),
     )
 
 
@@ -283,6 +290,7 @@ def action(
     replaced_by: tuple[str, ...] = (),
     invalidates_observations: tuple[str, ...] = (),
     preflight_observations: tuple[PreflightObservation, ...] = (),
+    human: HumanDeclaration | None = None,
 ) -> PublishedOperation:
     normalized_inputs = {} if inputs is None else dict(inputs)
     return PublishedOperation(
@@ -306,7 +314,13 @@ def action(
             inputs=normalized_inputs,
             preflight_observations=preflight_observations,
         ),
+        human=complete_gh_operation_human(
+            human, name=name, inputs=normalized_inputs, outputs={} if outputs is None else dict(outputs), is_action=True,
+            has_preflight=bool(preflight_observations),
+        ),
     )
+
+
 
 
 def ok(*, summary: str | None = None, outputs: JSONObject | None = None, raw: JSONObject | None = None) -> OperationOutcome:

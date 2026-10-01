@@ -1,116 +1,51 @@
-# git.worktree
+# Git worktree
 
-Read the current Git worktree state.
+A workflow needs the exact dirty-path list or needs to distinguish staged, unstaged, and untracked changes before a later Git action.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read the current Git worktree state.
+Read current Git worktree cleanliness and changed paths, separating untracked, staged, and unstaged changes without mixing in branch or stash summary fields.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic is about worktree cleanliness itself rather than about the current branch name or stash inventory.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- One coarse repository-status snapshot that also includes current-branch and stash facts; use connector.git.state for that combined summary.
+- Mutating the index by staging everything; use connector.git.index.add_all for the all-in staging action.
 
-```json
-{}
-```
+## What to provide
 
-## Outputs
+- No operation inputs are required; use the checkout whose worktree facts matter.
 
-```json
-{
-  "clean": "boolean",
-  "dirty_paths": [
-    "string"
-  ],
-  "has_staged_changes": "boolean",
-  "has_unstaged_changes": "boolean",
-  "has_untracked": "boolean",
-  "repository_root": "string"
-}
-```
+## Result and boundary
 
-## Effects
+- Reports whether the current worktree is clean or dirty, and identifies whether the dirty state includes staged, unstaged, or untracked changes.
+- Reports the repository root for the inspected checkout, so later steps can distinguish the repository context from the caller's starting directory.
+- Includes changed paths when a workflow needs file-level follow-up, but cleanliness and change categories remain usable without inspecting that list.
+- Returns clean, dirty_paths, has_untracked, has_staged_changes, has_unstaged_changes, and repository_root; unreadable state has no partial result and paths can change after observation.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `probe_failed`
 
-## Requirements
+- [`connector.git.state`](state.md): Read one broader repository-status snapshot that includes branch and stash context
+- [`connector.git.index.add_all`](index-add-all.md): Stage the current worktree batch after reviewing it
+- [`connector.git.branch.switch`](branch-switch.md): Sibling action for checkout movement when local cleanliness may decide whether switching is safe
+- [`connector.git.commit.create`](commit-create.md): Sibling action for committing once staged and unstaged worktree state has been reviewed
 
-- None
+## Exact machine contract
 
-## Example inputs
+Use `ordo-help operation git.worktree --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `git.worktree`
+## Canonical Examples
 
-```json
-{}
-```
+### git_worktree_probe_step
 
-## Full JSON reference
+Inspect the current dirty-path set and worktree cleanliness before staging or other Git mutations depend on those details.
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.worktree"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "worktree",
-    "outputs": {
-      "clean": "boolean",
-      "dirty_paths": [
-        "string"
-      ],
-      "has_staged_changes": "boolean",
-      "has_unstaged_changes": "boolean",
-      "has_untracked": "boolean",
-      "repository_root": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'git.worktree'",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "worktree",
-  "reference": "git.worktree",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: inspect-worktree-before-staging
+        uses: git.worktree
+        register: worktree_before
 ```

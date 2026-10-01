@@ -1,0 +1,56 @@
+version: 0
+workflow: gh-issue-maintenance
+inputs:
+  repository: acme/mobile-app
+  title: Refresh onboarding guide
+  initial_body: Document the onboarding checklist.
+  close_comment: Closing after syncing the checklist.
+blocks:
+- steps:
+  - name: create-issue
+    uses: gh.issue.create
+    with:
+      repository: inputs.repository
+      title: inputs.title
+      body: inputs.initial_body
+    register: created_issue
+  - name: inspect-created-issue
+    uses: gh.issue
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+    register: issue_snapshot
+  - name: add-close-comment
+    uses: gh.issue.comment.add
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      body: inputs.close_comment
+  - name: append-body-note
+    uses: gh.issue.body.append
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      text: "Follow-up note: checklist synced."
+      separator: "\n\n"
+  - name: replace-body
+    uses: gh.issue.body.replace
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      body: |
+        Document the onboarding checklist.
+
+        Checklist synced.
+  - name: list-comments
+    uses: gh.issue.comments
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      limit: 20
+    register: comments_snapshot
+  - name: close-issue
+    uses: gh.issue.close
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number

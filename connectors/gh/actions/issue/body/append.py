@@ -7,12 +7,42 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
+from ordo.model.human import declare_human
 _DEFAULT_SEPARATOR = "\n\n"
 
+
+HUMAN = declare_human({'title': 'GitHub issue body append',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow should append '
+         'one note to one issue body there.',
+ 'summary': 'Append one text fragment to the end of an existing GitHub issue body, optionally separated from the prior '
+            'body by one explicit separator. Prefer connector_contexts.gh.repository as the normal repository target '
+            'and use an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'should append one note to one issue body there.',
+                         'The workflow should preserve the current issue body and add one extra section, note, or '
+                         'footer to it.']},
+              {'heading': 'Do not use for',
+               'items': ['Regenerating the whole canonical body from scratch; use connector.gh.issue.body.replace for '
+                         'a full rewrite.',
+                         'Adding conversational discussion that belongs in the comment thread instead of the issue '
+                         'body; use connector.gh.issue.comment.add.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.issue.body.replace',
+                               'summary': 'Rewrite the full body instead of appending one trailing fragment'},
+                              {'handle': 'connector.gh.issue.comment.add',
+                               'summary': 'Write a discussion comment instead of mutating the issue body'},
+                              {'handle': 'connector.gh.issue',
+                               'summary': 'Probe the current body first when the append decision depends on existing '
+                                          'issue metadata'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue.body.replace', 'connector.gh.issue.comment.add', 'connector.gh.issue']}]})
 
 def info():
     return action(
         name="issue.body.append",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "text": "string", "separator": "string | null"},
         effects=("append text to GitHub issue body",),
         outputs={"issue_ref": "string", "url": "string", "body": "string", "changed": "boolean"},

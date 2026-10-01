@@ -1,0 +1,17 @@
+version: 0
+workflow: inspect-git-worktree-inventory
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-worktrees
+        uses: git.worktrees
+        register: worktree_inventory
+      - name: inspect-current-worktree
+        uses: git.worktree
+        register: current_worktree
+      - name: publish-summary
+        publish:
+          current_path: step.worktree_inventory.outputs.current_path
+          worktree_count: step.worktree_inventory.outputs.count
+          dirty_paths: step.current_worktree.outputs.dirty_paths
+          summary: "Git worktree inventory workflow prepared"

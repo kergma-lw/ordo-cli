@@ -5,12 +5,66 @@ from __future__ import annotations
 from connectors.git.actions._shared import map_nonzero, require_local_branch
 from connectors.git.actions.sync._shared import require_configured_remote
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git sync push',
+  'goal': 'A workflow is ready to publish one local branch outward after local validation, range checks, or remote '
+          'refresh have already justified the push decision.',
+  'summary': 'Push one local Git branch to a named remote, or use the current branch\'s configured upstream remote when none is supplied.',
+  'sections': [{'heading': 'Use when',
+                'items': ['A workflow is ready to publish one local branch outward after local validation, range '
+                          'checks, or remote refresh have already justified the push decision.',
+                          'Use this to publish a branch, not merely to refresh '
+                          'remote-tracking refs or inspecting divergence.',
+                          'Supply a configured remote name such as origin or team/origin. A remote name is a local Git '
+                          'identifier, not a URL, path, or command option.',
+                            'When remote is omitted or null, the requested branch must be the current branch and have a '
+                            'configured upstream remote. The action refuses to guess otherwise.',
+                           'The action checks that the branch and selected remote are available before pushing.']},
+              {'heading': 'Result and boundary',
+               'items': ['On success, the named remote has the current local branch revision for the branch that was '
+                         'pushed.',
+                         'A rejected non-fast-forward push leaves the remote branch unchanged. Fetch and reconcile the '
+                         'divergence before trying again.',
+                         'Other push blocks, such as unavailable branch or remote access, do not claim that publication '
+                         'occurred.']},
+              {'heading': 'What to provide',
+               'items': ['Provide the local branch to publish and, when it is not using its usual destination, the '
+                         'repository remote to receive it.']},
+              {'heading': 'Do not use for',
+               'items': ['Refreshing local knowledge of remote refs; use connector.git.sync.fetch for inbound '
+                         'synchronization before or instead of publishing.',
+                         'Guessing whether a push would be fast-forward-safe without wanting to publish yet; use '
+                         'connector.git.range or connector.git.upstream for that read-only decision context first.',
+                          'Ad-hoc URLs, paths, or options instead of configured remote names.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.sync.fetch',
+                               'summary': 'Sibling action for refreshing remote-tracking refs before a later push '
+                                          'decision or rejection recovery'},
+                              {'handle': 'connector.git.upstream',
+                                'summary': "Read the current branch's configured upstream remote "
+                                          'when remote is omitted'},
+                              {'handle': 'connector.git.range',
+                                'summary': 'Compare ahead/behind facts when the workflow first needs to know '
+                                          'whether the push should succeed as fast-forward'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current branch identity when the workflow first needs to '
+                                          'confirm which branch should be published'}]},
+              {'heading': 'Examples',
+               'items': ['git.sync.push with inputs {"branch": "feature/demo", "remote": "origin"}',
+                         'git.sync.push with inputs {"branch": "feature/demo", "remote": "team/origin"}',
+                         'git.sync.push with inputs {"branch": "feature/demo", "remote": null}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.sync.fetch', 'connector.git.upstream', 'connector.git.range']}]})
 
 def info():
     return action(
         name="sync.push",
-        summary="Push to a configured remote name; omitted or null remote uses the upstream-derived name, validated against configured names",
+        human=git_human(HUMAN, provide="`branch`: required; provide the local branch to publish. `remote`: optional; provide a configured remote name or null. Omit it only when this is the current branch and it has a configured upstream destination.", result="Returns remote and branch after publication. A rejected non-fast-forward push leaves the remote branch unchanged; unavailable branch, destination, access, or other blocks do not claim publication."),
+        summary="Push to a configured remote name; omitted or null remote uses the current branch's upstream-derived name, validated against configured names",
         inputs={"branch": "string", "remote": "string | null"},
         effects=("push a local branch to a remote",),
         outputs={"remote": "string", "branch": "string"},

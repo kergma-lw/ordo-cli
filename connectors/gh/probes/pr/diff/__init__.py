@@ -8,14 +8,47 @@ from connectors.gh._external import command_text, fail_github_command, text_ment
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_json_list, resolve_limit
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.model.human import declare_human
 
 _PATCH_CHAR_LIMIT = 4000
 _DIFF_HEADER_RE = re.compile(r'^diff --git a/(?P<old>.+) b/(?P<new>.+)$')
 
 
+HUMAN = declare_human({'title': 'GitHub pr diff',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs '
+         'changed-file detail there for one PR number.',
+ 'summary': 'Probe one GitHub pull request diff as normalized changed-file summaries with patch excerpts, rename '
+            'metadata, and binary/truncation signals. Prefer connector_contexts.gh.repository as the normal repository '
+            'target and use an explicit repository argument only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'needs changed-file detail there for one PR number.',
+                         'The workflow needs to reason about which files changed or inspect bounded patch content '
+                         'without parsing raw git output itself.']},
+              {'heading': 'Do not use for',
+               'items': ['Overall PR headline facts such as title, branch refs, or review decision; use '
+                         'connector.gh.pr for that metadata snapshot.',
+                         'Conversation or review decision surfaces; use comments, review_comments, or reviews when the '
+                         'workflow is about discussion rather than code changes.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.pr',
+                               'summary': 'Parent PR snapshot probe that reports change totals but not per-file diff '
+                                          'content'},
+                              {'handle': 'connector.gh.pr.review_comments',
+                               'summary': 'Sibling probe for line-level reviewer feedback that may reference files '
+                                          'from this diff'},
+                              {'handle': 'connector.git.range',
+                               'summary': 'Repository-local git diff surface when the workflow needs local git ranges '
+                                          'instead of remote PR normalization'}]},
+              {'heading': 'Examples', 'items': ['gh.pr.diff with inputs {"limit": 20, "pull_number": 42}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.pr.review_comments', 'connector.git.range', 'connector.gh.pr']}]})
+
 def info():
     return probe(
         name="pr.diff",
+        human=HUMAN,
         summary="Read normalized change content from a GitHub pull request.",
         inputs={**PULL_IDENTITY_INPUTS, "limit": "integer"},
         outputs={"pull_ref": "string", "total_files": "integer", "files": ["object"]},

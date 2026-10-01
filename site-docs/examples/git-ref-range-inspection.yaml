@@ -1,0 +1,26 @@
+version: 0
+workflow: inspect-git-ref-range
+inputs:
+  ref_name: {}
+  base_ref: {}
+  head_ref: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-ref
+        uses: git.ref
+        with:
+          ref: inputs.ref_name
+        register: ref_info
+      - name: inspect-range
+        uses: git.range
+        with:
+          base: inputs.base_ref
+          head: inputs.head_ref
+        register: range_info
+      - name: publish-summary
+        publish:
+          ref_exists: step.ref_info.outputs.exists
+          ahead_count: step.range_info.outputs.ahead_count
+          behind_count: step.range_info.outputs.behind_count
+          summary: "Git ref and range workflow prepared"

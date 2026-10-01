@@ -7,11 +7,41 @@ import json
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'GitHub issue comment add',
+ 'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow should leave '
+         'one comment on one issue there.',
+ 'summary': 'Add one new comment to an existing GitHub issue and return the created comment id, URL, and body. Prefer '
+            'connector_contexts.gh.repository as the normal repository target and use an explicit repository argument '
+            'only as a one-off override.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['connector_contexts.gh.repository already names the normal repository target and the workflow '
+                         'should leave one comment on one issue there.',
+                         'The workflow should leave a human-facing note in the issue conversation without rewriting '
+                         'the issue body.']},
+              {'heading': 'Do not use for',
+               'items': ['Updating the canonical issue description; use connector.gh.issue.body.append or '
+                         'connector.gh.issue.body.replace when the change belongs in the body itself.',
+                         'Reading prior comments; use connector.gh.issue.comments when the workflow needs observation '
+                         'rather than mutation.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.issue.comments',
+                               'summary': 'Probe the existing comment thread before or after adding a new comment'},
+                              {'handle': 'connector.gh.issue.body.append',
+                               'summary': 'Append durable text to the issue body instead of the comment thread'},
+                              {'handle': 'connector.gh.issue.body.replace',
+                               'summary': 'Rewrite the full issue body when the workflow owns the canonical '
+                                          'description'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.issue.comments', 'connector.gh.issue.body.append', 'connector.gh.issue.close']}]})
 
 def info():
     return action(
         name="issue.comment.add",
+        human=HUMAN,
         inputs={**ISSUE_IDENTITY_INPUTS, "body": "string"},
         effects=("add GitHub issue comment",),
         outputs={"issue_ref": "string", "comment_id": "string", "url": "string", "body": "string"},

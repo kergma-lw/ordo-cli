@@ -1,122 +1,48 @@
-# git.branches
+# Git branches
 
-List local Git branches.
+A workflow needs one branch inventory scan before choosing, creating, deleting, or publishing branch-related state.
 
-Use this when a workflow needs Git state or Git side effects. In practice: list local Git branches.
+List local and remote Git branches together with the current branch marker.
 
-- Namespace: `git`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later logic needs to compare the current branch against the available local or remote branch set, not just read one current branch name.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## Do not use for
 
-## Inputs
+- Reading only the current checkout context; use connector.git.branch for the cheaper current-branch lookup.
+- Mutating branch state; use connector.git.branch.create, connector.git.branch.delete, or connector.git.branch.switch for those actions.
 
-```json
-{}
-```
+## What to provide
 
-## Outputs
+- No inputs are required; run from the repository whose branch choices the workflow needs.
 
-```json
-{
-  "count": "integer",
-  "current": "string | null",
-  "items": [
-    {
-      "current": "boolean",
-      "kind": "string",
-      "name": "string",
-      "ref": "string"
-    }
-  ],
-  "repository_root": "string"
-}
-```
+## Result and boundary
 
-## Effects
+- Returns count, current, items with name, ref, kind, and current marker, plus repository_root. The inventory is a point-in-time observation and has no partial result when it is unreadable.
 
-- None
+## Related references
 
-## Failure modes
+Use these related references when you need a neighboring operation or more context.
 
-- `probe_failed`
 
-## Requirements
+- [`connector.git.branch`](branch.md): Read only the current checkout branch instead of the full inventory
+- [`connector.git.branch.create`](branch-create.md): Sibling action for adding one new local branch after inventory review
+- [`connector.git.branch.delete`](branch-delete.md): Sibling action for removing one local branch after inventory review
+- [`connector.git.ref`](ref.md): Check one explicit ref when a full inventory is broader than needed
 
-- None
+## Exact machine contract
 
-## Example inputs
+Use `ordo-help operation git.branches --json` when you need the exact machine-readable input and result contract for this operation.
 
-### `git.branches`
+## Canonical Examples
 
-```json
-{}
-```
+### git_branches_probe_step
 
-## Full JSON reference
+Load the branch inventory when the workflow needs the available local and remote branch set instead of only the current branch.
 
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "repository_root"
-    ],
-    "prerequisites": [
-      "git binary available",
-      "inside git repository"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "git",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {},
-        "reference": "git.branches"
-      }
-    ],
-    "failure_modes": [
-      "probe_failed"
-    ],
-    "inputs": {},
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "branches",
-    "outputs": {
-      "count": "integer",
-      "current": "string | null",
-      "items": [
-        {
-          "current": "boolean",
-          "kind": "string",
-          "name": "string",
-          "ref": "string"
-        }
-      ],
-      "repository_root": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'git.branches'",
-    "tags": [
-      "git",
-      "probe"
-    ]
-  },
-  "operation_name": "branches",
-  "reference": "git.branches",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+      - name: list-branches
+        uses: git.branches
+        register: branches
 ```

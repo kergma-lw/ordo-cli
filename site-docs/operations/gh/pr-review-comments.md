@@ -1,53 +1,51 @@
-# gh.pr.review_comments
+# GitHub pr review-comments
 
-Read line-level review comments from a GitHub pull request.
+the workflow's GitHub repository context already names the normal repository target and the workflow needs file-anchored PR review comments there by pull number.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read line-level review comments from a GitHub pull request.
+Probe line-level review comments on one GitHub pull request as typed code-anchored discussion records with path and line metadata. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "limit": "integer",
-  "pull_number": "integer",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "comments": [
-    "object"
-  ],
-  "pull_ref": "string",
-  "total_count": "integer"
-}
-```
-
-## Authoring contract
-
-Probe line-level review comments on one GitHub pull request as typed code-anchored discussion records with path and line metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs file-anchored PR review comments there by pull number.
 - The workflow needs reviewer feedback tied to concrete files or lines rather than only top-level PR conversation.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
 
-### Boundaries
+## What to provide
+
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `pull_number`: required.
+- `limit`: optional.
+
+## Result and boundary
+
+- Usable result fact: `pull_ref`.
+- Usable result fact: `total_count`.
+- Usable result fact: `comments`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
 
 - Top-level conversation comments on the PR body; use connector.gh.pr.comments for that broader discussion thread.
 - Submitted review verdicts without line detail; use connector.gh.pr.reviews for the review-level decisions.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.pr.diff`](pr-diff.md): Sibling probe for changed-file context that these line comments often reference
+- [`connector.gh.pr.comments`](pr-comments.md): Sibling probe for top-level conversation comments rather than file-anchored review remarks
+- [`connector.gh.pr.reviews`](pr-reviews.md): Sibling probe for submitted review verdicts rather than individual line comments
+
+## Inspect next
+
+- connector.gh.pr.diff
+- connector.gh.pr.reviews
+- connector.gh.pr.comments
+
+## Exact machine contract
+
+Use `ordo-help operation gh.pr.review_comments --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_pr_review_comments_step
 
@@ -61,100 +59,4 @@ Inspect line-level review comments with one explicit limit when the workflow nee
       pull_number: inputs.pull_number
       limit: 20
     register: pr_review_comments
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `pull_not_found`
-- `limit_invalid`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.pr.review_comments`
-
-```json
-{
-  "limit": "integer",
-  "pull_number": "integer",
-  "repository": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "limit": "integer",
-          "pull_number": "integer",
-          "repository": "string"
-        },
-        "reference": "gh.pr.review_comments"
-      }
-    ],
-    "failure_modes": [
-      "pull_not_found",
-      "limit_invalid",
-      "probe_failed"
-    ],
-    "inputs": {
-      "limit": "integer",
-      "pull_number": "integer",
-      "repository": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "pr.review_comments",
-    "outputs": {
-      "comments": [
-        "object"
-      ],
-      "pull_ref": "string",
-      "total_count": "integer"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Read line-level review comments from a GitHub pull request.",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "pr.review_comments",
-  "reference": "gh.pr.review_comments",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

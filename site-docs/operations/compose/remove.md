@@ -1,155 +1,101 @@
-# compose.remove
+# Compose remove
+
+You need cleanup of one stopped service instance after it is no longer needed.
 
 Remove one stopped materialized Compose service instance.
 
-Use this when a workflow needs this exact operation surface. In practice: remove one stopped materialized Compose service instance.
+## Use when
 
-- Namespace: `compose`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+- Provide one non-empty declared service name. This action has no project-wide form.
 
-## Related commands
+## What to provide
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+- `service`: required; provide one non-empty declared service name. This action has no project-wide form.
 
-## Inputs
+## Result and boundary
 
-```json
-{
-  "service": "string"
-}
-```
+- Later steps can use `target_kind`, `target`, `state`, and `changed`. Success reports `state=absent`, including an already absent service with `changed=false`; a running, starting, or degraded service is rejected without an implicit stop.
 
-## Outputs
+## Do not use for
 
-```json
-{
-  "changed": "boolean",
-  "state": "string",
-  "target": "string",
-  "target_kind": "string"
-}
-```
+- Stopping a still-running target; use connector.compose.stop first when runtime is still active.
+- Whole-project lifecycle changes; use connector.compose.start or connector.compose.stop when the intent is project/service runtime state rather than removal.
+- Assuming removal stops a service. A running, starting, or degraded service is rejected without an implicit stop; success reports state absent, including an already absent service with changed false.
 
-## Effects
+## Related references
 
-- remove the materialized runtime instance for one Compose service
+Use these related references when you need a neighboring operation or more context.
 
-## Failure modes
 
-- `service_not_declared`
-- `service_running`
-- `project_invalid`
-- `orchestrator_unavailable`
-- `runtime_remove_failed`
-- `remove_failed`
+- `ordo-help describe connector.compose`: Parent Compose connector family
+- `ordo-help describe connector.compose.service`: Service-level observation that can confirm stopped state before removal
+- `ordo-help describe connector.compose.stop`: Sibling lifecycle action often needed before removal
 
-## Requirements
+## Examples
 
-- None
+- compose.remove with inputs {"service": "api"}
 
-## Preflight observations
+## Inspect next
 
-```json
-[
-  {
-    "probe": "compose.service",
-    "with": {
-      "service": "{service}"
-    }
-  }
-]
-```
+- connector.compose.stop
+- connector.compose.service
+- operations
 
-## Invalidated observations
+## Exact machine contract
 
-- `compose.*`
+Use `ordo-help operation compose.remove --json` when you need the exact machine-readable input and result contract for this operation.
 
-## Example inputs
+## Canonical Examples
 
-### `compose.remove`
+### compose_lifecycle_decisions
 
-```json
-{
-  "service": "string"
-}
-```
+Remove the named service only after the saved stop result is `stopped`, then save and require the final `absent` result before publishing cleanup facts.
 
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "project_directory",
-      "compose_file",
-      "project_name"
-    ],
-    "prerequisites": [
-      "docker compose available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "compose",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "remove the materialized runtime instance for one Compose service"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "service": "string"
-        },
-        "reference": "compose.remove"
-      }
-    ],
-    "failure_modes": [
-      "service_not_declared",
-      "service_running",
-      "project_invalid",
-      "orchestrator_unavailable",
-      "runtime_remove_failed",
-      "remove_failed"
-    ],
-    "inputs": {
-      "service": "string"
-    },
-    "invalidates_observations": [
-      "compose.*"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "remove",
-    "outputs": {
-      "changed": "boolean",
-      "state": "string",
-      "target": "string",
-      "target_kind": "string"
-    },
-    "preflight_observations": [
-      {
-        "probe": "compose.service",
-        "with": {
-          "service": "{service}"
-        }
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Remove one stopped materialized Compose service instance.",
-    "tags": [
-      "compose",
-      "action"
-    ]
-  },
-  "operation_name": "remove",
-  "reference": "compose.remove",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: compose-lifecycle-decisions
+inputs:
+  service: {}
+  start_project: {}
+  remove_service: {}
+blocks:
+- steps:
+  - name: inspect-project
+    uses: compose.project
+    register: project
+  - name: require-project-start-decision
+    gate: inputs.start_project and step.project.outputs.state != "running"
+  - name: start-project
+    uses: compose.start
+    register: started
+  - name: require-project-running
+    gate: step.started.outputs.state == "running"
+  - name: inspect-service
+    uses: compose.service
+    with:
+      service: inputs.service
+    register: service_before_cleanup
+  - name: require-service-cleanup-decision
+    gate: inputs.remove_service
+  - name: stop-service
+    uses: compose.stop
+    with:
+      service: inputs.service
+    register: stopped
+  - name: require-service-stopped
+    gate: step.stopped.outputs.state == "stopped"
+  - name: remove-service
+    uses: compose.remove
+    with:
+      service: inputs.service
+    register: removed
+  - name: require-service-absent
+    gate: step.removed.outputs.state == "absent"
+  - name: publish-lifecycle-results
+    publish:
+      project_state_before_start: step.project.outputs.state
+      started_project: step.started.outputs.changed
+      service_state_before_cleanup: step.service_before_cleanup.outputs.state
+      stopped_service: step.stopped.outputs.changed
+      removed_service: step.removed.outputs.changed
 ```

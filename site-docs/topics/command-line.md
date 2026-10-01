@@ -1,266 +1,47 @@
 # Command-line reference
 
-This page summarizes the public CLI surface and the main execution modes.
+Choose the public command that lets you inspect, validate, plan, or carry out workflow work.
 
-Use this page when you need the public CLI entrypoints, flags, and execution modes.
+Start by listing workflows, then use a non-changing mode before running a workflow that makes changes.
 
-## ordo-playbook
+## Main entrypoint
 
-Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode
+Use `ordo-playbook` to work with the workflows published by the current playbook.
 
-**Usage:** `ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>`
+- `ordo-playbook workflows list` lists the workflows available in this project.
+- `ordo-playbook workflows show <workflow>` shows what a named workflow needs before you run it.
+- `ordo-playbook next` suggests the most useful workflow to consider next in the current context.
+- `ordo-playbook graph` shows how published workflows share persistent data. Run it to see which workflows write, read, or remove that data; the result shows relationships, not a required run order. No active task is required.
 
-### Modes
+## Choose a mode
 
-- `review <workflow>` — review workflow-quality findings without making changes
-- `check <workflow>` — check whether the workflow can be run now, without making changes
-- `plan <workflow>` — show what the workflow would do, without making changes
-- `explain <workflow>` — explain why the workflow can or cannot be run right now
-- `run <workflow>` — run the workflow and do the real work
-- `next` — suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options
-- `graph` — Show how workflows connect through persistent state.
+- `ordo-playbook check <workflow>` answers whether the workflow can run now without changing anything.
+- `ordo-playbook review <workflow>` reports workflow-quality issues without changing anything.
+- `ordo-playbook plan <workflow>` shows the work the workflow would perform without changing anything.
+- `ordo-playbook run <workflow>` performs the workflow's real work and reports its result.
+- `ordo-playbook explain <workflow>` explains why the workflow can or cannot run now.
+- After adding or changing a workflow, run both `check` and `review`: readiness and workflow quality are separate questions.
 
-### Flags
+## Public flags
 
-- `--file` (`PATH`) — Use one explicit playbook file path
-- `--profile` (`NAME`) — Select one named profile for this run
-- `--input` (`KEY=VALUE`) — Add or override one top-level workflow input from inline text, with simple number and true/false coercion
-- `--input-file` (`KEY=PATH`) — Add or override one top-level workflow input from a raw UTF-8 file string
-- `--progress-steps` — During run, emit each step name to stderr right before execution
-- `--json` — Emit the full JSON payload, including detailed diagnostics
+- `--file PATH` selects a playbook file for this command.
+- `--profile NAME` selects a named profile for this command.
+- `--input KEY=VALUE` supplies or replaces one input for this command; repeat it for more inputs.
+- `--input-file KEY=PATH` supplies one input from a file; repeat it for more inputs.
+- `--progress-steps` prints each step name as a run begins it.
+- `--json` returns machine-readable output when another tool needs to consume the result.
 
-### Discovery commands
+## Input precedence
 
-- `workflows list` — list declared playbook workflows with project-local descriptions
-- `workflows show <workflow>` — show one workflow entry: plain inputs expose caller slots with top-level warnings only for required declarations missing source coverage; --json retains the unchanged full declaration contract
+- For the same input key, the workflow's declared default is used first, then a selected profile fills the key only when it is still missing, then a concrete playbook workflow binding replaces it, and a command-line value replaces all of those for this run.
+- If both `--input KEY=VALUE` and `--input-file KEY=PATH` name the same key, `--input-file` wins: Ordo reads the file's UTF-8 text as that input value.
+- Within repeated uses of either one flag, the later value for the same key wins.
 
-### Input override precedence
+## Practical next steps
 
-- workflow.inputs declares the allowed activation keys; each declared key may be required, optional, or defaulted by its own declaration
-- profile.inputs may supply values for declared workflow inputs
-- playbook workflow-entry with supplies static invocation inputs before one run
-- playbook pre_run with supplies static invocation inputs to that pre_run workflow only
-- --input overrides workflow and profile-provided values for one run
-- --input-file overrides workflow and profile-provided values for one run
-- unknown activation inputs are rejected=true
-- when both --input and --input-file set the same key, --input-file wins
-
-### Workflow check/review loop
-
-When adding or changing workflows, run both check and review. Neither replaces the other.
-
-- `check <workflow>` — Validate applicability, explicit probe coverage, and execution readiness _Question: Can this workflow run now?_
-- `review <workflow>` — Surface workflow-quality findings, including input_authoring warnings for missing root input descriptions and missing playbook caller slots. CLI overrides do not suppress these advisories; available static findings remain visible when review_status is unavailable, without changing activation errors or other modes. _Question: Is this workflow well-authored?_
-
-### Example commands
-
-- `ordo-playbook workflows list`
-- `ordo-playbook workflows show inspect-issue`
-- `ordo-playbook next`
-- `ordo-playbook graph`
-- `ordo-playbook plan inspect-issue`
-- `ordo-playbook --profile review plan inspect-issue`
-- `ordo-playbook --input enabled=true plan inspect-issue`
-- `ordo-playbook --input-file body=./prompt.md plan inspect-issue`
-- `ordo-playbook --progress-steps run inspect-issue`
-
-## Full JSON reference
-
-```json
-{
-  "commands": [
-    {
-      "check_review_passes": {
-        "passes": [
-          {
-            "mode": "check <workflow>",
-            "purpose": "Validate applicability, explicit probe coverage, and execution readiness",
-            "question": "Can this workflow run now?"
-          },
-          {
-            "mode": "review <workflow>",
-            "purpose": "Surface workflow-quality findings, including input_authoring warnings for missing root input descriptions and missing playbook caller slots. CLI overrides do not suppress these advisories; available static findings remain visible when review_status is unavailable, without changing activation errors or other modes.",
-            "question": "Is this workflow well-authored?"
-          }
-        ],
-        "rule": "When adding or changing workflows, run both check and review. Neither replaces the other."
-      },
-      "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, inspecting inferred workflow topology, and running one named workflow in a selected runtime mode.",
-      "discovery_commands": [
-        {
-          "name": "workflows list",
-          "summary": "list declared playbook workflows with project-local descriptions"
-        },
-        {
-          "name": "workflows show <workflow>",
-          "summary": "show one workflow entry: plain inputs expose caller slots with top-level warnings only for required declarations missing source coverage; --json retains the unchanged full declaration contract"
-        }
-      ],
-      "do_not_use_for": [
-        "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-rules surfaces.",
-        "Treating CLI command examples as executable verified snippets: the current snippet harness cannot validate CLI activation examples. Authored YAML excerpts verify source parity only, not CLI discovery or activation output.",
-        "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
-        "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
-        "Assuming nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, and profile switches cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred."
-      ],
-      "examples": [
-        "ordo-playbook workflows list",
-        "ordo-playbook workflows show inspect-issue",
-        "ordo-playbook next",
-        "ordo-playbook graph",
-        "ordo-playbook plan inspect-issue",
-        "ordo-playbook --profile review plan inspect-issue",
-        "ordo-playbook --input enabled=true plan inspect-issue",
-        "ordo-playbook --input-file body=./prompt.md plan inspect-issue",
-        "ordo-playbook --progress-steps run inspect-issue"
-      ],
-      "flags": [
-        {
-          "effect": "override_playbook_discovery",
-          "name": "--file",
-          "required": false,
-          "summary": "Use one explicit playbook file path",
-          "value_shape": "PATH"
-        },
-        {
-          "effect": "select_active_profile",
-          "name": "--profile",
-          "required": false,
-          "summary": "Select one named profile for this run",
-          "value_shape": "NAME"
-        },
-        {
-          "effect": "override_input_inline",
-          "name": "--input",
-          "repeatable": true,
-          "required": false,
-          "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion",
-          "value_shape": "KEY=VALUE"
-        },
-        {
-          "effect": "override_input_from_file",
-          "name": "--input-file",
-          "repeatable": true,
-          "required": false,
-          "summary": "Add or override one top-level workflow input from a raw UTF-8 file string",
-          "value_shape": "KEY=PATH"
-        },
-        {
-          "effect": "emit_run_step_progress_to_stderr",
-          "name": "--progress-steps",
-          "required": false,
-          "summary": "During run, emit each step name to stderr right before execution"
-        },
-        {
-          "effect": "emit_json",
-          "name": "--json",
-          "required": false,
-          "summary": "Emit the full JSON payload, including detailed diagnostics"
-        }
-      ],
-      "input_override_precedence": [
-        "workflow.inputs declares the allowed activation keys; each declared key may be required, optional, or defaulted by its own declaration",
-        "profile.inputs may supply values for declared workflow inputs",
-        "playbook workflow-entry with supplies static invocation inputs before one run",
-        "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",
-        "--input overrides workflow and profile-provided values for one run",
-        "--input-file overrides workflow and profile-provided values for one run",
-        "unknown activation inputs are rejected=true",
-        "when both --input and --input-file set the same key, --input-file wins"
-      ],
-      "inspect_next": [
-        "command-line.ordo-playbook.flag.profile",
-        "command-line.ordo-playbook.flag.input",
-        "command-line.ordo-playbook.flag.input_file",
-        "command-line.ordo-playbook.flag.progress_steps",
-        "playbook.workflows.file",
-        "workflow-rules.paired_check_review_passes"
-      ],
-      "modes": [
-        {
-          "name": "review <workflow>",
-          "summary": "review workflow-quality findings without making changes"
-        },
-        {
-          "name": "check <workflow>",
-          "summary": "check whether the workflow can be run now, without making changes"
-        },
-        {
-          "name": "plan <workflow>",
-          "summary": "show what the workflow would do, without making changes"
-        },
-        {
-          "name": "explain <workflow>",
-          "summary": "explain why the workflow can or cannot be run right now"
-        },
-        {
-          "name": "run <workflow>",
-          "summary": "run the workflow and do the real work"
-        },
-        {
-          "name": "next",
-          "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"
-        },
-        {
-          "name": "graph",
-          "summary": "Show how workflows connect through persistent state."
-        }
-      ],
-      "name": "ordo-playbook",
-      "nearest_surfaces": [
-        {
-          "handle": "command-line",
-          "summary": "Top-level catalog of public launch commands and stable flags"
-        },
-        {
-          "handle": "playbook.workflows.file",
-          "summary": "Playbook workflow-entry field that binds one published workflow name to one workflow file"
-        },
-        {
-          "handle": "workflow-rules.paired_check_review_passes",
-          "summary": "Why check and review are complementary authoring passes rather than substitutes"
-        }
-      ],
-      "next_priority": [
-        "prefer workflows tied to the active state-backed work context over unrelated utility workflows",
-        "prefer workflows blocked only by execution-only operator input over workflows blocked by world-state mismatch",
-        "keep inspection-only workflows below continuation-capable workflows when both are otherwise credible"
-      ],
-      "purpose": "Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode",
-      "review_findings_surface": "Plain review includes all available findings in order under top_findings, with compact details, including when review_status is unavailable; --json retains full finding details.",
-      "run_failure_surface": {
-        "external_payload_fields": [
-          "kind",
-          "classification",
-          "tool",
-          "system",
-          "argv_summary",
-          "stderr_excerpt",
-          "suggested_checks"
-        ],
-        "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message."
-      },
-      "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
-      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
-      "use_when": [
-        "Show how workflows connect through persistent state. Use ordo-playbook graph to explore related workflows, where they write shared data, and where that data is removed. No active task is required.",
-        "Read +field as a write, −field as a deletion, and ? as a conditional change. A write need not be the first write; −context removes the selected context.",
-        "Shared context: writers → readers, not execution order. A free reader root is marked (data use; alternative sources) because it uses data without mutating the context. This shows shared data, not a mandatory sequence: guards and check determine applicability, and alternative ends are not sequential steps. Playbook order helps arrange workflows when their relationships leave a choice. Writers and deletions can also be branches. When sources already form a chain, the deepest source is the parent; also reads from keeps other sources visible. Distinct data from incomparable sources is shown under each source: the first source in display order holds the full occurrence, and ↔ (reference) leaves show the same operation without repeating its subtree. Alternative writers of the same data stay together. reads from: name? marks known conditional or fallback data use, separately from +field?. Fallback reads still count as data use. A missing graph edge does not prove independence in external systems.",
-        "Graph does not read saved state, run probes, or recommend what to do next. Use workflows show <workflow> for inputs, check <workflow> to check whether it can run, explain <workflow> to understand why, and next for a recommendation in the current environment.",
-        "parameter stands for a key that has not been selected; the relationship applies to a matching context instance. Use graph --json for detailed dependencies, conditions, and unresolved relationships. Technical reference: docs/static-graph.md and meta/model/runtime/graph-v1.md.",
-        "↔ marks the same workflow: state/kind identifies another role; (reference) is a leaf sighting, not another execution. A deletion appears near the related data's users; this does not require running every reader before deleting the data.",
-        "You need to discover which named workflows the current playbook publishes before choosing one.",
-        "Use workflows show <workflow> for the main caller interface without activating the workflow. Plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. Plain output omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json retains the unchanged complete declared inputs mapping and top-level launch_profile, including all input fields with original normalized required and caller_slot. Each visible input preserves description and hint when provided. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields; other envelope fields are unchanged except conditional plain warnings.",
-        "Plain workflows show adds top-level warnings only for required workflow declarations with coverage missing, evaluated before filtering inputs. Each warning contains code discovery.workflow.input_source_missing, the input name, a message explaining no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot, plus a hint to expose a caller slot or supply a source. Missing declarations stay hidden from inputs. Optional missing declarations do not warn; either caller-slot form or any present source suppresses the warning. Omit warnings entirely when none qualify. --json gains no warnings and remains unchanged. No readiness or state analysis is performed; check, review, plan, run, explain, and next remain unchanged.",
-        "In --json only, input sources list every present workflow_default, launch_profile, and entry_binding in that order, and coverage is provided when any source exists, caller_slot when only a slot exists, or missing when neither exists, using the same source-presence rule as review.playbook.input_caller_slot_missing. In both outputs, default appears only when declared, including null; binding appears only for a concrete static entry binding. Selected profile values are never exposed.",
-        "In --json only, top-level launch_profile reports the initial activation name and source, not the final bound workflow profile: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. The launch_profile input source label is also JSON-only. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
-        "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
-        "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
-        "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",
-        "Check may defer top-level state mutations after conditions and gates to inspect later independent guards without simulating writes. Plan keeps non-reusable nodes; run executes admitted mutations once in order."
-      ]
-    }
-  ],
-  "document_kind": "command_line"
-}
-```
+- Run `ordo-playbook workflows list` when you do not yet know the workflow name.
+- Run `ordo-playbook check <workflow>` and `ordo-playbook review <workflow>` before relying on a changed workflow.
+- Run `ordo-playbook plan <workflow>` to inspect intended work before `ordo-playbook run <workflow>` makes changes.
+- Use `ordo-help command-line --json` when a tool needs the complete command contract.
+- [`workflow-rules`](workflow-rules.md): Read the workflow authoring practices that make check and review complementary.
+- [`overview`](overview.md): Find related public help surfaces.

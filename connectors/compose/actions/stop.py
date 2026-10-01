@@ -4,20 +4,51 @@ from __future__ import annotations
 
 from connectors.compose._shared import compose_command, map_stop_failure, observe_project, observe_service
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
+from ordo.model.human import declare_human
 
+
+HUMAN = declare_human({'title': 'Compose stop',
+ 'goal': 'You need a running Compose target quiesced before cleanup, mutation, or another orchestration phase.',
+ 'summary': 'Stop one Compose project or one declared Compose service.',
+ 'sections': [{'heading': 'Use when',
+                'items': ['You need a running Compose target quiesced before cleanup, mutation, or another '
+                          'orchestration phase.',
+                          'Omit service to stop the whole project, or provide one declared service name to stop only '
+                          'that service.']},
+               {'heading': 'What to provide',
+                'items': ['`service`: optional; omit it to stop the project, or provide one declared service name to stop only that service.']},
+               {'heading': 'Result and boundary',
+                 'items': ['Later steps can use `target_kind`, `state`, and `changed`. A successful stop reports `state=stopped`; an already stopped or down target reports `changed=false`, while a partial stop reports `state=degraded`. Service-targeted results also include `target`. A failure does not prove that the target stopped.']},
+               {'heading': 'Do not use for',
+               'items': ['Removing stopped runtime instances; use connector.compose.remove when the intent is cleanup '
+                         'rather than stop.',
+                          'Pure observation; use connector.compose.project or connector.compose.service when you only '
+                          'need state.',
+                          'Assuming stop removes a service instance. A successful stop reports state stopped; an already '
+                          'stopped or down target reports changed false, while a partial stop reports degraded.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.compose', 'summary': 'Parent Compose connector family'},
+                              {'handle': 'connector.compose.start',
+                               'summary': 'Sibling lifecycle action for bringing a target up'},
+                              {'handle': 'connector.compose.remove',
+                               'summary': 'Cleanup action that often follows a successful stop'}]},
+              {'heading': 'Examples',
+               'items': ['compose.stop with inputs {}', 'compose.stop with inputs {"service": "api"}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.compose.remove', 'connector.compose.start', 'connector.compose.service']}]})
 
 def info():
     return action(
         name="stop",
+        human=HUMAN,
         summary="Stop one Compose project or service.",
         inputs={"service": "string | null"},
         effects=("stop the requested Compose target",),
         outputs={
             "target_kind": "string",
-            "target": "string",
             "state": "string",
             "changed": "boolean",
-            "changed_services": "array[string]",
         },
         failure_modes=(
             "service_not_declared",

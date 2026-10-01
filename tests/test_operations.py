@@ -1889,6 +1889,31 @@ class OperationTest(unittest.TestCase):
         )
         self.assertEqual(result.outputs["latest"], result.outputs["items"][0])
 
+    def test_git_tags_probe_contract_and_empty_inventory_allow_null_latest(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.tags", with_={"match": "v*"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tags")
+        resolved = ResolvedOperation("git.tags", "git", operation, "public")  # type: ignore[arg-type]
+
+        self.assertEqual(operation.outputs["latest"], "object | null")
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/tags/release-2026-07\trelease-2026-07\tcommit\t2222222222222222222222222222222222222222\t\n", stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 0)
+        self.assertEqual(result.outputs["items"], [])
+        self.assertIsNone(result.outputs["latest"])
+
     def test_git_tags_probe_supports_regex_match_kind(self) -> None:
         workflow = Workflow(
             version=0,

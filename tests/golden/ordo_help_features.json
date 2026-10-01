@@ -398,7 +398,7 @@
         "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
         "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
         "Use ordo-playbook graph to see how workflows connect through persistent state, where shared data is written, and where it is removed. No active task is required.",
-        "Shared context: writers → readers, not execution order. Free alternative reader roots are marked (data use; alternative sources). Read +field as writes, −field as deletes, and ? as a conditional change. Distinct data sources can show the same operation on several branches: ↔ (reference) leaves never repeat its subtree or execution. Alternative writers of the same data are not expanded. also reads from keeps extra sources visible; reads from: name? marks conditional/fallback data use separately from +field?. Guards and check determine applicability; alternative ends are not sequential steps.",
+        "Shared context: writers \u2192 readers, not execution order. Free alternative reader roots are marked (data use; alternative sources). Read +field as writes, \u2212field as deletes, and ? as a conditional change. Distinct data sources can show the same operation on several branches: \u2194 (reference) leaves never repeat its subtree or execution. Alternative writers of the same data are not expanded. also reads from keeps extra sources visible; reads from: name? marks conditional/fallback data use separately from +field?. Guards and check determine applicability; alternative ends are not sequential steps.",
         "parameter stands for a key that has not been selected; relationships apply to a matching context instance. Graph does not read saved state or run probes. A missing edge does not prove independence in external systems. Use graph --json for dependencies, conditions, and unresolved relationships.",
         "After exploring graph, use workflows show <workflow> for inputs, check or explain <workflow> for readiness, and next for a recommendation in the current environment. See docs/static-graph.md for the technical reference.",
         "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
@@ -1235,12 +1235,12 @@
       "appropriate_when": [
         "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
         "Typed public operations express product intent better than broad execution surfaces.",
-        "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to the direct GraphQL Actions association; null association is found=false. Jobs are complete read-only observations, not tested-SHA attestation or merge policy. gh.actions is a namespace segment, not an executable operation.",
+        "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to their associated Actions run; null association is found=false. Jobs are complete read-only observations, not merge policy. gh.actions is a namespace segment, not an executable operation.",
         "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
-        "Connector authors use ctx.call(name, inputs=...) for same-family probe dependencies with already-resolved values, never reevaluated expressions. Full and local dotted names work; omitted inputs/None preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring.",
+        "Before proposing a new connector capability, inspect the existing operations and compose the narrow published operations that already express the work. Inspect connector.authoring only when that review leaves a stable, user-visible capability gap.",
         "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
         "For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error.",
-        "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
+        "Use fs.file for UTF-8 content and metadata from one regular file. It returns a failure rather than a weakened result when it cannot safely read that file; it is not an atomic snapshot guarantee.",
         "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
         "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
         "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
@@ -1263,8 +1263,8 @@
         {
           "command": "ordo-help describe connector.authoring --json",
           "handle": "connector.authoring",
-          "kind": "sdk",
-          "summary": "Connector-author SDK dependency calls with already-resolved probe inputs",
+          "kind": "guidance",
+          "summary": "Deciding whether a new connector capability is needed",
           "topic": "model"
         },
         {
@@ -1446,7 +1446,7 @@
           "command": "ordo-help describe workflow-rules.routine.* --json",
           "handle": "workflow-rules.routine.*",
           "name": "routine.*",
-          "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
+          "summary": "routine.* is a deliberately limited project-local helper path, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
         },
         {
           "command": "ordo-help describe workflow-rules.local_artifacts_are_context --json",
@@ -1460,7 +1460,7 @@
     {
       "appropriate_when": [
         "Published connector operations and clean composition have already been exhausted, and the remaining gap is mechanical or intentionally project-local rather than semantic.",
-        "A narrowly bounded local automation step must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface."
+        "A small project-local helper must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface."
       ],
       "inappropriate_when": [
         "The remaining gap is semantic, unclear, or being preserved silently through a nearby local helper.",
@@ -1492,7 +1492,7 @@
           "command": "ordo-help describe workflow-rules.routine.* --json",
           "handle": "workflow-rules.routine.*",
           "kind": "rule",
-          "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
+          "summary": "routine.* is a deliberately limited project-local helper path, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
           "topic": "workflow-rules"
         },
         {
@@ -1551,7 +1551,7 @@
           "command": "ordo-help describe workflow-rules.routine.* --json",
           "handle": "workflow-rules.routine.*",
           "name": "routine.*",
-          "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
+          "summary": "routine.* is a deliberately limited project-local helper path, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
         },
         {
           "command": "ordo-help describe workflow-rules.decision_order --json",

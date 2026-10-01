@@ -1,119 +1,95 @@
-# gh.project
+# GitHub project
 
-Read a GitHub Project.
+A workflow first needs to confirm that one GitHub Project exists before inspecting its fields, issue membership, or item collections.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: read a GitHub Project.
+Probe one GitHub Project by its stable project id and return a typed existence snapshot with the canonical id and title.
 
-- Namespace: `gh`
-- Kind: `probe`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
+- Later steps need the project's canonical title or want a narrow project-identity probe instead of jumping straight to field or membership surfaces.
 
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
+## What to provide
 
-## Inputs
+- `project_id`: required.
 
-```json
-{
-  "project_id": "string"
-}
+## Result and boundary
+
+- Usable result fact: `exists`.
+- Usable result fact: `id`.
+- Usable result fact: `title`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
+
+## Do not use for
+
+- Inspecting one named field or its selectable values; use connector.gh.project.field or connector.gh.project.field.option for that narrower field story.
+- Enumerating project items or checking whether one issue is already attached to the project; use connector.gh.project.items or connector.gh.project.issue for membership questions.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- `ordo-help describe connector.gh`: Parent GitHub connector family for issue, pull-request, and project operations
+- [`connector.gh.project.field`](project-field.md): Sibling probe for one named project field rather than the project identity itself
+- [`connector.gh.project.items`](project-items.md): Sibling probe for project membership collections rather than top-level project identity
+- [`connector.gh.project.issue`](project-issue.md): Sibling probe for whether one repository issue is already in the project
+
+## Inspect next
+
+- connector.gh.project.field
+- connector.gh.project.items
+- connector.gh.project.issue
+
+## Exact machine contract
+
+Use `ordo-help operation gh.project --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
+
+### gh_project_probe_step
+
+Confirm one GitHub Project identity before branching into field-level or membership-level project logic.
+
+```yaml
+      - name: load-project
+        uses: gh.project
+        with:
+          project_id: inputs.project_id
+        register: project
 ```
+### gh_project_field_probe_flow
 
-## Outputs
+Inspect one project, one named field, and one candidate selectable option, then publish a compact readiness summary.
 
-```json
-{
-  "exists": "boolean",
-  "id": "string",
-  "title": "string"
-}
-```
-
-## Effects
-
-- None
-
-## Failure modes
-
-- `project_not_found`
-- `probe_failed`
-
-## Requirements
-
-- None
-
-## Example inputs
-
-### `gh.project`
-
-```json
-{
-  "project_id": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [],
-    "examples": [
-      {
-        "inputs": {
-          "project_id": "string"
-        },
-        "reference": "gh.project"
-      }
-    ],
-    "failure_modes": [
-      "project_not_found",
-      "probe_failed"
-    ],
-    "inputs": {
-      "project_id": "string"
-    },
-    "invalidates_observations": [],
-    "kind": "probe",
-    "maturity": "stable",
-    "name": "project",
-    "outputs": {
-      "exists": "boolean",
-      "id": "string",
-      "title": "string"
-    },
-    "preflight_observations": [],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Probe operation 'gh.project'",
-    "tags": [
-      "gh",
-      "probe"
-    ]
-  },
-  "operation_name": "project",
-  "reference": "gh.project",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
+```yaml
+version: 0
+workflow: inspect-project-field-probes
+inputs:
+  project_id: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: load-project
+        uses: gh.project
+        with:
+          project_id: inputs.project_id
+        register: project
+      - name: load-status-field
+        uses: gh.project.field
+        with:
+          project_id: inputs.project_id
+          field: "Status"
+        register: status_field
+      - name: check-done-option
+        uses: gh.project.field.option
+        with:
+          project_id: inputs.project_id
+          field: "Status"
+          option: "Done"
+        register: done_option
+      - name: publish-summary
+        publish:
+          project_title: step.project.outputs.title
+          field_kind: step.status_field.outputs.kind
+          done_available: step.done_option.outputs.exists
 ```

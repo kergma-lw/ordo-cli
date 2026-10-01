@@ -2504,7 +2504,7 @@ def _validate_runtime_value_surface(
         diagnostics.append(
             _diagnostic(
                 "validation.workflow.value_expr.embedded_escape_unnecessary",
-                "This quoted ${...} expression can be authored directly as a bare value. Reserve quoted ${...} only for YAML-hostile expressions that need the explicit escape form.",
+                "This quoted ${...} expression can be authored directly as a bare value. Reserve quoted ${...} for the uncommon case where YAML would otherwise interpret the expression as YAML syntax instead of one expression.",
                 path,
                 source,
                 expression=expression,

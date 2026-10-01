@@ -1,0 +1,10 @@
+version: 0
+workflow: launcher-step
+blocks:
+- guards: []
+- steps:
+  - name: regenerate-frontend-artifacts
+    uses: shell.command
+    launcher: shell_frontend
+    with:
+      command: "npm run openapi"

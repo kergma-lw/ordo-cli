@@ -31,7 +31,7 @@ class HelpSnippetVerificationSuiteTest(unittest.TestCase):
                     continue
                 if kind == "runner_verified":
                     result = verify_help_snippet(
-                        snippet=example["python"] if example["form"] == "python_fragment" else example["yaml"],
+                        snippet=example["yaml"],
                         world=verification["world"],
                         insertion_mode=verification["insertion_mode"],
                         target=verification["target"],

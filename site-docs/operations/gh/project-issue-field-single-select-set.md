@@ -1,57 +1,60 @@
-# gh.project.issue.field_single_select.set
+# Set GitHub Project single-select field
 
-Set a single-select field for a GitHub Project issue.
+Assign one visible Project choice to one issue in the workflow's normal GitHub repository.
 
-Use this when a workflow needs to inspect or change GitHub state. In practice: set a single-select field for a GitHub Project issue.
+Set one single-select GitHub Project field on one issue's project item by field name and visible option name. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
-- Namespace: `gh`
-- Kind: `action`
-- Maturity: `stable`
-- Deprecated: `false`
+## Use when
 
-## Related commands
-
-- `capabilities` — `ordo-help capabilities --json`
-- `operations` — `ordo-help operations --json`
-
-## Inputs
-
-```json
-{
-  "field": "string",
-  "issue_number": "integer",
-  "option": "string",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Outputs
-
-```json
-{
-  "changed": "boolean",
-  "field": "string",
-  "issue_ref": "string",
-  "item_id": "string",
-  "option": "string",
-  "project_id": "string"
-}
-```
-
-## Authoring contract
-
-Set one single-select GitHub Project field on one issue's project item by field name and visible option name. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
-
-- connector_contexts.gh.repository already names the normal repository target and the workflow needs to assign one selectable project value for one issue there.
 - A workflow needs to assign one selectable project value such as Status or Priority after membership and field-option validation succeed.
-- The caller knows the human-facing option label and wants Ordo to resolve the underlying option id automatically.
-- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+- The caller knows the human-facing option label and does not need to manage a stored selection identity.
 
-### Boundaries
+## What to provide
+
+- Provide the issue number, target Project ID, visible field name, and visible option label.
+- Choose the project by its owner and project number using GitHub's published project guide, then obtain that project's stable ID with the GitHub project view command. Store that returned ID as workflow input and confirm the selected project title with connector.gh.project before changing an issue.
+- Use the workflow's GitHub repository context normally; name another repository only as a deliberate override.
+- `repository`: context-defaulted; when omitted, it uses the GitHub repository selected by the workflow's playbook or profile settings. Provide an explicit `OWNER/REPO` value to override that default for this call.
+- `issue_number`: required.
+- `project_id`: required.
+- `field`: required.
+- `option`: required.
+
+## Result and boundary
+
+- Later steps can use the issue identity, Project item identity, selected field and option, and whether the value actually changed. changed=false means the item already held that option; changed=true means this action applied it.
+- The issue must already be in the Project and the requested field and option must exist with the right kind. A concurrent edit can make the returned changed state stale, so observe again before a decision that depends on the current value.
+- Usable result fact: `issue_ref`.
+- Usable result fact: `project_id`.
+- Usable result fact: `item_id`.
+- Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision. A successful change is not rolled back if a later workflow step fails. Required preflight facts must be established before the change is submitted.
+
+## Do not use for
 
 - Writing iteration-backed or numeric project fields; use connector.gh.project.issue.field_iteration.set or connector.gh.project.issue.field_number.set for those different field kinds.
 - Checking whether the requested option exists without mutating anything; use connector.gh.project.field.option when the workflow only needs a yes/no option probe.
+
+## Related references
+
+Use these related references when you need a neighboring operation or more context.
+
+
+- [`connector.gh.project.issue`](project-issue.md): Parent issue-membership probe for reading current project field values before or after mutation
+- [`connector.gh.project.field.option`](project-field-option.md): Sibling probe for validating one candidate selectable value before mutation
+- [`connector.gh.project.issue.add`](project-issue-add.md): Sibling action for ensuring the issue is a project item before setting a selectable field
+- [`connector.gh.project.issue.field_number.set`](project-issue-field-number-set.md): Sibling setter for numeric fields rather than selectable fields
+
+## Inspect next
+
+- connector.gh.project.field.option
+- connector.gh.project.issue
+- connector.gh.project.issue.add
+
+## Exact machine contract
+
+Use `ordo-help operation gh.project.issue.field_single_select.set --json` when you need the exact machine-readable input and result contract for this operation.
+
+## Canonical Examples
 
 ### gh_project_issue_field_single_select_set_step
 
@@ -66,193 +69,4 @@ Set one selectable project field such as Status by its visible option name after
           project_id: inputs.project_id
           field: "Status"
           option: "In review"
-```
-
-## Effects
-
-- set one GitHub project issue single-select field by field name
-
-## Failure modes
-
-- `issue_not_found`
-- `project_not_found`
-- `field_not_found`
-- `field_kind_unsupported`
-- `option_not_found`
-- `field_update_blocked`
-
-## Requirements
-
-- None
-
-## Preflight observations
-
-```json
-[
-  {
-    "fields": [
-      "exists"
-    ],
-    "probe": "gh.project.issue",
-    "with": {
-      "issue_number": "{issue_number}",
-      "project_id": "{project_id}",
-      "repository": "{repository}"
-    }
-  },
-  {
-    "fields": [
-      "exists"
-    ],
-    "probe": "gh.project.field",
-    "with": {
-      "field": "{field}",
-      "project_id": "{project_id}"
-    }
-  },
-  {
-    "fields": [
-      "exists"
-    ],
-    "probe": "gh.project.field.option",
-    "with": {
-      "field": "{field}",
-      "option": "{option}",
-      "project_id": "{project_id}"
-    }
-  }
-]
-```
-
-## Invalidated observations
-
-- `gh.project.issue`
-
-## Example inputs
-
-### `gh.project.issue.field_single_select.set`
-
-```json
-{
-  "field": "string",
-  "issue_number": "integer",
-  "option": "string",
-  "project_id": "string",
-  "repository": "string"
-}
-```
-
-## Full JSON reference
-
-```json
-{
-  "bootstrap": {
-    "context_fields": [
-      "host",
-      "viewer",
-      "scopes",
-      "repository"
-    ],
-    "prerequisites": [
-      "gh binary available",
-      "GitHub auth available"
-    ]
-  },
-  "document_kind": "operation",
-  "namespace": "gh",
-  "operation": {
-    "deprecated": false,
-    "effects": [
-      "set one GitHub project issue single-select field by field name"
-    ],
-    "examples": [
-      {
-        "inputs": {
-          "field": "string",
-          "issue_number": "integer",
-          "option": "string",
-          "project_id": "string",
-          "repository": "string"
-        },
-        "reference": "gh.project.issue.field_single_select.set"
-      }
-    ],
-    "failure_modes": [
-      "issue_not_found",
-      "project_not_found",
-      "field_not_found",
-      "field_kind_unsupported",
-      "option_not_found",
-      "field_update_blocked"
-    ],
-    "inputs": {
-      "field": "string",
-      "issue_number": "integer",
-      "option": "string",
-      "project_id": "string",
-      "repository": "string"
-    },
-    "invalidates_observations": [
-      "gh.project.issue"
-    ],
-    "kind": "action",
-    "maturity": "stable",
-    "name": "project.issue.field_single_select.set",
-    "outputs": {
-      "changed": "boolean",
-      "field": "string",
-      "issue_ref": "string",
-      "item_id": "string",
-      "option": "string",
-      "project_id": "string"
-    },
-    "preflight_observations": [
-      {
-        "fields": [
-          "exists"
-        ],
-        "probe": "gh.project.issue",
-        "with": {
-          "issue_number": "{issue_number}",
-          "project_id": "{project_id}",
-          "repository": "{repository}"
-        }
-      },
-      {
-        "fields": [
-          "exists"
-        ],
-        "probe": "gh.project.field",
-        "with": {
-          "field": "{field}",
-          "project_id": "{project_id}"
-        }
-      },
-      {
-        "fields": [
-          "exists"
-        ],
-        "probe": "gh.project.field.option",
-        "with": {
-          "field": "{field}",
-          "option": "{option}",
-          "project_id": "{project_id}"
-        }
-      }
-    ],
-    "prerequisites": [],
-    "replaced_by": [],
-    "summary": "Action operation 'gh.project.issue.field_single_select.set'",
-    "tags": [
-      "gh",
-      "action"
-    ]
-  },
-  "operation_name": "project.issue.field_single_select.set",
-  "reference": "gh.project.issue.field_single_select.set",
-  "related_commands": {
-    "capabilities": "ordo-help capabilities --json",
-    "operations": "ordo-help operations --json"
-  }
-}
 ```

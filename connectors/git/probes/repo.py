@@ -5,11 +5,46 @@ from __future__ import annotations
 from pathlib import Path
 
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
+from ordo.model.human import declare_human
+from connectors.git.human import git_human
 
+
+HUMAN = declare_human({'title': 'Git repo',
+ 'goal': 'A workflow first needs to confirm repository-level context such as root path, bare status, or default branch '
+         'before making narrower branch or sync decisions.',
+  'summary': 'Read the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, '
+            'and default-branch facts for the repository discovered at the current root.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['A workflow first needs to confirm repository-level context such as root path, bare status, '
+                         'or default branch before making narrower branch or sync decisions.',
+                         'Later logic needs stable repository facts without yet asking about one specific ref, one '
+                         'branch inventory, or one upstream relationship.']},
+              {'heading': 'Do not use for',
+                'items': ["Reading the current branch's upstream-tracking relationship; use connector.git.upstream for "
+                          'that branch-specific tracking relationship.',
+                         'Inspecting branch inventory or current checkout branch identity; use connector.git.branches '
+                         'or connector.git.branch when the workflow is really about branch-level context.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.git.upstream',
+                                'summary': 'Read current-branch upstream tracking after repository context '
+                                          'is known'},
+                              {'handle': 'connector.git.branch',
+                                'summary': 'Read current checkout branch identity rather than '
+                                          'repository-level facts'},
+                              {'handle': 'connector.git.worktree',
+                                'summary': 'Read broader worktree cleanliness and file-change context'},
+                              {'handle': 'connector.git.ref',
+                                'summary': 'Check one exact ref instead of repository-wide '
+                                          'context'}]},
+              {'heading': 'Examples', 'items': ['git.repo with inputs {}']},
+              {'heading': 'Inspect next',
+               'items': ['connector.git.upstream', 'connector.git.branch', 'connector.git.worktree']}]})
 
 def info():
     return probe(
         name="repo",
+        human=git_human(HUMAN, provide="No inputs are required; run from the repository whose local context later steps will use.", result="Returns exists, root, git_dir, inside_work_tree, bare, head_ref, worktree_path, common_dir, and default_branch. A detached or unborn checkout can leave optional facts unknown; repository context can change after observation."),
         outputs={
             "exists": "boolean",
             "root": "string",

@@ -4,6 +4,7 @@ from connectors.gh._actions_run import (
     ActionsObservation, object_value, positive_int, repository_matches, text, validate_run,
 )
 from ordo.plugin_sdk import MappedOutcomeError, probe
+from ordo.model.human import declare_human
 
 OUTPUTS = {
     "repository": "string", "found": "boolean", "run_id": "integer",
@@ -19,10 +20,66 @@ QUERY = (
 )
 
 
+HUMAN = declare_human({'title': 'GitHub actions run',
+ 'goal': 'Supply exactly one non-null positive integer run_id or check_suite_id. Optional positive integer attempt '
+         'selects that numbered attempt; omitted/null attempt reads the latest observed run_attempt, then retrieves '
+         'the pinned numbered attempt. Booleans are not integer identifiers.',
+ 'summary': "Observe one GitHub Actions run attempt, selected by a run ID or a check suite's direct Actions "
+            'association.',
+ 'sections': [{'heading': 'Use when',
+               'items': ['Supply exactly one non-null positive integer run_id or check_suite_id. Optional positive '
+                         'integer attempt selects that numbered attempt; omitted/null attempt reads the latest '
+                         'observed run_attempt, then retrieves the pinned numbered attempt. Booleans are not integer '
+                         'identifiers.',
+                          "Repository is optional and nullable. Leave it out to use the workflow's GitHub repository "
+                          'context, or provide a valid ASCII OWNER/REPO value to inspect another repository. An invalid '
+                          'explicit value is rejected rather than falling back to the workflow target. The selected '
+                          'repository must be accessible to the authenticated GitHub command-line session.',
+                          'For check_suite_id, resolve its directly associated Actions run and confirm the repository '
+                          'and suite identity. No repository-wide run scan is used. A known null association returns found=false, '
+                         'requested check_suite_id, repository, pull_requests=[], and all other run fields null. '
+                          'Missing association details fail, not normal absence.',
+                         'On found=true, outputs include repository, run_id, check_suite_id, run_attempt, workflow_id, '
+                         'workflow_path, event, status, conclusion, head_sha, head_branch, url, created_at, '
+                          'updated_at, run_started_at, and pull_requests with number/head_sha/base_sha. Optional GitHub '
+                         'facts remain null; missing pull_requests becomes []. Present SHAs are full hexadecimal '
+                         'values. Output run_attempt becomes the explicit attempt input to gh.actions.run.jobs.',
+                           'Invalid selectors, attempts, or repository values are rejected. If the selected run cannot '
+                           'be read, is inconsistent with the selected repository or suite, or returns incomplete data, '
+                           'the result is unavailable. A missing run is not found=false; found=false only describes a '
+                           'check suite with no associated Actions run.']},
+               {'heading': 'What to provide',
+                'items': ['Provide exactly one required positive integer: `run_id` or `check_suite_id`. Do not provide both. `attempt` is optional; when omitted or null, the operation observes the latest attempt and then pins that numbered attempt.',
+                          'Provide `repository` only to override the workflow GitHub repository context. Use `check_suite_id` from a pull request check when the workflow needs its directly associated Actions run.']},
+               {'heading': 'Result and boundary',
+                'items': ['When `found=true`, later steps can use `run_id`, `check_suite_id`, `run_attempt`, `head_sha`, lifecycle facts, and `pull_requests`. Pass `run_id` and the returned `run_attempt` to `gh.actions.run.jobs`.',
+                           'For a known check suite without an associated run, `found=false` is the result; it is not a failed run. Unknown or unavailable observations fail rather than reporting absence. The latest-then-pinned lookup is non-atomic and does not establish merge policy.']},
+               {'heading': 'Do not use for',
+               'items': ['Run triggering, reruns, cancellation, polling, log retrieval, required-job selection, or '
+                         'merge policy. This is read-only observation.',
+                           'An immutable event snapshot: PR head/base SHAs are GitHub '
+                          'observations. Latest-then-pinned retrieval is non-atomic and '
+                         'does not promise the newest attempt at return time.']},
+              {'heading': 'Related references',
+               'body': 'Use these related references when you need a neighboring operation or more context.',
+               'references': [{'handle': 'connector.gh.actions.run.jobs',
+                               'summary': 'Full jobs traversal using the observed run_id and explicit '
+                                          'attempt=run_attempt'},
+                              {'handle': 'connector.gh.pr.checks',
+                               'summary': 'PR-attached check runs expose nullable check_suite_id as the selector '
+                                          'bridge'},
+                              {'handle': 'connector.gh.repo.actions.permissions',
+                               'summary': 'Repository Actions permission settings, not run observations'},
+                               {'handle': 'connector.gh',
+                                'summary': 'GitHub access requirements and family operation boundaries'}]},
+              {'heading': 'Inspect next',
+               'items': ['connector.gh.actions.run.jobs', 'connector.gh.pr.checks', 'connector.gh']}]})
+
 def info():
     return probe(
         name="actions.run",
-        summary="Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.",
+        human=HUMAN,
+        summary="Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are GitHub observations, not immutable event snapshots.",
         inputs={"repository": "string", "run_id": "integer", "check_suite_id": "integer", "attempt": "integer"},
         outputs=OUTPUTS, failure_modes=("input_error", "actions_run_unavailable"), handler=run,
     )
