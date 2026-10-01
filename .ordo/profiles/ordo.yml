@@ -1,7 +1,7 @@
 name: ordo
 inputs:
   repo_kind: ordo
-  repo_dir: /home/ww/projects/ordo
+  repo_dir: ..
   repository: kergma-lw/ordo-cli
   project_id: PVT_kwHOAahuQ84Bbo51
 working_directory: ${inputs.repo_dir}
