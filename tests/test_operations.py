@@ -1,4 +1,5 @@
 import importlib
+import json
 import unittest
 from unittest.mock import patch
 
@@ -5434,6 +5435,47 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["estimate"], 5)
         self.assertEqual(result.outputs["item_id"], "PVTI_1")
 
+    def test_gh_project_issue_probe_returns_named_scalar_custom_fields(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.issue", with_={"repository": "owner/repo", "issue_number": 1, "project_id": "PVT_demo"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue")
+        resolved = ResolvedOperation("gh.project.issue", "gh", operation, "public")  # type: ignore[arg-type]
+        field_values = [
+            {"__typename": "ProjectV2ItemFieldSingleSelectValue", "name": "Task", "field": {"id": "PVTSSF_work", "name": "Work type"}},
+            {"__typename": "ProjectV2ItemFieldNumberValue", "number": 5, "field": {"id": "PVTF_estimate", "name": "Estimate"}},
+            {"__typename": "ProjectV2ItemFieldTextValue", "text": "Needs review", "field": {"id": "PVTF_notes", "name": "Notes"}},
+            {"__typename": "ProjectV2ItemFieldDateValue", "date": "2026-10-01", "field": {"id": "PVTF_due", "name": "Due"}},
+            {"__typename": "ProjectV2ItemFieldIterationValue", "title": "Sprint 12", "field": {"id": "PVTF_iteration", "name": "Iteration"}},
+            {"__typename": "ProjectV2ItemFieldSingleSelectValue", "name": "Duplicate", "field": {"id": "PVTSSF_work_2", "name": "Work type"}},
+            {"__typename": "ProjectV2ItemFieldUserValue", "field": {"id": "PVTF_owner", "name": "Owner"}},
+        ]
+        payload = {"data": {"repository": {"issue": {"projectItems": {"nodes": [{"id": "PVTI_1", "project": {"id": "PVT_demo"}, "fieldValues": {"nodes": field_values}}]}}}}}
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout=json.dumps(payload), stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(
+            result.outputs["custom_fields"]["Work type"],
+            [
+                {"field_id": "PVTSSF_work", "kind": "single_select", "value": "Task"},
+                {"field_id": "PVTSSF_work_2", "kind": "single_select", "value": "Duplicate"},
+            ],
+        )
+        self.assertEqual(result.outputs["custom_fields"]["Estimate"], [{"field_id": "PVTF_estimate", "kind": "number", "value": 5}])
+        self.assertEqual(result.outputs["custom_fields"]["Notes"], [{"field_id": "PVTF_notes", "kind": "text", "value": "Needs review"}])
+        self.assertEqual(result.outputs["custom_fields"]["Due"], [{"field_id": "PVTF_due", "kind": "date", "value": "2026-10-01"}])
+        self.assertEqual(result.outputs["custom_fields"]["Iteration"], [{"field_id": "PVTF_iteration", "kind": "iteration", "value": "Sprint 12"}])
+        self.assertNotIn("Owner", result.outputs["custom_fields"])
+
     def test_gh_project_issue_probe_reports_issue_not_in_project_via_exists_false(self) -> None:
         workflow = Workflow(
             version=0,
@@ -5456,6 +5498,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertFalse(result.outputs["exists"])
         self.assertIsNone(result.outputs["status"])
+        self.assertEqual(result.outputs["custom_fields"], {})
 
     def test_gh_project_issue_probe_reports_project_not_found(self) -> None:
         workflow = Workflow(

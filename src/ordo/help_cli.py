@@ -6684,6 +6684,9 @@ def _resolve_describe_topic_alias(topic: str, *, context: _HelpResponseContext |
         candidate = f"connector.{topic.removeprefix('operation.')}"
         if candidate in context.lookup("model"):
             return candidate
+    candidate = f"connector.{topic}"
+    if candidate in context.lookup("model"):
+        return candidate
     return topic
 
 

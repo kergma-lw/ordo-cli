@@ -70,6 +70,7 @@ class ConnectorRegistryTest(unittest.TestCase):
         self.assertEqual(project_issue.inputs["project_id"], "string")
         self.assertEqual(project_issue.outputs["exists"], "boolean")
         self.assertEqual(project_issue.outputs["item_id"], "string")
+        self.assertEqual(project_issue.outputs["custom_fields"], "object")
         self.assertIn("project_not_found", project_issue.failure_modes)
 
         project_issue_add = registry.get_operation("gh.project.issue.add")
