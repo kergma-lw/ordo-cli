@@ -1165,6 +1165,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_describe_connector_gh_project_issue_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
         issue = json.loads(self.run_help("describe", "connector.gh.project.issue", "--json").stdout)
+        issue_alias = json.loads(self.run_help("describe", "gh.project.issue", "--json").stdout)
         add = json.loads(self.run_help("describe", "connector.gh.project.issue.add", "--json").stdout)
         iteration = json.loads(self.run_help("describe", "connector.gh.project.issue.field_iteration.set", "--json").stdout)
         number = json.loads(self.run_help("describe", "connector.gh.project.issue.field_number.set", "--json").stdout)
@@ -1172,6 +1173,10 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(issue["snippet_coverage"], "runner_verified")
         self.assertIn("already attached", issue["metadata"]["definition"])
+        self.assertIn("custom_fields", issue["human"]["summary"])
+        self.assertIn("Work type", str(issue["human"]["sections"]))
+        self.assertIn('lookup("Work type")', str(issue["human"]["sections"]))
+        self.assertEqual(issue_alias["name"], "connector.gh.project.issue")
         self.assertEqual(issue["canonical_examples"][0]["form"], "step_fragment")
         self.assertEqual(issue["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.gh.project.issue.add", [item["handle"] for item in issue["metadata"]["nearest_surfaces"]])
@@ -1191,6 +1196,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(single_select["snippet_coverage"], "runner_verified")
         self.assertIn("visible option name", single_select["metadata"]["definition"])
         self.assertEqual(single_select["canonical_examples"][0]["form"], "step_fragment")
+
+    def test_search_custom_field_finds_gh_project_issue(self) -> None:
+        result = json.loads(self.run_help("search", "custom field", "--json").stdout)
+
+        self.assertIn("gh.project.issue", [operation["reference"] for operation in result["operations"]])
 
     def test_describe_connector_gh_project_items_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
         items = json.loads(self.run_help("describe", "connector.gh.project.items", "--json").stdout)
@@ -2250,6 +2260,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(issue.returncode, 0)
         self.assertIn("Probe whether one GitHub issue is already attached", issue.stdout)
+        self.assertIn("custom_fields", issue.stdout)
         self.assertIn("connector.gh.project.issue.add", issue.stdout)
         self.assertIn("example_for: workflow_fragment", issue.stdout)
 

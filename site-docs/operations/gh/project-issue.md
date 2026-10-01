@@ -2,12 +2,12 @@
 
 the workflow's GitHub repository context already names the normal repository target and the workflow needs project membership for one issue there.
 
-Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id plus the common project field values that Ordo reads from that membership. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
+Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id, common project field values, and arbitrary named scalar project fields in custom_fields. Prefer the workflow's GitHub repository context as the normal repository target and use an explicit repository argument only as a one-off override.
 
 ## Use when
 
 - A workflow needs to know whether one issue is already in the target project before deciding to add it or update its project fields.
-- Later logic needs one compact project-membership snapshot such as Status, Type, Priority, Iteration, Size, or Estimate for one issue in one project.
+- Later logic needs one compact project-membership snapshot such as Status, Type, Priority, Iteration, Size, Estimate, or a custom field for one issue in one project.
 
 ## What to provide
 
@@ -25,6 +25,7 @@ Probe whether one GitHub issue is already attached to one GitHub Project and ret
 - Usable result fact: `iteration`.
 - Usable result fact: `size`.
 - Usable result fact: `estimate`.
+- Usable result fact: `custom_fields`.
 - Material constraint: unavailable, invalid, contradictory, or incomplete facts stop the operation without a usable result; concurrent changes can make a result stale, so observe again before a current-state decision.
 
 ## Do not use for
@@ -41,6 +42,17 @@ Use these related references when you need a neighboring operation or more conte
 - [`connector.gh.project.issue.add`](project-issue-add.md): Sibling action for attaching the issue to the project when this probe reports exists=false
 - [`connector.gh.project.items`](project-items.md): Sibling probe for project-wide membership scans instead of one issue-specific membership lookup
 - [`connector.gh.project.issue.field_single_select.set`](project-issue-field-single-select-set.md): Sibling action for mutating one project field after membership inspection confirms the target issue context
+
+## Read project fields
+
+- The normalized status, type, priority, iteration, size, and estimate outputs are compatibility shortcuts for project fields with those exact names.
+- Use custom_fields to read arbitrary named scalar project fields. Look up the exact field name, including spaces and case, rather than using dotted access. Each name maps to a list so duplicate project field names remain visible. For example, use step.membership.outputs.custom_fields | lookup("Work type") | first | field("value") to read the first Work type value.
+- Each custom_fields entry includes field_id, kind, and value. Single-select, iteration, text, and date values are strings; number values are numbers. Unset, composite, and unsupported field values are omitted.
+- The type output remains the normalized shortcut for the field named Type. A project field also named Type is independently available through custom_fields.
+
+## Filter by a custom single-select field
+
+- To decide whether a project item has a custom single-select value, use gh.project.items with filters [{field: "Work type", value: "Task"}] and a content_refs value for the issue, then guard on the matching item count. Work type is an illustrative field name, not a built-in field.
 
 ## Inspect next
 

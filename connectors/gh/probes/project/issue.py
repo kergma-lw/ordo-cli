@@ -13,8 +13,8 @@ from ordo.model.human import declare_human
 HUMAN = declare_human({'title': 'GitHub project issue',
  'goal': 'connector_contexts.gh.repository already names the normal repository target and the workflow needs project '
          'membership for one issue there.',
- 'summary': 'Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized '
-            'membership item id plus the common project field values that Ordo reads from that membership. Prefer '
+         'summary': 'Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized '
+             'membership item id, common project field values, and arbitrary named scalar project fields in custom_fields. Prefer '
             'connector_contexts.gh.repository as the normal repository target and use an explicit repository argument '
             'only as a one-off override.',
  'sections': [{'heading': 'Use when',
@@ -22,8 +22,8 @@ HUMAN = declare_human({'title': 'GitHub project issue',
                          'needs project membership for one issue there.',
                          'A workflow needs to know whether one issue is already in the target project before deciding '
                          'to add it or update its project fields.',
-                         'Later logic needs one compact project-membership snapshot such as Status, Type, Priority, '
-                         'Iteration, Size, or Estimate for one issue in one project.']},
+                          'Later logic needs one compact project-membership snapshot such as Status, Type, Priority, '
+                          'Iteration, Size, Estimate, or a custom field for one issue in one project.']},
               {'heading': 'Do not use for',
                'items': ['Scanning many project items or filtering project membership collections; use '
                          'connector.gh.project.items or connector.gh.project.items.details for collection-shaped '
@@ -46,8 +46,24 @@ HUMAN = declare_human({'title': 'GitHub project issue',
                               {'handle': 'connector.gh.project.issue.field_single_select.set',
                                'summary': 'Sibling action for mutating one project field after membership inspection '
                                           'confirms the target issue context'}]},
-              {'heading': 'Examples',
-               'items': ['gh.project.issue with inputs {"issue_number": 42, "project_id": "PVT_kwDOExample"}']},
+               {'heading': 'Examples',
+                'items': ['gh.project.issue with inputs {"issue_number": 42, "project_id": "PVT_kwDOExample"}']},
+               {'heading': 'Read project fields',
+                'items': ['The normalized status, type, priority, iteration, size, and estimate outputs are compatibility '
+                          'shortcuts for project fields with those exact names.',
+                          'Use custom_fields to read arbitrary named scalar project fields. Look up the exact field name, '
+                          'including spaces and case, rather than using dotted access. Each name maps to a list so duplicate '
+                          'project field names remain visible. For example, use step.membership.outputs.custom_fields | '
+                          'lookup("Work type") | first | field("value") to read the first Work type value.',
+                          'Each custom_fields entry includes field_id, kind, and value. Single-select, iteration, text, and '
+                          'date values are strings; number values are numbers. Unset, composite, and unsupported field values '
+                          'are omitted.',
+                          'The type output remains the normalized shortcut for the field named Type. A project field also '
+                          'named Type is independently available through custom_fields.']},
+               {'heading': 'Filter by a custom single-select field',
+                'items': ['To decide whether a project item has a custom single-select value, use gh.project.items with '
+                          'filters [{field: "Work type", value: "Task"}] and a content_refs value for the issue, then guard '
+                          'on the matching item count. Work type is an illustrative field name, not a built-in field.']},
               {'heading': 'Inspect next',
                'items': ['connector.gh.project.issue.add',
                          'connector.gh.project.issue.field_single_select.set',
@@ -65,8 +81,9 @@ def info():
             "type": "string",
             "priority": "string",
             "iteration": "string",
-            "size": "string",
-            "estimate": "number",
+             "size": "string",
+             "estimate": "number",
+            "custom_fields": "object",
         },
         failure_modes=("issue_not_found", "project_not_found", "probe_failed"),
         handler=run,
@@ -98,10 +115,12 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     "issue(number:$number){"
                     "projectItems(first:50){nodes{"
                     "id project{... on ProjectV2{id title}}"
-                    "fieldValues(first:50){nodes{"
-                    "... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2FieldCommon{id name}}}"
-                    "... on ProjectV2ItemFieldIterationValue{iterationId title startDate duration field{... on ProjectV2IterationField{id name}}}"
-                    "... on ProjectV2ItemFieldNumberValue{number field{... on ProjectV2FieldCommon{id name}}}"
+                    "fieldValues(first:50){nodes{__typename "
+                    "... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2FieldCommon{id name dataType}}}"
+                    "... on ProjectV2ItemFieldIterationValue{iterationId title startDate duration field{... on ProjectV2IterationField{id name dataType}}}"
+                    "... on ProjectV2ItemFieldNumberValue{number field{... on ProjectV2FieldCommon{id name dataType}}}"
+                    "... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2FieldCommon{id name dataType}}}"
+                    "... on ProjectV2ItemFieldDateValue{date field{... on ProjectV2FieldCommon{id name dataType}}}"
                     "}}}}}}}"
                 ),
                 "-f",
@@ -220,6 +239,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 "iteration": None,
                 "size": None,
                 "estimate": None,
+                "custom_fields": {},
             },
             raw=command.raw,
         )
@@ -235,6 +255,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
             "iteration": item.get("iteration"),
             "size": item.get("size"),
             "estimate": item.get("estimate"),
+            "custom_fields": item.get("custom_fields"),
         },
         raw=command.raw,
     )
@@ -256,6 +277,7 @@ def _match_project_item(nodes: list[object], project_id: str) -> dict[str, objec
             "iteration": _iteration_value(node, "Iteration"),
             "size": _single_select_value(node, "Size"),
             "estimate": _number_value(node, "Estimate"),
+            "custom_fields": _custom_fields(node),
         }
     return None
 
@@ -298,6 +320,51 @@ def _number_value(node: dict[str, object], field_name: str) -> object:
         if field.get("name") == field_name:
             return field_value.get("number")
     return None
+
+
+_CUSTOM_FIELD_KINDS = {
+    "ProjectV2ItemFieldSingleSelectValue": ("single_select", "name"),
+    "ProjectV2ItemFieldIterationValue": ("iteration", "title"),
+    "ProjectV2ItemFieldNumberValue": ("number", "number"),
+    "ProjectV2ItemFieldTextValue": ("text", "text"),
+    "ProjectV2ItemFieldDateValue": ("date", "date"),
+}
+
+
+def _custom_fields(node: dict[str, object]) -> dict[str, list[dict[str, object]]]:
+    custom_fields: dict[str, list[dict[str, object]]] = {}
+    for field_value in _field_nodes(node):
+        if not isinstance(field_value, dict):
+            continue
+        field = field_value.get("field")
+        if not isinstance(field, dict):
+            continue
+        field_name = field.get("name")
+        if not isinstance(field_name, str):
+            continue
+        kind_and_value_key = _CUSTOM_FIELD_KINDS.get(str(field_value.get("__typename")))
+        if kind_and_value_key is None:
+            kind_and_value_key = _custom_field_kind_from_data_type(field.get("dataType"))
+        if kind_and_value_key is None:
+            continue
+        kind, value_key = kind_and_value_key
+        value = field_value.get(value_key)
+        if value is None:
+            continue
+        custom_fields.setdefault(field_name, []).append(
+            {"field_id": field.get("id"), "kind": kind, "value": value}
+        )
+    return custom_fields
+
+
+def _custom_field_kind_from_data_type(data_type: object) -> tuple[str, str] | None:
+    return {
+        "SINGLE_SELECT": ("single_select", "name"),
+        "ITERATION": ("iteration", "title"),
+        "NUMBER": ("number", "number"),
+        "TEXT": ("text", "text"),
+        "DATE": ("date", "date"),
+    }.get(str(data_type))
 
 
 def _lookup_project(ctx: OperationContext, project_id: str) -> OperationOutcome | None:
