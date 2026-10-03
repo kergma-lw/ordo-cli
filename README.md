@@ -2,66 +2,83 @@
 
 [![Tests](https://github.com/kergma-lw/ordo-cli/actions/workflows/tests.yml/badge.svg)](https://github.com/kergma-lw/ordo-cli/actions/workflows/tests.yml)
 
-Local declarative workflow runtime built around public connector contracts.
+> A runtime for local workflows that helps an agent check whether an action is allowed, explain that decision, and only then change project state.
 
-## Goal
+Ordo is for a project owner who delegates work to an AI agent and does not want recurring development rituals to depend on the agent's guesses, long `AGENTS.md` instructions, or incidental error messages.
 
-Ordo is a small runtime for describing local operational workflows in a readable way.
+An Ordo workflow keeps three things distinct:
 
-Target use cases:
-- repo rituals
-- agent helpers
-- guarded local automation
-- human + machine authored workflow files
+- **observations** about the current world, such as Git state, an issue, Project fields, or saved context;
+- **policy**, which combines observations into the conditions for proceeding;
+- **actions**, such as creating a branch, changing an issue status, or publishing changes.
 
-## Design shape
+A new ritual can combine existing observations and actions. Before running an action with side effects, an agent can ask whether the path is allowed and receive the reason when it is not.
 
-- `connectors/` — public connector families and operations
-- `schema/` — machine-readable format
-- `docs/` — human-readable spec
-- `examples/` — valid minimal examples
-- `profiles/` — reusable presets, defaults, and explicit overrides
-- `src/ordo/model/` — core workflow, profile, connector, diagnostic, and runtime models
-- `src/ordo/runtime/` — runtime mode orchestration surface
-- `src/ordo/connectors/` — Python connector package namespace
+## Good fit
 
-Notable docs:
-- `docs/quickstart.md` — fastest path to loading, checking, planning, explaining, and executing examples
-- `docs/ordo.1.md` — man-style overview of current capabilities and usage
-- `docs/playbook.md` — initial project-local playbook contract and discovery rules
-- `docs/format.md` — current format draft
-- `docs/contracts.md` — stable v0 workflow and runtime result contracts
-- `docs/pypyr-comparison.md` — honest positioning notes vs pypyr
-- `docs/gitx-open-task-rewrite.md` — example rewrite of a gitx ritual slice
-- `docs/architecture/positioning-and-value.md` — longer internal notes on positioning and value
-- `docs/secrets-audit.md` — audit commands, scanner scopes, result interpretation, and reviewed exceptions
-- `SECURITY.md` — workflow trust boundaries and bug/vulnerability reporting
+- recurring repository rituals: starting a task, preparing work for review, publishing, or closing work;
+- local automation with explicit admission rules and state checks;
+- helpers for AI agents that need a structured answer instead of a guess from logs;
+- workflows whose purpose and rules need to be reviewable and reusable.
 
-## Core ideas
+## Not the goal
 
-- declarative workflows
-- explicit guards
-- explicit steps
-- public connector families
-- connector operations
-- `check` / `plan` / `execute` / `explain`
-- structured results
+Ordo is not a replacement for a general orchestration platform, a CI service, or a general-purpose programming language in YAML. It is not intended to automate every process out of the box.
 
-## Status
+The project is still early-stage. Check the currently supported capabilities, limits, and examples before adopting it in a project.
 
-This repository now contains the v0 contract-first runtime foundation:
-- workflow and profile loading
-- strict validation and structured diagnostics
-- public connector registry and stable resolution
-- runtime modes: `check`, `plan`, `execute`, `explain`
-- initial canonical connector operations
-- examples, profiles, and golden outputs
+## What it looks like
 
-There is not yet a stable end-user CLI; the current surface is primarily a Python API.
+This small workflow reads a GitHub issue only when the worktree is clean:
+
+```yaml
+version: 0
+workflow: inspect-issue
+inputs:
+  repository: kergma-lw/ordo-cli
+  issue_number: 1
+blocks:
+- guards:
+  - git.worktree.clean
+- steps:
+  - name: inspect-issue
+    uses: gh.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+    register: issue
+```
+
+The clean-worktree check is evaluated before the issue lookup. If it blocks the workflow, analysis modes report the reason instead of attempting the next step anyway.
+
+## Examples
+
+A supported installation path for using Ordo in another project will be documented separately. For now, explore the model through the examples in this repository.
+
+[`examples/inspect-issue.yaml`](examples/inspect-issue.yaml) is a small entry point into the workflow format. More substantial project rituals live in [`.ordo/workflows`](.ordo/workflows).
+
+## How Ordo differs from a task runner
+
+A task runner primarily answers, “What should run?” Ordo also asks:
+
+1. Does this workflow apply in the current state?
+2. Which rules block it, if any?
+3. Which steps would run, and which have side effects?
+4. What is the next safe action?
+
+Its central idea is the combination of declarative workflows, explicit admission rules, separate analysis modes, and structured results.
+
+## Documentation
+
+- [Workflow examples](examples/) — small working process descriptions.
+- [Workflow format](docs/format.md) — the YAML model.
+- [Command-line reference](docs/ordo.1.md) — available commands and their use.
+- [Comparison with nearby tools](docs/comparison.md) — Ordo alongside pypyr, StackStorm, and Ansible.
+
+## Security
+
+Read [SECURITY.md](SECURITY.md) for workflow trust boundaries and vulnerability reporting.
 
 ## License
 
-Except where otherwise noted, Ordo is free software licensed under the GNU General
-Public License, version 3 or (at your option) any later version
-(`GPL-3.0-or-later`). See [LICENSE](LICENSE) for the full terms, including the
-disclaimer of warranty. Third-party materials retain their respective licenses.
+Ordo is free software licensed under the [GNU General Public License, version 3 or later](LICENSE).
