@@ -139,7 +139,7 @@ def test_model_navigates_to_the_complete_routine_example_without_an_internal_ide
 def test_examples_site_links_repository_examples_and_explains_snippet_distinction():
     rendered = render_topic("topics/examples.md", "examples", help_cli.build_examples_response())
 
-    assert "[examples/minimal.yaml](../examples/minimal.yaml)" in rendered
+    assert "[examples/samples/minimal.yaml](../examples/samples/minimal.yaml)" in rendered
     assert "Repository examples are complete files verified in this repository" in rendered
     assert "snippet-backed example is a smaller excerpt" in rendered
 

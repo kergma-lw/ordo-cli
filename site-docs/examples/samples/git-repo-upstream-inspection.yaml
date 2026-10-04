@@ -1,0 +1,20 @@
+version: 0
+workflow: inspect-git-repo-upstream
+blocks:
+   - guards: []
+   - steps:
+      # Inspect repository and upstream settings.
+      - name: Inspect repository
+        uses: git.repo
+        register: repo_info
+      - name: Inspect upstream
+        uses: git.upstream
+        register: upstream_info
+      - name: Publish summary
+        publish:
+          repo_root: step.repo_info.outputs.root
+          upstream_configured: step.upstream_info.outputs.configured
+          upstream_ref: step.upstream_info.outputs.upstream_ref
+          remote: step.upstream_info.outputs.remote
+          remote_branch: step.upstream_info.outputs.remote_branch
+          summary: "Git repo and upstream workflow prepared"

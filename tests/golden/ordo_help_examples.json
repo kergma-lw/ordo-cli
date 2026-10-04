@@ -4,7 +4,7 @@
     {
       "definition": "Minimal workflow example that composes one published operation into one small end-to-end workflow shape.",
       "name": "minimal",
-      "path": "examples/minimal.yaml",
+      "path": "examples/samples/minimal.yaml",
       "related_topics": [
         "overview",
         "model",
@@ -19,7 +19,7 @@
     {
       "definition": "Issue inspection example that uses a guard before loading one published GitHub issue probe.",
       "name": "inspect-issue",
-      "path": "examples/inspect-issue.yaml",
+      "path": "examples/samples/inspect-issue.yaml",
       "related_topics": [
         "capabilities",
         "model",
@@ -84,7 +84,7 @@
     {
       "definition": "Launcher selection example that shows one step-level launcher override inside a profile-scoped execution context.",
       "name": "launcher-step",
-      "path": "examples/launcher-step.yaml",
+      "path": "examples/samples/launcher-step.yaml",
       "related_topics": [
         "capabilities",
         "model",
@@ -101,7 +101,7 @@
     {
       "definition": "Workflow include example that reuses one plain fragment without passing include arguments.",
       "name": "include-plain",
-      "path": "examples/include-plain.yaml",
+      "path": "examples/samples/include-plain.yaml",
       "related_topics": [
         "model",
         "examples"
@@ -115,7 +115,7 @@
     {
       "definition": "Workflow include example that passes explicit arguments into one reusable fragment contract.",
       "name": "include-args",
-      "path": "examples/include-args.yaml",
+      "path": "examples/samples/include-args.yaml",
       "related_topics": [
         "capabilities",
         "model",
@@ -131,7 +131,7 @@
     {
       "definition": "Playbook workflow catalog example that shows one published workflow entry with defaults, profiles, and state bindings.",
       "name": "playbook-workflows",
-      "path": "examples/playbook-workflows.yaml",
+      "path": "examples/samples/playbook-workflows.yaml",
       "related_topics": [
         "features",
         "model",
@@ -147,7 +147,7 @@
     {
       "definition": "Playbook top-level example that shows the required version marker together with repository-wide connector defaults before workflow and profile activation.",
       "name": "playbook-connectors",
-      "path": "examples/playbook-connectors.yaml",
+      "path": "examples/samples/playbook-connectors.yaml",
       "related_topics": [
         "features",
         "model",
@@ -163,7 +163,7 @@
     {
       "definition": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs.",
       "name": "playbook-pre-run",
-      "path": "examples/playbook-pre-run.yaml",
+      "path": "examples/samples/playbook-pre-run.yaml",
       "related_topics": [
         "model",
         "examples",
@@ -179,7 +179,7 @@
     {
       "definition": "Run-invocation example that contrasts named run-target fan-out with inline repeated steps, including outer if, gate, with, and register fields.",
       "name": "run-fan-out",
-      "path": "examples/run-fan-out.yaml",
+      "path": "examples/samples/run-fan-out.yaml",
       "related_topics": [
         "model",
         "examples",
@@ -195,7 +195,7 @@
     {
       "definition": "Text adapter example that projects, searches, and rewrites line-oriented text through the published text adapter surface.",
       "name": "text-adapter",
-      "path": "examples/text-adapter.yaml",
+      "path": "examples/samples/text-adapter.yaml",
       "related_topics": [
         "capabilities",
         "model",
@@ -211,7 +211,7 @@
     {
       "definition": "Local-expression filter example that demonstrates type predicates, membership tests, and boolean flow over embedded values.",
       "name": "local-expression-filters",
-      "path": "examples/local-expression-filters.yaml",
+      "path": "examples/samples/local-expression-filters.yaml",
       "related_topics": [
         "model",
         "examples"
@@ -226,7 +226,7 @@
     {
       "definition": "Workflow-local named expressions reuse input defaults in a boolean guard and publish a lowercased branch label as data, without running a shell command or creating a Git branch.",
       "name": "let-bindings",
-      "path": "examples/let-bindings.yaml",
+      "path": "examples/samples/let-bindings.yaml",
       "related_topics": [
         "features",
         "model",
@@ -242,7 +242,7 @@
     {
       "definition": "Project-items example that binds one collection probe through let and then filters it by field values.",
       "name": "project-items-let",
-      "path": "examples/project-items-let.yaml",
+      "path": "examples/samples/project-items-let.yaml",
       "related_topics": [
         "operations",
         "examples",

@@ -9,23 +9,27 @@ state_needs:
   task_memory: {}
 blocks:
 - guards:
+  # Require a clean non-main branch for an open issue.
   - git.worktree.clean
   - git.branch.value != "main"
   - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state
     == "OPEN"
 - steps:
-  - name: verify
+  # Verify and integrate the task branch.
+  - name: Run verification
     uses: shell.command
     with:
       command: ".venv/bin/python -m pytest"
-  - name: merge-main
+  - name: Fast-forward main branch
     uses: git.integrate.merge_ff_only
     with:
       ref: state.task_memory[inputs.task_key].branch
-  - name: close-issue
+
+  # Close the issue and clear task state.
+  - name: Close issue
     uses: gh.issue.close
     with:
       repository: inputs.repository
       issue_number: inputs.issue_number
-  - name: forget-task-branch
+  - name: Forget task branch
     state_delete: state.task_memory[inputs.task_key].branch

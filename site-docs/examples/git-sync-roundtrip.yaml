@@ -6,25 +6,28 @@ inputs:
 blocks:
   - guards: []
   - steps:
-      - name: fetch-remote-state
+      # Refresh and inspect upstream state.
+      - name: Fetch remote state
         uses: git.sync.fetch
         with:
           remote: inputs.remote_name # Run checks exact configured-name membership before transport.
-      - name: inspect-upstream
+      - name: Inspect upstream
         uses: git.upstream
         register: upstream_info
-      - name: compare-branch-to-upstream
+      - name: Compare branch with upstream
         uses: git.range
         with:
           base: "@{upstream}"
           head: inputs.branch_name
         register: branch_range
-      - name: push-branch
+
+      # Push the branch and publish the summary.
+      - name: Push branch
         uses: git.sync.push
         with:
           branch: inputs.branch_name
           remote: inputs.remote_name # Keep the configured fetch/push target explicit; omitted/null also resolves nested upstream remote names.
-      - name: publish-summary
+      - name: Publish summary
         publish:
           upstream_ref: step.upstream_info.outputs.upstream_ref
           ahead: step.branch_range.outputs.ahead_count

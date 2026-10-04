@@ -17,7 +17,8 @@ def test_example_full_workflow_discovery_and_runner(name):
     handle = f"examples.{name}"
     registry = {handle: describe_help_snippets()[handle]}
     example = registry[handle]["canonical_examples"][0]
-    source = (Path(__file__).resolve().parents[1] / f"examples/{name}.yaml").read_text(encoding="utf-8")
+    relative_path = f"examples/{name}.yaml" if name == "set-active-task-from-gitx" else f"examples/samples/{name}.yaml"
+    source = (Path(__file__).resolve().parents[1] / relative_path).read_text(encoding="utf-8")
     assert example["yaml"] == source.rstrip("\n")
     assert example["source_excerpt"]["end_line"] == len(source.splitlines())
     assert registry[handle]["snippet_coverage"] == "runner_verified"

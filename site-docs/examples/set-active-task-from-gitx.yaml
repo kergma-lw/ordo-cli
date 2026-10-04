@@ -17,39 +17,44 @@ state_needs:
   task_memory: {}
 blocks:
 - guards:
+  # Require one clean worktree with an open issue.
   - inputs.allow_backlog | is_boolean
   - git.worktrees.count == 1
   - git.state.worktree_clean
   - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state
     == "OPEN"
 - steps:
-  - name: add-issue-to-project
+  # Add the issue and load post-add project policy; do not use a pre-add membership snapshot.
+  - name: Add issue to project
     uses: gh.project.issue.add
     with:
       repository: inputs.repository
       issue_number: inputs.issue_number
       project_id: inputs.project_id
   # Observe after adding; policy must not use a pre-add membership snapshot.
-  - name: load-project-policy
+  - name: Load project policy
     uses: gh.project.issue
     with:
       repository: inputs.repository
       issue_number: inputs.issue_number
       project_id: inputs.project_id
     register: project
-  - name: require-project-membership
+
+  # Validate and start the approved project item.
+  - name: Require project membership
     gate: step.project.outputs.exists
-  - name: require-project-type-string
+  - name: Require a project type
     gate: step.project.outputs.type | is_string
-  - name: require-allowed-project-type
+  - name: Require an allowed project type
     gate: step.project.outputs.type | in(inputs.allowed_issue_types)
-  - name: block-done
+  - name: Block completed work
     gate: step.project.outputs.status != "Done"
-  - name: block-in-review
+  - name: Block work in review
     gate: step.project.outputs.status != "In review"
-  - name: require-backlog-permission
+  - name: Require backlog permission
     gate: step.project.outputs.status != "Backlog" or inputs.allow_backlog
-  - name: move-issue-to-in-progress
+
+  - name: Move issue to In progress
     uses: gh.project.issue.field_single_select.set
     with:
       repository: inputs.repository
@@ -57,7 +62,9 @@ blocks:
       project_id: inputs.project_id
       field: "Status"
       option: "In progress"
-  - name: compute-branch
+
+  # Compute the task branch and keep a stable local-base snapshot for its creation.
+  - name: Compute task branch
     value:
       format: "{}/{}-{}"
       args:
@@ -65,32 +72,34 @@ blocks:
       - inputs.issue_number
       - inputs.issue_title | trim | slug
     register: branch
-  - name: probe-local-base
+  - name: Inspect local base branch
     uses: git.ref
     with:
       ref:
         format: "refs/heads/{}"
         args: [inputs.base_branch]
     register: local_base
-  - name: fetch-remote
+  # Refresh and fast-forward the base branch.
+  - name: Fetch remote
     uses: git.sync.fetch
     with:
       remote: inputs.remote
-  - name: probe-remote-base
+  - name: Inspect remote base branch
     uses: git.ref
     with:
       ref:
         format: "refs/remotes/{}/{}"
         args: [inputs.remote, inputs.base_branch]
     register: remote_base
-  - name: require-remote-base
+  # Verify the remote base branch.
+  - name: Require remote base branch
     gate: step.remote_base.outputs.exists
-  - name: switch-base
+  - name: Switch to base branch
     if: step.local_base.outputs.exists
     uses: git.branch.switch
     with:
       branch: inputs.base_branch
-  - name: merge-base-ff-only
+  - name: Fast-forward base branch
     if: step.local_base.outputs.exists
     uses: git.integrate.merge_ff_only
     with:
@@ -98,19 +107,21 @@ blocks:
         format: "refs/remotes/{}/{}"
         args: [inputs.remote, inputs.base_branch]
   # Keep this snapshot stable across branch creation.
-  - name: probe-target-branch
+
+  # Select or create the task branch.
+  - name: Inspect task branch
     uses: git.ref
     with:
       ref:
         format: "refs/heads/{}"
         args: [step.branch.outputs.value]
     register: target_branch
-  - name: switch-existing-target
+  - name: Switch to existing task branch
     if: step.target_branch.outputs.exists
     uses: git.branch.switch
     with:
       branch: step.branch.outputs.value
-  - name: create-local-target
+  - name: Create task branch from local base
     if: not step.target_branch.outputs.exists and step.local_base.outputs.exists
     uses: git.branch.create
     with:
@@ -118,7 +129,7 @@ blocks:
       start_point:
         format: "refs/heads/{}"
         args: [inputs.base_branch]
-  - name: create-remote-target
+  - name: Create task branch from remote base
     if: not step.target_branch.outputs.exists and not step.local_base.outputs.exists
     uses: git.branch.create
     with:
@@ -127,28 +138,31 @@ blocks:
         format: "refs/remotes/{}/{}"
         args: [inputs.remote, inputs.base_branch]
   # Creation is not rolled back if switching fails; the new branch can remain.
-  - name: switch-created-target
+  - name: Switch to new task branch
     if: not step.target_branch.outputs.exists
     uses: git.branch.switch
     with:
       branch: step.branch.outputs.value
-  - name: remember-issue-number
+
+
+  # Record active task details.
+  - name: Remember issue number
     state_set:
       state.task_memory[inputs.task_key].issue_number: ${inputs.issue_number}
-  - name: remember-issue-type
+  - name: Remember issue type
     state_set:
       state.task_memory[inputs.task_key].issue_type: ${inputs.issue_type}
-  - name: remember-issue-title
+  - name: Remember issue title
     state_set:
       state.task_memory[inputs.task_key].issue_title: ${inputs.issue_title}
-  - name: remember-branch
+  - name: Remember task branch
     state_set:
       state.task_memory[inputs.task_key].branch: ${step.branch.outputs.value}
-  - name: remember-repository-kind
+  - name: Remember repository kind
     state_set:
       state.task_memory[inputs.task_key].repository_kind: ${inputs.repository_kind}
   # Trusted code hook: only supply intentional executable code, never interpolate ordinary data.
-  - name: run-post-open-command
+  - name: Run post-open command
     if: inputs.post_open_command != ""
     uses: shell.command
     with:

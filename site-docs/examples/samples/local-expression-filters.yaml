@@ -1,0 +1,20 @@
+version: 0
+workflow: local-expression-filters
+inputs:
+  title: Example Task
+  status: ready
+  allowed:
+  - ready
+  - blocked
+blocks:
+- guards: []
+- steps:
+  # Validate the status and announce the task.
+  - name: Check allowed status
+    value: inputs.status | in(inputs.allowed)
+    register: allowed_status
+  - name: Announce task
+    if: step.allowed_status.outputs.value | is_boolean
+    uses: shell.command
+    with:
+      command: format("printf {}", inputs.title | slug)

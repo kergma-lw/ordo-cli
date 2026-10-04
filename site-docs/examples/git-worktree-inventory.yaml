@@ -5,18 +5,16 @@ workflow: inspect-git-worktree-inventory
 blocks:
   - guards: []
   - steps:
-      # First inspect every checkout that shares this repository.
-      - name: list-worktrees
+      # Inspect repository worktrees and the current checkout.
+      - name: List worktrees
         uses: git.worktrees
         register: worktree_inventory
 
-      # Then inspect the current checkout for uncommitted paths.
-      - name: inspect-current-worktree
+      - name: Inspect current worktree
         uses: git.worktree
         register: current_worktree
 
-      # Return the small set of facts needed to choose a safe next action.
-      - name: publish-worktree-inventory
+      - name: Publish worktree inventory
         publish:
           current_path: step.worktree_inventory.outputs.current_path
           worktree_count: step.worktree_inventory.outputs.count

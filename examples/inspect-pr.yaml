@@ -5,54 +5,60 @@ inputs:
   pull_number: 42
 blocks:
 - steps:
-  - name: load-pr
+  # Load pull request content.
+  - name: Load pull request
     uses: gh.pr
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
     register: pr
-  - name: load-pr-diff
+  - name: Load pull request diff
     uses: gh.pr.diff
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
       limit: 20
     register: pr_diff
-  - name: load-pr-comments
+
+  # Load discussion and review activity.
+  - name: Load pull request comments
     uses: gh.pr.comments
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
       limit: 20
     register: pr_comments
-  - name: load-pr-reviews
+  - name: Load pull request reviews
     uses: gh.pr.reviews
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
       limit: 20
     register: pr_reviews
-  - name: load-pr-review-comments
+  - name: Load pull request review comments
     uses: gh.pr.review_comments
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
       limit: 20
     register: pr_review_comments
-  - name: load-pr-checks
+
+  # Load checks and timeline activity.
+  - name: Load pull request checks
     uses: gh.pr.checks
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
     register: pr_checks
-  - name: load-pr-timeline
+  - name: Load pull request timeline
     uses: gh.pr.timeline
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
       limit: 20
     register: pr_timeline
-  - name: publish-pr-inspection
+
+  - name: Publish pull request inspection
     publish:
       summary: "Pull request inspection loaded"
       pull_ref:

@@ -261,7 +261,7 @@ blocks:
   - name: demo
     for_each: {snippet}
     steps:
-      - name: publish-item
+      - name: Publish issue item
         publish:
           issue_number: item
 """

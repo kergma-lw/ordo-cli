@@ -72,7 +72,7 @@
         "eligibility": "eligible",
         "status": "pending",
         "step_names": [
-          "inspect-issue"
+          "Inspect issue"
         ],
         "type": "steps"
       }
@@ -139,7 +139,7 @@
               "invalidates_scopes": [],
               "kind": "probe",
               "launcher": null,
-              "name": "inspect-issue",
+              "name": "Inspect issue",
               "probe_scopes": [
                 "gh.issue"
               ],
@@ -250,7 +250,7 @@
         "invalidates_scopes": [],
         "kind": "probe",
         "launcher": null,
-        "name": "inspect-issue",
+        "name": "Inspect issue",
         "probe_scopes": [
           "gh.issue"
         ],
@@ -273,7 +273,7 @@
       "git.worktree.clean"
     ],
     "step_names": [
-      "inspect-issue"
+      "Inspect issue"
     ]
   },
   "status": "ok"

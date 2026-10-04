@@ -87,7 +87,7 @@ def test_pr_outcome_prose_hides_transport_status_and_examples_hide_bootstrap():
 
 
 def test_published_shell_example_never_executes_workflow_controlled_text():
-    source = Path(__file__).resolve().parents[1] / "examples" / "shell-command-legacy-compatibility.yaml"
+    source = Path(__file__).resolve().parents[1] / "examples" / "samples" / "shell-command-legacy-compatibility.yaml"
     text = source.read_text(encoding="utf-8")
 
     assert "command: \"printf 'legacy check'\"" in text

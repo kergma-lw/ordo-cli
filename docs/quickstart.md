@@ -14,7 +14,7 @@ All examples below assume you run Python with `PYTHONPATH=src` from the reposito
 
 Start with a small workflow:
 
-`examples/inspect-issue.yaml`
+`examples/samples/inspect-issue.yaml`
 
 ```yaml
 version: 0
@@ -37,7 +37,7 @@ steps:
 
 If you want one example that already uses workflow-local named expressions, inspect:
 
-`examples/let-bindings.yaml`
+`examples/samples/let-bindings.yaml`
 
 ```yaml
 version: 0
@@ -68,7 +68,7 @@ PYTHONPATH=src .venv/bin/python - <<'PY'
 from pathlib import Path
 from ordo import load_workflow_file, validate_workflow_document
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 report = validate_workflow_document(workflow.to_contract())
 
 print(report.status)
@@ -121,7 +121,7 @@ PYTHONPATH=src .venv/bin/python - <<'PY'
 from pathlib import Path
 from ordo import check_workflow, load_workflow_file
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 result = check_workflow(workflow)
 
 print(result.to_contract())
@@ -143,7 +143,7 @@ PYTHONPATH=src .venv/bin/python - <<'PY'
 from pathlib import Path
 from ordo import load_workflow_file, plan_workflow
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 result = plan_workflow(workflow)
 
 print(result.to_contract())
@@ -165,7 +165,7 @@ compatibility alias. The CLI mode `explain` and result mode `Mode.EXPLAIN` are u
 
 Blocked example:
 
-`examples/blocked-main-branch.yaml`
+`examples/samples/blocked-main-branch.yaml`
 
 ```bash
 PYTHONPATH=src .venv/bin/python - <<'PY'
@@ -173,7 +173,7 @@ from pathlib import Path
 from ordo import assess_workflow_readiness, load_workflow_file
 from ordo.model.runtime import OperationResult
 
-workflow = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
+workflow = load_workflow_file(Path("examples/samples/blocked-main-branch.yaml"))
 
 def probe(resolved_guard, _workflow):
     if resolved_guard.reference == "git.branch":
@@ -203,7 +203,7 @@ from pathlib import Path
 from ordo import execute_workflow, load_workflow_file
 from ordo.model.runtime import OperationResult
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 
 result = execute_workflow(
     workflow,
@@ -240,7 +240,7 @@ PYTHONPATH=src .venv/bin/python - <<'PY'
 from pathlib import Path
 from ordo import load_profile_file, load_workflow_file, plan_workflow
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 profile = load_profile_file(Path("profiles/backend-default.yaml"))
 
 result = plan_workflow(workflow, profile=profile)

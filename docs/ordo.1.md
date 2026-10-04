@@ -20,7 +20,7 @@ from ordo import (
     plan_workflow,
 )
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 profile = load_profile_file(Path("profiles/backend-default.yaml"))
 
 check_result = check_workflow(workflow, profile=profile)
@@ -199,7 +199,7 @@ Load and check a workflow:
 from pathlib import Path
 from ordo import check_workflow, load_workflow_file
 
-workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
 result = check_workflow(workflow)
 print(result.to_contract())
 ```
@@ -233,6 +233,6 @@ Current v0 limits are important:
 - `docs/contracts.md`
 - `docs/playbook.md`
 - `docs/format.md`
-- `examples/inspect-issue.yaml`
-- `examples/blocked-main-branch.yaml`
+- `examples/samples/inspect-issue.yaml`
+- `examples/samples/blocked-main-branch.yaml`
 - `profiles/backend-default.yaml`

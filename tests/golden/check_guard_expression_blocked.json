@@ -139,7 +139,7 @@
         "conditional_steps": [],
         "status": "blocked",
         "step_names": [
-          "verify-command"
+          "Run verification command"
         ],
         "type": "steps"
       }
@@ -240,7 +240,7 @@
       "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
     "step_names": [
-      "verify-command"
+      "Run verification command"
     ]
   },
   "status": "guard_failed"

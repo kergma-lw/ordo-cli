@@ -21,31 +21,31 @@ class ExampleSurfaceTest(unittest.TestCase):
     def test_example_workflows_validate(self) -> None:
         for path in (
             Path("examples/gh-issue-maintenance.yaml"),
-            Path("examples/minimal.yaml"),
-            Path("examples/inspect-issue.yaml"),
+            Path("examples/samples/minimal.yaml"),
+            Path("examples/samples/inspect-issue.yaml"),
             Path("examples/inspect-pr.yaml"),
-            Path("examples/git-branch-management.yaml"),
-            Path("examples/git-commit-management.yaml"),
-            Path("examples/git-ref-range-inspection.yaml"),
-            Path("examples/git-repo-upstream-inspection.yaml"),
-            Path("examples/git-tag-inspection.yaml"),
-            Path("examples/project-field-probes.yaml"),
-            Path("examples/project-item-collections.yaml"),
-            Path("examples/project-issue-membership.yaml"),
-            Path("examples/blocked-main-branch.yaml"),
-            Path("examples/launcher-step.yaml"),
-            Path("examples/let-bindings.yaml"),
-            Path("examples/local-expression-filters.yaml"),
-            Path("examples/run-step.yaml"),
-            Path("examples/run-fan-out.yaml"),
+            Path("examples/samples/git-branch-management.yaml"),
+            Path("examples/samples/git-commit-management.yaml"),
+            Path("examples/samples/git-ref-range-inspection.yaml"),
+            Path("examples/samples/git-repo-upstream-inspection.yaml"),
+            Path("examples/samples/git-tag-inspection.yaml"),
+            Path("examples/samples/project-field-probes.yaml"),
+            Path("examples/samples/project-item-collections.yaml"),
+            Path("examples/samples/project-issue-membership.yaml"),
+            Path("examples/samples/blocked-main-branch.yaml"),
+            Path("examples/samples/launcher-step.yaml"),
+            Path("examples/samples/let-bindings.yaml"),
+            Path("examples/samples/local-expression-filters.yaml"),
+            Path("examples/samples/run-step.yaml"),
+            Path("examples/samples/run-fan-out.yaml"),
         ):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
             self.assertTrue(report.ok, path.as_posix())
 
     def test_included_example_workflows_load(self) -> None:
         for path in (
-            Path("examples/include-plain.yaml"),
-            Path("examples/include-args.yaml"),
+            Path("examples/samples/include-plain.yaml"),
+            Path("examples/samples/include-args.yaml"),
         ):
             workflow = load_workflow_file(path)
             self.assertTrue(workflow.blocks, path.as_posix())
@@ -67,7 +67,7 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertIn("shell_frontend", profile.launchers)
 
     def test_blocked_example_teaches_blocked_before_execution(self) -> None:
-        workflow = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/blocked-main-branch.yaml"))
 
         result = assess_workflow_readiness(
             workflow,
@@ -81,7 +81,7 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(result.outputs["next_actions"][0]["action"], "resolve_blocking_guards")
 
     def test_plan_surface_for_example_profile_and_workflow_is_machine_readable(self) -> None:
-        workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
         profile = load_profile_file(Path("profiles/read-only-review.yaml"))
 
         result = plan_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -91,7 +91,7 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "read-only-review")
 
     def test_let_bindings_example_executes_end_to_end(self) -> None:
-        path = Path("examples/let-bindings.yaml")
+        path = Path("examples/samples/let-bindings.yaml")
         workflow = load_workflow_file(path)
         example = describe_help_snippets()["examples.let-bindings"]["canonical_examples"][0]
         self.assertEqual(example["yaml"], path.read_text(encoding="utf-8").rstrip("\n"))
@@ -105,7 +105,7 @@ class ExampleSurfaceTest(unittest.TestCase):
                 self.assertEqual(payload["snippet_coverage"], "runner_verified")
                 self.assertEqual(payload["canonical_examples"][0], example)
             else:
-                self.assertIn("publish-branch", output.getvalue())
+                self.assertIn("Publish branch", output.getvalue())
                 self.assertIn("enabled: false blocks publication", output.getvalue())
 
         with patch("subprocess.run") as run:
@@ -113,11 +113,11 @@ class ExampleSurfaceTest(unittest.TestCase):
         run.assert_not_called()
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["executed_steps"], ["publish-branch"])
+        self.assertEqual(result.outputs["executed_steps"], ["Publish branch"])
         self.assertEqual(result.to_contract()["published"], [{"branch": "task/7"}])
 
     def test_let_bindings_example_keeps_untrusted_type_as_data(self) -> None:
-        workflow = load_workflow_file(Path("examples/let-bindings.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/let-bindings.yaml"))
         for task_type in ("Task; touch /tmp/ordo-injection", "$(id) `id` | cat &", "Task'\"\nNEXT"):
             with self.subTest(task_type=task_type), patch("subprocess.run") as run:
                 result = execute_workflow(
@@ -129,7 +129,7 @@ class ExampleSurfaceTest(unittest.TestCase):
                 self.assertEqual(result.to_contract()["published"], [{"branch": f"{task_type.lower()}/7"}])
 
     def test_let_bindings_example_disabled_guard_blocks_without_commands(self) -> None:
-        workflow = load_workflow_file(Path("examples/let-bindings.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/let-bindings.yaml"))
         with patch("subprocess.run") as run:
             result = execute_workflow(
                 replace(workflow, inputs={**workflow.inputs, "enabled": False}),
@@ -142,14 +142,14 @@ class ExampleSurfaceTest(unittest.TestCase):
 
     def test_local_expression_filters_example_is_published_and_executes_end_to_end(self) -> None:
         catalog = describe_examples_catalog()
-        workflow = load_workflow_file(Path("examples/local-expression-filters.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/local-expression-filters.yaml"))
 
         self.assertTrue(any(item["name"] == "local-expression-filters" for item in catalog["examples"]))
 
         result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["executed_steps"], ["compute-membership", "announce"])
+        self.assertEqual(result.outputs["executed_steps"], ["Check allowed status", "Announce task"])
         self.assertEqual(result.operation_results[0].outputs.get("value"), True)
         self.assertEqual(result.operation_results[1].outputs.get("stdout"), "example-task")
 
@@ -160,12 +160,12 @@ class ExampleSurfaceTest(unittest.TestCase):
 
         activated = activate_playbook(
             workflow_name="remember-profile",
-            playbook_path=Path("examples/playbook-workflows.yaml"),
+            playbook_path=Path("examples/samples/playbook-workflows.yaml"),
         )
 
         self.assertEqual(activated.workflow_name, "remember-profile")
         self.assertEqual(activated.workflow_description, "Read one remembered profile from shared state")
-        self.assertEqual(activated.working_directory, Path("examples").resolve())
+        self.assertEqual(activated.working_directory, Path("examples/samples").resolve())
         self.assertIsNotNone(activated.profile)
 
     def test_playbook_connectors_example_is_published_and_activates(self) -> None:
@@ -175,7 +175,7 @@ class ExampleSurfaceTest(unittest.TestCase):
 
         activated = activate_playbook(
             workflow_name="inspect-compose",
-            playbook_path=Path("examples/playbook-connectors.yaml"),
+            playbook_path=Path("examples/samples/playbook-connectors.yaml"),
         )
 
         self.assertEqual(activated.workflow_name, "inspect-compose")
@@ -228,27 +228,27 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(published["timeline_count"], 1)
 
     def test_project_field_probes_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/project-field-probes.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/project-field-probes.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-project-field-probes")
 
     def test_project_issue_membership_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/project-issue-membership.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/project-issue-membership.yaml"))
 
         self.assertEqual(workflow.workflow, "prepare-project-issue-membership")
 
     def test_project_item_collections_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/project-item-collections.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/project-item-collections.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-project-item-collections")
 
     def test_git_branch_management_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/git-branch-management.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/git-branch-management.yaml"))
 
         self.assertEqual(workflow.workflow, "manage-git-branches")
 
     def test_git_commit_management_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/git-commit-management.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/git-commit-management.yaml"))
 
         self.assertEqual(workflow.workflow, "manage-git-commits")
         steps = workflow.blocks[1].steps
@@ -261,17 +261,17 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(published["ahead"], "step.branch_range.outputs.ahead_count")
 
     def test_git_tag_inspection_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/git-tag-inspection.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/git-tag-inspection.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-git-tags")
 
     def test_git_ref_range_inspection_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/git-ref-range-inspection.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/git-ref-range-inspection.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-git-ref-range")
 
     def test_git_repo_upstream_inspection_example_loads(self) -> None:
-        workflow = load_workflow_file(Path("examples/git-repo-upstream-inspection.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/git-repo-upstream-inspection.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-git-repo-upstream")
 

@@ -205,7 +205,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "step_fragment",
                 "summary": "Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines.",
                 "source_example": "fs-file-inspection",
-                "source_excerpt": {"path": "examples/fs-file-inspection.yaml", "start_line": 8, "end_line": 18},
+                "source_excerpt": {"path": "examples/samples/fs-file-inspection.yaml", "start_line": 9, "end_line": 19},
                 "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "step_fragment", "target": "connector.fs.file", "expected_status": "ok"},
             },
             {
@@ -214,7 +214,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "workflow_fragment",
                 "summary": "A complete observer workflow requires file_path and publishes a summary rather than full content. Content and metadata come from one observed file, not an atomic snapshot.",
                 "source_example": "fs-file-inspection",
-                "source_excerpt": {"path": "examples/fs-file-inspection.yaml", "start_line": 1, "end_line": 18},
+                "source_excerpt": {"path": "examples/samples/fs-file-inspection.yaml", "start_line": 1, "end_line": 19},
                 "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.fs.file", "expected_status": "ok"},
             },
         ],
@@ -228,7 +228,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "workflow_fragment",
                 "summary": "Use let to name reusable expressions: should_run controls admission, while branch formats the input type and issue number. With the defaults, publish emits branch: task/7; enabled: false blocks publication. Publish returns data, unlike shell.command execution or Git branch creation. Runner verification validates the full workflow shape without execution; targeted example tests cover execution safety.",
                 "source_example": "examples.let-bindings",
-                "source_excerpt": {"path": "examples/let-bindings.yaml", "start_line": 1, "end_line": 16},
+                "source_excerpt": {"path": "examples/samples/let-bindings.yaml", "start_line": 1, "end_line": 16},
                 "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "examples.let-bindings", "expected_status": "ok"},
             },
         ],
@@ -242,7 +242,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "workflow_fragment",
                 "summary": "Supply required repository and project_id inputs and bind the task_memory state role through the playbook; allowed_issue_types is a list (default [Task, Bug]), not CSV. Guards require boolean allow_backlog, one clean worktree, and an open issue. Add membership, then read project policy: missing type blocks, missing status is allowed, Done/In review block, and Backlog needs permission. Set Status to In progress before Git work. Branch naming and remembered issue values use inputs, not the project type. Fetch the configured remote once (no branch-specific fetch or pull), require its remote-tracking base, then switch and fast-forward an existing local base. A failed base switch stops the sequence. Reuse a target branch or create it from the local base, otherwise the remote-tracking base; separate creation and switching can leave a branch on failure. Write task state only after switching. Earlier membership, status, Git, and individual state writes are not rolled back on later failure. Only nonempty post_open_command runs as explicit trusted code; never interpolate ordinary issue data into it. This retained migration hook is not permission to author new shell.command steps; the workflow-rules prohibition still applies. This illustrative example is not the canonical .ordo workflow; demo profile project IDs make no operational promise. Runner verification validates the complete source shape, including required inputs and state_needs, without Git/GitHub execution, state persistence, or hook execution.",
                 "source_example": "examples.set-active-task-from-gitx",
-                "source_excerpt": {"path": "examples/set-active-task-from-gitx.yaml", "start_line": 1, "end_line": 155},
+                "source_excerpt": {"path": "examples/set-active-task-from-gitx.yaml", "start_line": 1, "end_line": 169},
                 "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "examples.set-active-task-from-gitx", "expected_status": "ok"},
             },
         ],
@@ -357,7 +357,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'workflows:\n  remember-profile:\n    file: ./playbook-workflow-target.yaml\n    description: Read one remembered profile from shared state\n    category: inspect\n    when: Use when you need one state-backed profile lookup before choosing the next workflow.\n    with:\n      active_profile_key: active_profile\n      repo_dir: .\n    working_directory: ${inputs.repo_dir}\n    state_bindings:\n      shared_state: shared_state',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 7,
                     "end_line": 18
                 },
@@ -379,7 +379,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'file: ./playbook-workflow-target.yaml',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 9,
                     "end_line": 9
                 },
@@ -398,7 +398,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "workflow_fragment",
                 "summary": "Document required and optional root inputs beside their declarations. The playbook supplies the state key and optional directory separately; concrete bindings without caller slots stay hidden from plain inputs. Plain show preserves default/description/hint when declared, omits top-level launch_profile and input caller_slot/sources/coverage, and reports caller-slot obligation in required without adding optional. It adds top-level discovery.workflow.input_source_missing warnings only for required workflow declarations with coverage missing; optional missing declarations do not warn. No qualifying declaration means no warnings field. --json retains the unchanged full declaration and launch-profile contract. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
-                "source_excerpt": {"path": "examples/playbook-workflow-target.yaml", "start_line": 1, "end_line": 16},
+                "source_excerpt": {"path": "examples/samples/playbook-workflow-target.yaml", "start_line": 1, "end_line": 16},
                 "verification": {"kind": "excerpt_verified", "example": "examples.playbook-workflows"},
             }
         ],
@@ -411,7 +411,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "workflow_fragment",
                 "summary": "A required input and an explicitly optional input both carry descriptions; neither declares a default, so workflows show must not invent default: null. Caller exposure belongs to playbook.workflows.with. Plain show displays caller slots, omits top-level launch_profile and input caller_slot/sources/coverage, and reports caller-slot obligation in required without adding optional. Its conditional top-level discovery.workflow.input_source_missing warnings use workflow declaration requiredness and coverage missing, not displayed required. Optional missing declarations do not warn; no qualifying declaration means no warnings field. --json retains every declaration and all existing fields unchanged. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
-                "source_excerpt": {"path": "examples/playbook-workflow-target.yaml", "start_line": 1, "end_line": 16},
+                "source_excerpt": {"path": "examples/samples/playbook-workflow-target.yaml", "start_line": 1, "end_line": 16},
                 "verification": {"kind": "excerpt_verified", "example": "examples.playbook-workflows"},
             }
         ],
@@ -427,7 +427,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'with:\n  active_profile_key: active_profile\n  repo_dir: .',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 13,
                     "end_line": 15
                 },
@@ -441,7 +441,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "field_fragment",
                 "summary": "Expose the state key with active_profile_key: and the optional directory with repo_dir?:. Both plain workflows show and --json retain these caller inputs; a required slot still demands caller input even if another source provides coverage. Either slot form suppresses discovery.workflow.input_source_missing warnings: plain top-level warnings appears only for required workflow declarations with coverage missing, and is omitted when none qualify. Plain show omits top-level launch_profile and input caller_slot/sources/coverage; other record fields are preserved except required, which is true for a required slot and false for an optional slot. No optional field is added. --json keeps all fields unchanged. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
-                "source_excerpt": {"path": "examples/playbook-workflows.yaml", "start_line": 19, "end_line": 26},
+                "source_excerpt": {"path": "examples/samples/playbook-workflows.yaml", "start_line": 19, "end_line": 26},
                 "verification": {"kind": "excerpt_verified", "example": "examples.playbook-workflows"},
             }
         ],
@@ -457,7 +457,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'description: Read one remembered profile from shared state',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 10,
                     "end_line": 10
                 },
@@ -479,7 +479,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'category: inspect',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 11,
                     "end_line": 11
                 },
@@ -501,7 +501,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'when: Use when you need one state-backed profile lookup before choosing the next workflow.',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 12,
                     "end_line": 12
                 },
@@ -523,7 +523,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'working_directory: ${inputs.repo_dir}',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 16,
                     "end_line": 16
                 },
@@ -545,7 +545,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": 'state_bindings:\n  shared_state: shared_state',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
-                    "path": "examples/playbook-workflows.yaml",
+                    "path": "examples/samples/playbook-workflows.yaml",
                     "start_line": 17,
                     "end_line": 18
                 },
@@ -567,7 +567,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": "version: 1\nstates:\n  shared_state:\n    path: .ordo/example-state.json",
                 "source_example": "examples.playbook-connectors",
                 "source_excerpt": {
-                    "path": "examples/playbook-connectors.yaml",
+                    "path": "examples/samples/playbook-connectors.yaml",
                     "start_line": 1,
                     "end_line": 4
                 },
@@ -589,7 +589,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "yaml": "connectors:\n  compose:\n    directory: ./deploy\n    file: compose.prod.yaml",
                 "source_example": "examples.playbook-connectors",
                 "source_excerpt": {
-                    "path": "examples/playbook-connectors.yaml",
+                    "path": "examples/samples/playbook-connectors.yaml",
                     "start_line": 7,
                     "end_line": 10
                 },
@@ -729,7 +729,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Start one workflow document with the required version marker before the rest of the top-level workflow contract.",
                 "source_excerpt": {
-                    "path": "examples/minimal.yaml",
+                    "path": "examples/samples/minimal.yaml",
                     "start_line": 1,
                     "end_line": 3
                 },
@@ -749,7 +749,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Declare the workflow document's stable contract name before the block structure begins.",
                 "source_excerpt": {
-                    "path": "examples/minimal.yaml",
+                    "path": "examples/samples/minimal.yaml",
                     "start_line": 2,
                     "end_line": 3
                 },
@@ -769,7 +769,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Select one named reusable run target for a runtime invocation step instead of inlining the repeated body locally.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 7,
                     "end_line": 9
                 },
@@ -789,7 +789,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Bind explicit caller-scoped values into one named run target instead of letting the callee read caller context implicitly.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 9,
                     "end_line": 12
                 },
@@ -809,7 +809,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Repeat one invocation-shaped step over an explicit array-valued item source.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 12,
                     "end_line": 14
                 },
@@ -829,7 +829,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Gate the whole invocation step with one outer caller-scoped condition before fan-out or inline body execution begins.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 13,
                     "end_line": 15
                 },
@@ -849,7 +849,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Declare one outer admission gate for a run invocation when the real question is whether the whole invocation may proceed at all.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 18,
                     "end_line": 22
                 },
@@ -869,7 +869,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Capture the aggregate results of a run invocation or fan-out step under one explicit outer register name.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 13,
                     "end_line": 16
                 },
@@ -889,7 +889,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Keep one short local repeated body inline under for_each when a named run target would be heavier than necessary.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 25,
                     "end_line": 31
                 },
@@ -909,7 +909,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Give one step a stable local identity so later workflow surfaces can refer to it explicitly.",
                 "source_excerpt": {
-                    "path": "examples/inspect-issue.yaml",
+                    "path": "examples/samples/inspect-issue.yaml",
                     "start_line": 10,
                     "end_line": 10
                 },
@@ -929,7 +929,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Use one step-level if condition when the step is locally optional inside an already-valid path.",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
+                    "path": "examples/samples/project-issue-membership.yaml",
                     "start_line": 17,
                     "end_line": 19
                 },
@@ -944,7 +944,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Use one gate condition when the real question is whether the protected invocation may proceed at all.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 21,
                     "end_line": 24
                 },
@@ -964,9 +964,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "field_fragment",
                 "summary": "Read one earlier registered step result through the explicit step.<register>.outputs... surface instead of inventing implicit shared context.",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
+                    "path": "examples/samples/project-issue-membership.yaml",
                     "start_line": 17,
-                    "end_line": 18
+                    "end_line": 19
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -984,7 +984,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "step_fragment",
                 "summary": "Use the dedicated operation-call step form when one named step's primary job is invoking one published operation surface through uses.",
                 "source_excerpt": {
-                    "path": "examples/inspect-issue.yaml",
+                    "path": "examples/samples/inspect-issue.yaml",
                     "start_line": 10,
                     "end_line": 15
                 },
@@ -1004,7 +1004,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "step_fragment",
                 "summary": "Use the dedicated run-invocation step form when one named step invokes a workflow fragment target with optional fan-out and aggregate capture.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 8,
                     "end_line": 15
                 },
@@ -1024,7 +1024,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "form": "step_fragment",
                 "summary": "Use the dedicated inline fan-out form when a short local repeated body should stay inline under one explicit for_each step.",
                 "source_excerpt": {
-                    "path": "examples/run-fan-out.yaml",
+                    "path": "examples/samples/run-fan-out.yaml",
                     "start_line": 25,
                     "end_line": 31
                 },
@@ -1045,7 +1045,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Publish one profile-scoped override record with a named target, structured data, and a short reason note.",
                 "yaml": "overrides:\n  - target: local.issue-triage\n    with:\n      default_label: bug\n      board: intake\n    reason: Share one profile-scoped triage adaptation record.",
                 "source_excerpt": {
-                    "path": "examples/profile-overrides.yaml",
+                    "path": "examples/samples/profile-overrides.yaml",
                     "start_line": 2,
                     "end_line": 7
                 },
@@ -1066,7 +1066,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Name which integration or local convention should read this override record.",
                 "yaml": "  - target: local.issue-triage",
                 "source_excerpt": {
-                    "path": "examples/profile-overrides.yaml",
+                    "path": "examples/samples/profile-overrides.yaml",
                     "start_line": 3,
                     "end_line": 3
                 },
@@ -1087,7 +1087,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Attach structured data that the named target may use.",
                 "yaml": "    with:\n      default_label: bug\n      board: intake",
                 "source_excerpt": {
-                    "path": "examples/profile-overrides.yaml",
+                    "path": "examples/samples/profile-overrides.yaml",
                     "start_line": 4,
                     "end_line": 6
                 },
@@ -1108,7 +1108,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Annotate the override record with one short explanation for later readers.",
                 "yaml": "    reason: Share one profile-scoped triage adaptation record.",
                 "source_excerpt": {
-                    "path": "examples/profile-overrides.yaml",
+                    "path": "examples/samples/profile-overrides.yaml",
                     "start_line": 7,
                     "end_line": 7
                 },
@@ -1129,9 +1129,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Confirm one GitHub Project identity before branching into field-level or membership-level project logic.",
                 "source_example": "project-field-probes",
                 "source_excerpt": {
-                    "path": "examples/project-field-probes.yaml",
-                    "start_line": 8,
-                    "end_line": 12
+                    "path": "examples/samples/project-field-probes.yaml",
+                    "start_line": 9,
+                    "end_line": 13
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1145,9 +1145,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one project, one named field, and one candidate selectable option, then publish a compact readiness summary.",
                 "source_example": "project-field-probes",
                 "source_excerpt": {
-                    "path": "examples/project-field-probes.yaml",
+                    "path": "examples/samples/project-field-probes.yaml",
                     "start_line": 1,
-                    "end_line": 30
+                    "end_line": 31
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1166,9 +1166,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one GitHub repository's normalized identity and fork relationship before deciding whether hosted fork sync applies.",
                 "source_example": "gh-repo-sync",
                 "source_excerpt": {
-                    "path": "examples/gh-repo-sync.yaml",
-                    "start_line": 8,
-                    "end_line": 10
+                    "path": "examples/samples/gh-repo-sync.yaml",
+                    "start_line": 9,
+                    "end_line": 11
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1182,9 +1182,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one hosted fork repository, sync its default branch from the parent repository, then publish the synced branch summary.",
                 "source_example": "gh-repo-sync",
                 "source_excerpt": {
-                    "path": "examples/gh-repo-sync.yaml",
+                    "path": "examples/samples/gh-repo-sync.yaml",
                     "start_line": 1,
-                    "end_line": 18
+                    "end_line": 19
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1203,9 +1203,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Sync one hosted GitHub fork repository's default branch from its parent repository through the published repo.sync action.",
                 "source_example": "gh-repo-sync",
                 "source_excerpt": {
-                    "path": "examples/gh-repo-sync.yaml",
-                    "start_line": 11,
-                    "end_line": 13
+                    "path": "examples/samples/gh-repo-sync.yaml",
+                    "start_line": 12,
+                    "end_line": 14
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1224,9 +1224,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read one repository's GitHub Actions permissions before toggling or restoring the hosted Actions enabled state.",
                 "source_example": "gh-repo-actions-permissions",
                 "source_excerpt": {
-                    "path": "examples/gh-repo-actions-permissions.yaml",
-                    "start_line": 8,
-                    "end_line": 10
+                    "path": "examples/samples/gh-repo-actions-permissions.yaml",
+                    "start_line": 9,
+                    "end_line": 11
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1240,9 +1240,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read repository Actions permissions, disable Actions explicitly, then restore the prior enabled state through separate leaf actions.",
                 "source_example": "gh-repo-actions-permissions",
                 "source_excerpt": {
-                    "path": "examples/gh-repo-actions-permissions.yaml",
+                    "path": "examples/samples/gh-repo-actions-permissions.yaml",
                     "start_line": 1,
-                    "end_line": 19
+                    "end_line": 20
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1261,9 +1261,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Set one repository's GitHub Actions enabled flag as an explicit leaf mutation step.",
                 "source_example": "gh-repo-actions-permissions",
                 "source_excerpt": {
-                    "path": "examples/gh-repo-actions-permissions.yaml",
-                    "start_line": 11,
-                    "end_line": 15
+                    "path": "examples/samples/gh-repo-actions-permissions.yaml",
+                    "start_line": 12,
+                    "end_line": 16
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1282,9 +1282,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one named GitHub Project field and register its kind and option metadata for later decisions.",
                 "source_example": "project-field-probes",
                 "source_excerpt": {
-                    "path": "examples/project-field-probes.yaml",
-                    "start_line": 13,
-                    "end_line": 18
+                    "path": "examples/samples/project-field-probes.yaml",
+                    "start_line": 14,
+                    "end_line": 19
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1303,9 +1303,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Check whether one named selectable value is valid for the inspected GitHub Project field.",
                 "source_example": "project-field-probes",
                 "source_excerpt": {
-                    "path": "examples/project-field-probes.yaml",
-                    "start_line": 19,
-                    "end_line": 25
+                    "path": "examples/samples/project-field-probes.yaml",
+                    "start_line": 20,
+                    "end_line": 26
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1324,9 +1324,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect whether one issue is already attached to the target GitHub Project before deciding whether to add it or mutate its fields.",
                 "source_example": "project-issue-membership",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
-                    "start_line": 10,
-                    "end_line": 16
+                    "path": "examples/samples/project-issue-membership.yaml",
+                    "start_line": 11,
+                    "end_line": 17
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1343,9 +1343,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Probe one issue's project membership, attach it if needed, then set representative single-select, number, and iteration fields through typed project issue surfaces.",
                 "source_example": "project-issue-membership",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
+                    "path": "examples/samples/project-issue-membership.yaml",
                     "start_line": 1,
-                    "end_line": 48
+                    "end_line": 51
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1367,9 +1367,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Attach the issue to the target GitHub Project only when the earlier membership probe reported exists=false.",
                 "source_example": "project-issue-membership",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
-                    "start_line": 17,
-                    "end_line": 24
+                    "path": "examples/samples/project-issue-membership.yaml",
+                    "start_line": 18,
+                    "end_line": 25
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1391,9 +1391,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Move the project-backed issue into one named iteration after membership is already ensured.",
                 "source_example": "project-issue-membership",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
-                    "start_line": 33,
-                    "end_line": 40
+                    "path": "examples/samples/project-issue-membership.yaml",
+                    "start_line": 36,
+                    "end_line": 43
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1415,9 +1415,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Write one numeric project field such as Estimate after the issue is attached to the project.",
                 "source_example": "project-issue-membership",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
-                    "start_line": 25,
-                    "end_line": 32
+                    "path": "examples/samples/project-issue-membership.yaml",
+                    "start_line": 28,
+                    "end_line": 35
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1439,9 +1439,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Set one selectable project field such as Status by its visible option name after membership is ensured.",
                 "source_example": "project-issue-membership",
                 "source_excerpt": {
-                    "path": "examples/project-issue-membership.yaml",
-                    "start_line": 41,
-                    "end_line": 48
+                    "path": "examples/samples/project-issue-membership.yaml",
+                    "start_line": 44,
+                    "end_line": 51
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1463,9 +1463,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Scan one GitHub Project for matching items before branching on collection size or reusing the matched item list later.",
                 "source_example": "project-item-collections",
                 "source_excerpt": {
-                    "path": "examples/project-item-collections.yaml",
-                    "start_line": 8,
-                    "end_line": 16
+                    "path": "examples/samples/project-item-collections.yaml",
+                    "start_line": 9,
+                    "end_line": 17
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1482,9 +1482,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Load one light project-item collection first, then load richer item details for an explicit matched subset before publishing a compact summary.",
                 "source_example": "project-item-collections",
                 "source_excerpt": {
-                    "path": "examples/project-item-collections.yaml",
+                    "path": "examples/samples/project-item-collections.yaml",
                     "start_line": 1,
-                    "end_line": 33
+                    "end_line": 34
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1506,9 +1506,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Load richer project-backed content details such as state and label_names for a previously narrowed project item subset.",
                 "source_example": "project-item-collections",
                 "source_excerpt": {
-                    "path": "examples/project-item-collections.yaml",
-                    "start_line": 17,
-                    "end_line": 28
+                    "path": "examples/samples/project-item-collections.yaml",
+                    "start_line": 18,
+                    "end_line": 29
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1530,9 +1530,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read the current checkout branch before making a branch-specific decision or publishing branch context.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
-                    "start_line": 8,
-                    "end_line": 10
+                    "path": "examples/samples/git-branch-management.yaml",
+                    "start_line": 9,
+                    "end_line": 11
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1549,9 +1549,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read the current branch and branch inventory, create a feature branch, switch to it, then clean up one stale local branch.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
+                    "path": "examples/samples/git-branch-management.yaml",
                     "start_line": 1,
-                    "end_line": 31
+                    "end_line": 34
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1573,9 +1573,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Create one new local feature branch from HEAD without switching the current checkout automatically.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
-                    "start_line": 14,
-                    "end_line": 18
+                    "path": "examples/samples/git-branch-management.yaml",
+                    "start_line": 17,
+                    "end_line": 21
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1597,9 +1597,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Delete one stale local branch with the default force: false behavior (git branch -d), preserving Git's merged-branch check.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
-                    "start_line": 23,
-                    "end_line": 26
+                    "path": "examples/samples/git-branch-management.yaml",
+                    "start_line": 28,
+                    "end_line": 31
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1616,9 +1616,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "After independently verifying squash-merge cleanup eligibility, explicitly select git branch -D with force: true. Default and checked-out branch protections still apply.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
-                    "start_line": 32,
-                    "end_line": 37
+                    "path": "examples/samples/git-branch-management.yaml",
+                    "start_line": 38,
+                    "end_line": 43
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1640,9 +1640,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Switch the current checkout onto the created feature branch before later branch-specific work begins.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
-                    "start_line": 19,
-                    "end_line": 22
+                    "path": "examples/samples/git-branch-management.yaml",
+                    "start_line": 22,
+                    "end_line": 25
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1664,9 +1664,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Load the branch inventory when the workflow needs the available local and remote branch set instead of only the current branch.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
-                    "path": "examples/git-branch-management.yaml",
-                    "start_line": 11,
-                    "end_line": 13
+                    "path": "examples/samples/git-branch-management.yaml",
+                    "start_line": 12,
+                    "end_line": 14
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1688,9 +1688,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Create one ordinary Git commit from the current index after the staged changes are ready.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
-                    "path": "examples/git-commit-management.yaml",
-                    "start_line": 16,
-                    "end_line": 20
+                    "path": "examples/samples/git-commit-management.yaml",
+                    "start_line": 17,
+                    "end_line": 21
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1712,9 +1712,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Amend the current HEAD commit when the workflow intentionally wants history rewriting instead of another follow-up commit.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
-                    "path": "examples/git-commit-management.yaml",
-                    "start_line": 21,
-                    "end_line": 25
+                    "path": "examples/samples/git-commit-management.yaml",
+                    "start_line": 22,
+                    "end_line": 26
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1736,9 +1736,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Create a compensating revert commit for one target commit while preserving visible history.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
-                    "path": "examples/git-commit-management.yaml",
-                    "start_line": 26,
-                    "end_line": 30
+                    "path": "examples/samples/git-commit-management.yaml",
+                    "start_line": 27,
+                    "end_line": 31
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1760,9 +1760,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read a bounded Git commit-history slice when the workflow needs commit texts instead of diffs or a history diagram.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
-                    "path": "examples/git-commit-management.yaml",
-                    "start_line": 10,
-                    "end_line": 15
+                    "path": "examples/samples/git-commit-management.yaml",
+                    "start_line": 11,
+                    "end_line": 16
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1779,9 +1779,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect recent commit texts, then choose exactly one deliberate history change: create, amend, or revert.",
                 "source_example": "git-commit-management",
                 "source_excerpt": {
-                    "path": "examples/git-commit-management.yaml",
+                    "path": "examples/samples/git-commit-management.yaml",
                     "start_line": 1,
-                    "end_line": 35
+                    "end_line": 34
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1803,9 +1803,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one exact Git tag before branching on its existence or publishing its ref and object identity.",
                 "source_example": "git-tag-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-tag-inspection.yaml",
-                    "start_line": 8,
-                    "end_line": 12
+                    "path": "examples/samples/git-tag-inspection.yaml",
+                    "start_line": 9,
+                    "end_line": 13
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1827,9 +1827,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect a version-sorted Git tag inventory when the workflow needs more than one exact tag lookup.",
                 "source_example": "git-tag-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-tag-inspection.yaml",
-                    "start_line": 13,
-                    "end_line": 18
+                    "path": "examples/samples/git-tag-inspection.yaml",
+                    "start_line": 14,
+                    "end_line": 19
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1846,9 +1846,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one exact tag and one matching tag inventory together so a workflow can compare single-tag existence with broader release-tag discovery.",
                 "source_example": "git-tag-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-tag-inspection.yaml",
+                    "path": "examples/samples/git-tag-inspection.yaml",
                     "start_line": 1,
-                    "end_line": 23
+                    "end_line": 24
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1870,9 +1870,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one exact Git ref before branching on existence, symbolic-target behavior, or downstream comparison choices.",
                 "source_example": "git-ref-range-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-ref-range-inspection.yaml",
-                    "start_line": 10,
-                    "end_line": 14
+                    "path": "examples/samples/git-ref-range-inspection.yaml",
+                    "start_line": 11,
+                    "end_line": 15
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1894,9 +1894,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Compare two Git revision endpoints when the workflow needs merge-base and ahead/behind facts rather than one exact ref lookup.",
                 "source_example": "git-ref-range-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-ref-range-inspection.yaml",
-                    "start_line": 15,
-                    "end_line": 19
+                    "path": "examples/samples/git-ref-range-inspection.yaml",
+                    "start_line": 16,
+                    "end_line": 20
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1913,9 +1913,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one exact ref and one endpoint comparison together so a workflow can separate single-ref validation from ahead/behind relationship facts.",
                 "source_example": "git-ref-range-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-ref-range-inspection.yaml",
+                    "path": "examples/samples/git-ref-range-inspection.yaml",
                     "start_line": 1,
-                    "end_line": 26
+                    "end_line": 27
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1937,9 +1937,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect repository-level Git context before making narrower branch, upstream, or worktree decisions.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-repo-upstream-inspection.yaml",
-                    "start_line": 6,
-                    "end_line": 8
+                    "path": "examples/samples/git-repo-upstream-inspection.yaml",
+                    "start_line": 7,
+                    "end_line": 9
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1961,9 +1961,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect the current branch's tracked remote and branch names before deciding whether publication is appropriate.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-repo-upstream-inspection.yaml",
-                    "start_line": 9,
-                    "end_line": 11
+                    "path": "examples/samples/git-repo-upstream-inspection.yaml",
+                    "start_line": 10,
+                    "end_line": 12
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1980,9 +1980,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Publish repository context and the current branch's tracked remote and branch relationship for a later decision.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-repo-upstream-inspection.yaml",
+                    "path": "examples/samples/git-repo-upstream-inspection.yaml",
                     "start_line": 1,
-                    "end_line": 20
+                    "end_line": 21
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2004,9 +2004,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Stage the whole current Git worktree once the workflow has already decided that every pending change belongs in the next staging batch.",
                 "source_example": "git-worktree-staging",
                 "source_excerpt": {
-                    "path": "examples/git-worktree-staging.yaml",
-                    "start_line": 9,
-                    "end_line": 11
+                    "path": "examples/samples/git-worktree-staging.yaml",
+                    "start_line": 10,
+                    "end_line": 12
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2028,9 +2028,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect the current dirty-path set and worktree cleanliness before staging or other Git mutations depend on those details.",
                 "source_example": "git-worktree-staging",
                 "source_excerpt": {
-                    "path": "examples/git-worktree-staging.yaml",
-                    "start_line": 6,
-                    "end_line": 8
+                    "path": "examples/samples/git-worktree-staging.yaml",
+                    "start_line": 7,
+                    "end_line": 9
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2052,9 +2052,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect one combined Git repository-state snapshot after staging decisions need branch, cleanliness, and stash facts together.",
                 "source_example": "git-worktree-staging",
                 "source_excerpt": {
-                    "path": "examples/git-worktree-staging.yaml",
-                    "start_line": 12,
-                    "end_line": 14
+                    "path": "examples/samples/git-worktree-staging.yaml",
+                    "start_line": 13,
+                    "end_line": 15
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2071,9 +2071,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect the dirty worktree, stage the full batch, then read one combined repository-state snapshot so the workflow keeps path-level and summary-level Git checks distinct.",
                 "source_example": "git-worktree-staging",
                 "source_excerpt": {
-                    "path": "examples/git-worktree-staging.yaml",
+                    "path": "examples/samples/git-worktree-staging.yaml",
                     "start_line": 1,
-                    "end_line": 21
+                    "end_line": 22
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2095,9 +2095,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Merge one target ref into the current checkout when the workflow explicitly wants an integration commit instead of a fast-forward-only update.",
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
-                    "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 19,
-                    "end_line": 23
+                    "path": "examples/samples/git-integration-strategies.yaml",
+                    "start_line": 20,
+                    "end_line": 24
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2114,9 +2114,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Contrast merge, fast-forward-only merge, cherry-pick, and rebase --onto in one teaching workflow so each Git integration surface keeps its own unit of change and history semantics.",
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
-                    "path": "examples/git-integration-strategies.yaml",
+                    "path": "examples/samples/git-integration-strategies.yaml",
                     "start_line": 1,
-                    "end_line": 45
+                    "end_line": 46
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2138,9 +2138,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Advance the current checkout to one target ref only when the histories already allow a fast-forward update.",
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
-                    "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 24,
-                    "end_line": 28
+                    "path": "examples/samples/git-integration-strategies.yaml",
+                    "start_line": 25,
+                    "end_line": 29
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2162,9 +2162,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Cherry-pick one chosen commit when the workflow wants a targeted backport-style transplant instead of integrating the whole source ref.",
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
-                    "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 29,
-                    "end_line": 33
+                    "path": "examples/samples/git-integration-strategies.yaml",
+                    "start_line": 30,
+                    "end_line": 34
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2186,9 +2186,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Rewrite one topic branch onto a new base when the workflow intentionally wants branch-range replay rather than merge-based integration.",
                 "source_example": "git-integration-strategies",
                 "source_excerpt": {
-                    "path": "examples/git-integration-strategies.yaml",
-                    "start_line": 34,
-                    "end_line": 40
+                    "path": "examples/samples/git-integration-strategies.yaml",
+                    "start_line": 35,
+                    "end_line": 41
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2211,8 +2211,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
-                    "start_line": 9,
-                    "end_line": 12
+                    "start_line": 10,
+                    "end_line": 13
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2231,7 +2231,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
                     "start_line": 1,
-                    "end_line": 31
+                    "end_line": 36
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2254,8 +2254,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
-                    "start_line": 22,
-                    "end_line": 26
+                    "start_line": 25,
+                    "end_line": 29
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2277,9 +2277,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect the current stash list before later workflow steps decide whether hidden local work needs recovery or acknowledgement.",
                 "source_example": "git-stash-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-stash-inspection.yaml",
-                    "start_line": 6,
-                    "end_line": 8
+                    "path": "examples/samples/git-stash-inspection.yaml",
+                    "start_line": 7,
+                    "end_line": 9
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2296,9 +2296,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Inspect stash inventory alongside repository state so workflows can distinguish saved stash entries from current dirty-worktree facts.",
                 "source_example": "git-stash-inspection",
                 "source_excerpt": {
-                    "path": "examples/git-stash-inspection.yaml",
+                    "path": "examples/samples/git-stash-inspection.yaml",
                     "start_line": 1,
-                    "end_line": 15
+                    "end_line": 17
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2341,7 +2341,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/git-worktree-inventory.yaml",
                     "start_line": 1,
-                    "end_line": 24
+                    "end_line": 22
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2363,9 +2363,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Run one explicit legacy shell command step when the workflow is documenting or containing compatibility behavior rather than teaching shell.command as a preferred new design.",
                 "source_example": "shell-command-legacy-compatibility",
                 "source_excerpt": {
-                    "path": "examples/shell-command-legacy-compatibility.yaml",
-                    "start_line": 6,
-                    "end_line": 10
+                    "path": "examples/samples/shell-command-legacy-compatibility.yaml",
+                    "start_line": 7,
+                    "end_line": 11
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2382,9 +2382,9 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Show shell.command only inside an explicitly legacy compatibility workflow so the published example teaches containment and caution rather than endorsement.",
                 "source_example": "shell-command-legacy-compatibility",
                 "source_excerpt": {
-                    "path": "examples/shell-command-legacy-compatibility.yaml",
+                    "path": "examples/samples/shell-command-legacy-compatibility.yaml",
                     "start_line": 1,
-                    "end_line": 16
+                    "end_line": 15
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2407,8 +2407,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 17,
-                    "end_line": 22
+                    "start_line": 18,
+                    "end_line": 23
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2424,7 +2424,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
                     "start_line": 1,
-                    "end_line": 56
+                    "end_line": 60
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2444,8 +2444,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 10,
-                    "end_line": 16
+                    "start_line": 11,
+                    "end_line": 17
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2465,8 +2465,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 52,
-                    "end_line": 56
+                    "start_line": 56,
+                    "end_line": 60
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2486,8 +2486,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 45,
-                    "end_line": 51
+                    "start_line": 49,
+                    "end_line": 55
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2507,8 +2507,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 23,
-                    "end_line": 28
+                    "start_line": 26,
+                    "end_line": 31
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2528,8 +2528,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 29,
-                    "end_line": 35
+                    "start_line": 32,
+                    "end_line": 38
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2549,8 +2549,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.gh-issue-maintenance",
                 "source_excerpt": {
                     "path": "examples/gh-issue-maintenance.yaml",
-                    "start_line": 36,
-                    "end_line": 44
+                    "start_line": 39,
+                    "end_line": 47
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2570,8 +2570,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 8,
-                    "end_line": 13
+                    "start_line": 9,
+                    "end_line": 14
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2587,7 +2587,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
                     "start_line": 1,
-                    "end_line": 70
+                    "end_line": 76
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2607,8 +2607,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 14,
-                    "end_line": 20
+                    "start_line": 15,
+                    "end_line": 21
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2628,8 +2628,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 21,
-                    "end_line": 27
+                    "start_line": 24,
+                    "end_line": 30
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2649,8 +2649,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 28,
-                    "end_line": 34
+                    "start_line": 31,
+                    "end_line": 37
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2670,8 +2670,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 35,
-                    "end_line": 41
+                    "start_line": 38,
+                    "end_line": 44
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2691,8 +2691,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 42,
-                    "end_line": 47
+                    "start_line": 47,
+                    "end_line": 52
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2712,8 +2712,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "examples.inspect-pr",
                 "source_excerpt": {
                     "path": "examples/inspect-pr.yaml",
-                    "start_line": 48,
-                    "end_line": 54
+                    "start_line": 53,
+                    "end_line": 59
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2751,7 +2751,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Show the existing binding example with a read in the mutation payload. Excerpt verification checks source fidelity only, not bound file identity, profile contexts, or persistence; distinct roles do not guarantee distinct files.",
                 "source_example": "examples.state-bindings",
                 "source_excerpt": {
-                    "path": "examples/state-bindings.yaml",
+                    "path": "examples/samples/state-bindings.yaml",
                     "start_line": 1,
                     "end_line": 15
                 },
@@ -2841,7 +2841,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "step_fragment",
                 "summary": "Use the dedicated publish step form when one named step emits an outward-facing published payload for callers.",
-                "yaml": '- name: publish-summary\n  publish:\n    summary: "Workflow prepared"\n    ready: true',
+                "yaml": '- name: Publish summary\n  publish:\n    summary: "Workflow prepared"\n    ready: true',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -2926,7 +2926,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "step_fragment",
                 "summary": "Show one complete run-invocation step that calls a named runtime target with explicit argument binding.",
-                "yaml": '- name: review-each-issue\n  run: "fragments/review_issue.yaml"\n  with:\n    issue_number: item\n  for_each: inputs.issue_numbers',
+                "yaml": '- name: Review each issue\n  run: "fragments/review_issue.yaml"\n  with:\n    issue_number: item\n  for_each: inputs.issue_numbers',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -2945,7 +2945,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "field_fragment",
                 "summary": "Show a valid `workflow.step.steps` inline repeated body for one short local repeated action.",
-                "yaml": 'steps:\n  - name: publish-item\n    publish:\n      issue_number: item',
+                "yaml": 'steps:\n  - name: Publish issue item\n    publish:\n      issue_number: item',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -2959,7 +2959,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "step_fragment",
                 "summary": "Show one complete inline fan-out step that repeats one short local body for each issue number.",
-                "yaml": '- name: publish-each-issue\n  for_each: inputs.issue_numbers\n  steps:\n    - name: publish-item\n      publish:\n        issue_number: item',
+                "yaml": '- name: Publish each issue\n  for_each: inputs.issue_numbers\n  steps:\n    - name: Publish issue item\n      publish:\n        issue_number: item',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -2992,7 +2992,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "step_fragment",
                 "summary": "Show one complete inline repeated step that binds an array source through for_each before running a short local body.",
-                "yaml": '- name: publish-each-issue\n  for_each: inputs.issue_numbers\n  steps:\n    - name: publish-item\n      publish:\n        issue_number: item',
+                "yaml": '- name: Publish each issue\n  for_each: inputs.issue_numbers\n  steps:\n    - name: Publish issue item\n      publish:\n        issue_number: item',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -3025,7 +3025,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "kind": "positive",
                 "form": "step_fragment",
                 "summary": "Show one complete run-invocation step that binds explicit runtime arguments through with.",
-                "yaml": '- name: review-each-issue\n  run: "fragments/review_issue.yaml"\n  with:\n    issue_number: item\n    review_mode: inputs.review_mode\n  for_each: inputs.issue_numbers',
+                "yaml": '- name: Review each issue\n  run: "fragments/review_issue.yaml"\n  with:\n    issue_number: item\n    review_mode: inputs.review_mode\n  for_each: inputs.issue_numbers',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",

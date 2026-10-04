@@ -1,0 +1,43 @@
+version: 0
+workflow: manage-git-branches
+inputs:
+  branch_name: {}
+blocks:
+   - guards: []
+   - steps:
+      # Inspect the current branch and branch inventory.
+      - name: Read current branch
+        uses: git.branch
+        register: current_branch
+      - name: List branches
+        uses: git.branches
+        register: branches
+
+      # Create and switch to the feature branch.
+      - name: Create feature branch
+        uses: git.branch.create
+        with:
+          branch: inputs.branch_name
+          start_point: "HEAD"
+      - name: Switch to feature branch
+        uses: git.branch.switch
+        with:
+          branch: inputs.branch_name
+
+      # Demonstrate routine branch cleanup.
+      - name: Delete stale branch
+        uses: git.branch.delete
+        with:
+          branch: "stale/demo"
+      - name: Publish summary
+        publish:
+          current_branch: step.current_branch.outputs.value
+          inventory_count: step.branches.outputs.count
+          summary: "Git branch workflow prepared"
+
+      # Caller has independently verified that this squash-merged branch is eligible for cleanup.
+      - name: Delete verified squash branch
+        uses: git.branch.delete
+        with:
+          branch: "squash/demo"
+          force: true

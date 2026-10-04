@@ -77,10 +77,10 @@ class GoldenOutputTest(unittest.TestCase):
         }
 
     def test_runtime_mode_outputs_match_goldens(self) -> None:
-        blocked = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
-        expr_blocked = load_workflow_file(Path("examples/guard-expression-blocked.yaml"))
-        inspect = load_workflow_file(Path("examples/inspect-issue.yaml"))
-        preflight_halt = load_workflow_file(Path("examples/preflight-halt.yaml"))
+        blocked = load_workflow_file(Path("examples/samples/blocked-main-branch.yaml"))
+        expr_blocked = load_workflow_file(Path("examples/samples/guard-expression-blocked.yaml"))
+        inspect = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
+        preflight_halt = load_workflow_file(Path("examples/samples/preflight-halt.yaml"))
 
         cases = {
             "check_blocked_main_branch.json": check_workflow(blocked, guard_probe=_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
@@ -105,7 +105,7 @@ class RuntimeInvariantTest(unittest.TestCase):
         self.assertFalse(report.ok)
 
     def test_unknown_operation_failure_invariant(self) -> None:
-        workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
         workflow = workflow.__class__(
             version=workflow.version,
             workflow=workflow.workflow,
@@ -117,7 +117,7 @@ class RuntimeInvariantTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
 
     def test_json_serializable_runtime_surfaces_invariant(self) -> None:
-        workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
+        workflow = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
         outputs = [
             check_workflow(workflow, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             plan_workflow(workflow, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
@@ -128,8 +128,8 @@ class RuntimeInvariantTest(unittest.TestCase):
             json.dumps(output)
 
     def test_blocked_before_execution_distinct_from_execution_failure(self) -> None:
-        blocked = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
-        inspect = load_workflow_file(Path("examples/inspect-issue.yaml"))
+        blocked = load_workflow_file(Path("examples/samples/blocked-main-branch.yaml"))
+        inspect = load_workflow_file(Path("examples/samples/inspect-issue.yaml"))
         blocked_result = execute_workflow(blocked, guard_probe=_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
         failed_result = execute_workflow(inspect, guard_probe=_ok_probe, step_executor=lambda *_: OperationResult(status="execution_error", summary="boom"), connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
