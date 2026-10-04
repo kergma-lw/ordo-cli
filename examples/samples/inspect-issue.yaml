@@ -1,0 +1,15 @@
+version: 0
+workflow: inspect-issue
+inputs:
+  repository: kergma-lw/ordo-cli
+  issue_number: 1
+blocks:
+- guards:
+  - git.worktree.clean
+- steps:
+   - name: Inspect issue
+     uses: gh.issue
+     with:
+       repository: inputs.repository
+       issue_number: inputs.issue_number
+     register: issue

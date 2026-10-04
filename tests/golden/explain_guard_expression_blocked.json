@@ -139,7 +139,7 @@
         "conditional_steps": [],
         "status": "blocked",
         "step_names": [
-          "verify-command"
+          "Run verification command"
         ],
         "type": "steps"
       }
@@ -210,7 +210,7 @@
               ],
               "kind": "action",
               "launcher": null,
-              "name": "verify-command",
+              "name": "Run verification command",
               "probe_scopes": [],
               "planned_probe_result": null,
               "preflight": null,
@@ -428,7 +428,7 @@
         ],
         "kind": "action",
         "launcher": null,
-        "name": "verify-command",
+        "name": "Run verification command",
         "probe_scopes": [],
         "preflight_classification": "effectful",
         "reference": "shell.command",
@@ -451,7 +451,7 @@
       "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
     "step_names": [
-      "verify-command"
+      "Run verification command"
     ]
   },
   "status": "guard_failed"

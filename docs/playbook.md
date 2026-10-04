@@ -177,7 +177,7 @@ Each input reports:
 
 Coverage is authored source presence, not value validity or execution readiness. A source counts even when its value is `null`, `false`, or zero. A required caller slot still requires explicit caller input even when coverage is `provided`; an optional caller slot does not make a required workflow declaration optional. `--input`, `--input-file`, and later runtime profile switches do not contribute authored coverage. The `missing` rule is shared with `review.playbook.input_caller_slot_missing`, including unused and optional declarations.
 
-The source excerpts in `examples/playbook-workflow-target.yaml` and `examples/playbook-workflows.yaml` demonstrate declarations, concrete bindings, and caller slots through the supported excerpt harness. Excerpt verification checks source parity, not CLI activation or discovery output. The current snippet harness cannot validate CLI activation examples; command examples here are usage guidance, not executable verified snippets.
+The source excerpts in `examples/samples/playbook-workflow-target.yaml` and `examples/samples/playbook-workflows.yaml` demonstrate declarations, concrete bindings, and caller slots through the supported excerpt harness. Excerpt verification checks source parity, not CLI activation or discovery output. The current snippet harness cannot validate CLI activation examples; command examples here are usage guidance, not executable verified snippets.
 
 `hint` is guidance only. It is not itself a validation rule.
 

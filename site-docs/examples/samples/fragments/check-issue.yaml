@@ -1,0 +1,12 @@
+description: Inspect one issue through an included fragment
+args:
+  repository: string
+  issue_number: integer
+blocks:
+- steps:
+  - name: Inspect issue
+    uses: gh.issue
+    with:
+      repository: args.repository
+      issue_number: args.issue_number
+    register: issue

@@ -1,0 +1,16 @@
+version: 0
+workflow: let-bindings
+inputs:
+  enabled: true
+  type: Task
+  issue_number: 7
+let:
+  should_run: inputs.enabled
+  branch: format("{}/{}", inputs.type | lower, inputs.issue_number)
+blocks:
+- guards:
+  - should_run
+- steps:
+  - name: Publish branch
+    publish:
+      branch: branch

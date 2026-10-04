@@ -1,0 +1,31 @@
+version: 0
+workflow: inspect-project-field-probes
+inputs:
+  project_id: {}
+blocks:
+   - guards: []
+   - steps:
+      # Inspect the project, Status field, and Done option.
+      - name: Load project
+        uses: gh.project
+        with:
+          project_id: inputs.project_id
+        register: project
+      - name: Load Status field
+        uses: gh.project.field
+        with:
+          project_id: inputs.project_id
+          field: "Status"
+        register: status_field
+      - name: Check Done option
+        uses: gh.project.field.option
+        with:
+          project_id: inputs.project_id
+          field: "Status"
+          option: "Done"
+        register: done_option
+      - name: Publish summary
+        publish:
+          project_title: step.project.outputs.title
+          field_kind: step.status_field.outputs.kind
+          done_available: step.done_option.outputs.exists

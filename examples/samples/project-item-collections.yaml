@@ -1,0 +1,34 @@
+version: 0
+workflow: inspect-project-item-collections
+inputs:
+  project_id: {}
+blocks:
+   - guards: []
+   - steps:
+      # Load ready items, their details, and a summary.
+      - name: Load ready items
+        uses: gh.project.items
+        with:
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          filters:
+            - field: "Status"
+              value: "Ready"
+        register: ready_items
+      - name: Load ready item details
+        uses: gh.project.items.details
+        with:
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          filters:
+            - field: "Status"
+              value: "Ready"
+          content_refs:
+            - "owner/repo#7"
+            - "owner/repo#8"
+        register: ready_item_details
+      - name: Publish summary
+        publish:
+          ready_count: step.ready_items.outputs.count
+          detailed_count: step.ready_item_details.outputs.count
+          summary: "Project item collections loaded"

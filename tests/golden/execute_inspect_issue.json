@@ -80,19 +80,19 @@
         "conditional_steps": [],
         "status": "pending",
         "step_names": [
-          "inspect-issue"
+          "Inspect issue"
         ],
         "type": "steps"
       },
       {
         "block_index": 1,
         "executed_steps": [
-          "inspect-issue"
+          "Inspect issue"
         ],
         "skipped_steps": [],
         "status": "ok",
         "step_names": [
-          "inspect-issue"
+          "Inspect issue"
         ],
         "type": "steps"
       }
@@ -102,7 +102,7 @@
       "git.worktree.clean"
     ],
     "executed_steps": [
-      "inspect-issue"
+      "Inspect issue"
     ],
     "execution_tree": null,
     "execution_tree_fallback_reason": "missing_execution_tree",
@@ -139,7 +139,7 @@
       "git.worktree.clean"
     ],
     "step_names": [
-      "inspect-issue"
+      "Inspect issue"
     ]
   },
   "status": "ok"

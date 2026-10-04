@@ -103,7 +103,7 @@
         "conditional_steps": [],
         "status": "blocked",
         "step_names": [
-          "verify-command"
+          "Run verification command"
         ],
         "type": "steps"
       }
@@ -186,7 +186,7 @@
       "git.branch.value != \"main\""
     ],
     "step_names": [
-      "verify-command"
+      "Run verification command"
     ]
   },
   "status": "guard_failed"

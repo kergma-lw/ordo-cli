@@ -1,0 +1,22 @@
+version: 0
+workflow: inspect-and-stage-git-worktree
+blocks:
+   - guards: []
+   - steps:
+      # Inspect, stage, and report worktree changes.
+      - name: Inspect worktree before staging
+        uses: git.worktree
+        register: worktree_before
+      - name: Stage all worktree changes
+        uses: git.index.add_all
+        register: stage_all
+      - name: Inspect repository state
+        uses: git.state
+        register: repo_state
+      - name: Publish summary
+        publish:
+          dirty_paths_before: step.worktree_before.outputs.dirty_paths
+          staged_all: step.stage_all.outputs.staged
+          has_staged_changes: step.repo_state.outputs.has_staged_changes
+          stash_count: step.repo_state.outputs.stash_count
+          summary: "Git worktree staging workflow prepared"

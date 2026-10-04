@@ -103,7 +103,7 @@
         "conditional_steps": [],
         "status": "blocked",
         "step_names": [
-          "verify-command"
+          "Run verification command"
         ],
         "type": "steps"
       }
@@ -174,7 +174,7 @@
               ],
               "kind": "action",
               "launcher": null,
-              "name": "verify-command",
+              "name": "Run verification command",
               "probe_scopes": [],
               "planned_probe_result": null,
               "preflight": null,
@@ -356,7 +356,7 @@
         ],
         "kind": "action",
         "launcher": null,
-        "name": "verify-command",
+        "name": "Run verification command",
         "probe_scopes": [],
         "preflight_classification": "effectful",
         "reference": "shell.command",
@@ -379,7 +379,7 @@
       "git.branch.value != \"main\""
     ],
     "step_names": [
-      "verify-command"
+      "Run verification command"
     ]
   },
   "status": "guard_failed"

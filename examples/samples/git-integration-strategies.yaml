@@ -1,0 +1,46 @@
+version: 0
+workflow: choose-git-integration-strategy
+inputs:
+  strategy: {}
+  target_ref: {}
+  target_commit: {}
+  onto_ref: {}
+  upstream_ref: {}
+  branch_name: {}
+blocks:
+   - guards: []
+   - steps:
+      # Apply the selected integration strategy.
+      - name: Compare branch range
+        uses: git.range
+        with:
+          base: inputs.upstream_ref
+          head: inputs.branch_name
+        register: branch_range
+      - name: Merge target reference
+        if: inputs.strategy == "merge"
+        uses: git.integrate.merge
+        with:
+          ref: inputs.target_ref
+      - name: Fast-forward target reference
+        if: inputs.strategy == "fast-forward"
+        uses: git.integrate.merge_ff_only
+        with:
+          ref: inputs.target_ref
+      - name: Cherry-pick target commit
+        if: inputs.strategy == "cherry-pick"
+        uses: git.integrate.cherry_pick
+        with:
+          commit: inputs.target_commit
+      - name: Rebase branch onto new base
+        if: inputs.strategy == "rebase"
+        uses: git.integrate.rebase_onto
+        with:
+          onto: inputs.onto_ref
+          upstream: inputs.upstream_ref
+          branch: inputs.branch_name
+      - name: Publish summary
+        publish:
+          merge_base: step.branch_range.outputs.merge_base
+          compared_head: step.branch_range.outputs.head_oid
+          summary: "Choose exactly one reviewed path: merge for an integration commit, fast-forward only for a linear advance, cherry-pick for one commit, or rebase onto for a topic-branch rewrite."

@@ -1091,7 +1091,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_steps["metadata"]["role"], "inline_repeated_body")
         self.assertEqual(step_steps["canonical_examples"][0]["form"], "field_fragment")
         self.assertEqual(step_steps["canonical_examples"][1]["form"], "step_fragment")
-        self.assertIn('steps:\n  - name: publish-item', step_steps["canonical_examples"][0]["yaml"])
+        self.assertIn('steps:\n  - name: Publish issue item', step_steps["canonical_examples"][0]["yaml"])
         self.assertEqual(step_for_each["snippet_coverage"], "runner_verified")
         self.assertEqual(step_for_each["metadata"]["role"], "bounded_repetition_source")
         self.assertEqual(step_for_each["canonical_examples"][0]["form"], "value")
@@ -1822,7 +1822,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Required `run` field that names the workflow target called by this step", run_target.stdout)
         self.assertIn("named reusable run target", run_target.stdout)
         self.assertIn("example_for: field_fragment", run_target.stdout)
-        self.assertIn("run: examples/fragments/check-issue.yaml", run_target.stdout)
+        self.assertIn("run: examples/samples/fragments/check-issue.yaml", run_target.stdout)
 
         self.assertEqual(with_payload.returncode, 0)
         self.assertIn("Bind explicit caller-scoped values into one named run target", with_payload.stdout)
@@ -1853,7 +1853,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(steps.returncode, 0)
         self.assertIn("Keep one short local repeated body inline under for_each", steps.stdout)
         self.assertIn("run_inline_repeated_body", steps.stdout)
-        self.assertIn("publish-item", steps.stdout)
+        self.assertIn("Publish issue item", steps.stdout)
 
     def test_text_describe_workflow_step_form_group_is_teaching_ready(self) -> None:
         operation_call = self.run_help("describe", "workflow.step_forms.operation_call")
@@ -1879,20 +1879,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.run.run", run_invocation.stdout)
         self.assertIn("workflow.step_forms.inline_fan_out_invocation", run_invocation.stdout)
         self.assertIn("example_for: step_fragment", run_invocation.stdout)
-        self.assertIn("run: examples/fragments/check-issue.yaml", run_invocation.stdout)
+        self.assertIn("run: examples/samples/fragments/check-issue.yaml", run_invocation.stdout)
 
         self.assertEqual(inline_fan_out.returncode, 0)
         self.assertIn("repeats one short inline step list for each item", inline_fan_out.stdout)
         self.assertIn("workflow.run.steps", inline_fan_out.stdout)
         self.assertIn("workflow.step_forms.run_invocation", inline_fan_out.stdout)
         self.assertIn("example_for: step_fragment", inline_fan_out.stdout)
-        self.assertIn("publish-item", inline_fan_out.stdout)
+        self.assertIn("Publish issue item", inline_fan_out.stdout)
 
         self.assertEqual(step_name.returncode, 0)
         self.assertIn("Required `name` field that gives a step its stable local identity", step_name.stdout)
         self.assertIn("later workflow surfaces can refer to it explicitly", step_name.stdout)
         self.assertIn("example_for: field_fragment", step_name.stdout)
-        self.assertIn("name: inspect-issue", step_name.stdout)
+        self.assertIn("name: Inspect issue", step_name.stdout)
 
         self.assertEqual(step_condition.returncode, 0)
         self.assertIn("explicit boolean control decisions", step_condition.stdout)
@@ -2500,7 +2500,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(playbook_pre_run.returncode, 0)
         self.assertIn("Playbook pre-run example that inserts one shared preparation workflow", playbook_pre_run.stdout)
-        self.assertIn("examples/playbook-pre-run.yaml", playbook_pre_run.stdout)
+        self.assertIn("examples/samples/playbook-pre-run.yaml", playbook_pre_run.stdout)
 
     def test_text_describe_workflow_step_negative_rule_group_is_teaching_ready(self) -> None:
         exactly_one = self.run_help("describe", "workflow_step.exactly_one_form")

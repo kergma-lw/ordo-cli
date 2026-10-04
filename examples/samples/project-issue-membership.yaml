@@ -1,0 +1,51 @@
+version: 0
+workflow: prepare-project-issue-membership
+inputs:
+  repository: {}
+  issue_number: {}
+  project_id: {}
+blocks:
+   - guards: []
+   - steps:
+      # Ensure the issue belongs to the project.
+      - name: Load project membership
+        uses: gh.project.issue
+        with:
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          project_id: inputs.project_id
+        register: membership
+      - name: Add issue to project
+        if: not step.membership.outputs.exists
+        uses: gh.project.issue.add
+        with:
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          project_id: inputs.project_id
+        register: membership_add
+
+      # Set the project fields.
+      - name: Set estimate
+        uses: gh.project.issue.field_number.set
+        with:
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          project_id: inputs.project_id
+          field: "Estimate"
+          value: 3
+      - name: Set iteration
+        uses: gh.project.issue.field_iteration.set
+        with:
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          project_id: inputs.project_id
+          field: "Iteration"
+          iteration: "Sprint 12"
+      - name: Set status
+        uses: gh.project.issue.field_single_select.set
+        with:
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          project_id: inputs.project_id
+          field: "Status"
+          option: "In review"

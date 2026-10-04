@@ -123,6 +123,21 @@ def _parse_worktrees_output(
             current = None
             continue
 
+        if line in {"bare", "detached", "locked", "prunable"}:
+            if current is None:
+                return fail_with_diagnostic(
+                    code="probe_failed",
+                    summary="Git worktree porcelain returned fields before a worktree header",
+                    diagnostic_code="probe.git_worktrees.invalid_line",
+                    reference=ctx.reference,
+                    raw={"worktrees": raw, "line": line},
+                )
+            if line == "bare":
+                current["bare"] = True
+            elif line == "detached":
+                current["detached"] = True
+            continue
+
         field, separator, value = line.partition(" ")
         if not separator:
             return fail_with_diagnostic(

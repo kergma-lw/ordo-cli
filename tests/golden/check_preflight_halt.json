@@ -14,10 +14,10 @@
         "active_profile": null,
         "block_index": 0,
         "conditional_steps": [
-          "close-issue"
+          "Close issue"
         ],
         "interpreted_steps": [
-          "load-issue"
+          "Load issue"
         ],
         "preflight_halt": {
           "branch_condition": null,
@@ -28,13 +28,13 @@
             "step_index": 1
           },
           "reason": "effectful_step_encountered",
-          "step_name": "close-issue"
+          "step_name": "Close issue"
         },
         "skipped_steps": [],
         "status": "preflight_halted",
         "step_names": [
-          "load-issue",
-          "close-issue"
+          "Load issue",
+          "Close issue"
         ],
         "type": "steps"
       },
@@ -81,7 +81,7 @@
           "step_index": 1
         },
         "reason": "effectful_step_encountered",
-        "step_name": "close-issue"
+        "step_name": "Close issue"
       }
     ],
     "preflight_registers": {
@@ -101,7 +101,7 @@
         "condition": null,
         "condition_status": null,
         "conditional": false,
-        "name": "load-issue",
+        "name": "Load issue",
         "probe_scopes": [
           "gh.issue"
         ],
@@ -124,7 +124,7 @@
         "condition_status": "true",
         "conditional": true,
         "halt_reason": "effectful_step_encountered",
-        "name": "close-issue",
+        "name": "Close issue",
         "preflight_classification": "effectful",
         "reference": "gh.issue.close",
         "status": "halted",
@@ -155,8 +155,8 @@
     "blockers": [],
     "guard_checks": [],
     "step_names": [
-      "load-issue",
-      "close-issue"
+      "Load issue",
+      "Close issue"
     ]
   },
   "status": "ok"

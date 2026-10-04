@@ -1,0 +1,15 @@
+version: 0
+workflow: legacy-shell-command-compatibility
+blocks:
+   - guards: []
+   - steps:
+      # Run the legacy command and publish its result.
+      - name: Run legacy shell command
+        uses: shell.command
+        with:
+          command: "printf 'legacy check'"
+        register: shell_result
+      - name: Publish summary
+        publish:
+          exit_code: step.shell_result.outputs.exit_code
+          summary: "Legacy shell command workflow prepared"

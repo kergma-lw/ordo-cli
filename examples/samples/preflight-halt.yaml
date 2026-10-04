@@ -1,0 +1,23 @@
+version: 0
+workflow: preflight-halt
+inputs:
+  repository: kergma-lw/ordo-cli
+  issue_number: 1
+  run_effectful: true
+blocks:
+- steps:
+  # Inspect the issue before optional closure.
+  - name: Load issue
+    uses: gh.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+    register: issue
+  - name: Close issue
+    uses: gh.issue.close
+    if: inputs.run_effectful
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+- guards:
+  - git.worktree.clean

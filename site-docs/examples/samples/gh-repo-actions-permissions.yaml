@@ -1,0 +1,20 @@
+version: 0
+workflow: gh-repo-actions-permissions
+connector_contexts:
+  gh:
+    repository: acme/public-mirror # Literal ASCII OWNER/REPO default, not a URL or authorization allowlist.
+blocks:
+- steps:
+  # Capture, disable, and restore Actions permissions.
+  - name: Read Actions permissions
+    uses: gh.repo.actions.permissions
+    register: before
+  - name: Disable Actions
+    uses: gh.repo.actions.permissions.set
+    with:
+      enabled: false
+    register: disabled
+  - name: Restore Actions
+    uses: gh.repo.actions.permissions.set
+    with:
+      enabled: step.before.outputs.enabled
