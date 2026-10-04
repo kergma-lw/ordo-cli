@@ -53,9 +53,23 @@ The clean-worktree check is evaluated before the issue lookup. If it blocks the 
 
 ## Examples
 
-A supported installation path for using Ordo in another project will be documented separately. For now, explore the model through the examples in this repository.
+Try the read-only local Git example from a fresh clone. It needs Python 3.12 or later and Git:
 
-[`examples/inspect-issue.yaml`](examples/inspect-issue.yaml) is a small entry point into the workflow format. More substantial project rituals live in [`.ordo/workflows`](.ordo/workflows).
+```bash
+/usr/bin/python3.12 -m venv .venv
+.venv/bin/python -m pip install -e .
+
+./ordo-help examples
+./ordo-help describe examples.git-worktree-inventory
+./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml review inspect-git-worktree-inventory
+GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml check inspect-git-worktree-inventory
+GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml plan inspect-git-worktree-inventory
+GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml run inspect-git-worktree-inventory
+```
+
+The example only reads local Git state. Its result reports the current checkout path, the number of linked worktrees, and uncommitted paths. `GIT_OPTIONAL_LOCKS=0` prevents Git from taking optional locks while inspecting the checkout.
+
+For further authoring references, browse `./ordo-help examples`. More substantial project rituals live in [`.ordo/workflows`](.ordo/workflows).
 
 ## How Ordo differs from a task runner
 

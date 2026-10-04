@@ -1,0 +1,7 @@
+version: 1
+workflows:
+  inspect-git-worktree-inventory:
+    file: ./git-worktree-inventory.yaml
+    description: Inspect the current checkout, linked worktrees, and local changes without changing Git state.
+    category: inspect
+    when: Use before a Git action when you need to understand the local checkout state.

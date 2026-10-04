@@ -2321,8 +2321,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "git-worktree-inventory",
                 "source_excerpt": {
                     "path": "examples/git-worktree-inventory.yaml",
-                    "start_line": 6,
-                    "end_line": 8
+                    "start_line": 9,
+                    "end_line": 11
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -2341,7 +2341,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/git-worktree-inventory.yaml",
                     "start_line": 1,
-                    "end_line": 15
+                    "end_line": 24
                 },
                 "verification": {
                     "kind": "runner_verified",

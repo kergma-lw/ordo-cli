@@ -49,6 +49,13 @@ EXAMPLES_CATALOG: JSONObject = {
             "related_topics": ["operations", "examples", "model"],
         },
         {
+            "name": "git-worktree-inventory",
+            "path": "examples/git-worktree-inventory.yaml",
+            "definition": "Read-only local Git example that inspects the current checkout, linked worktrees, and uncommitted paths before choosing a Git action.",
+            "shows": ["read_only_git_inspection", "sequential_probe_composition", "small_published_summary"],
+            "related_topics": ["operations", "examples", "workflow-rules"],
+        },
+        {
             "name": "set-active-task-from-gitx",
             "path": "examples/set-active-task-from-gitx.yaml",
             "definition": "Native task-activation sequence that checks project policy, updates status, fetches and fast-forwards the base, selects a task branch, and remembers task state, with an optional explicit trusted-code hook.",
@@ -181,6 +188,13 @@ EXAMPLE_FOCUSED_DESCRIBE_HUMAN: dict[str, HumanDeclaration] = {
         path="examples/inspect-pr.yaml",
         demonstrates=["Composing pull-request inspection operations", "Separate pull-request information surfaces", "Inputs to a published digest"],
         related_topics=["operations", "examples", "model"],
+    ),
+    "git-worktree-inventory": _example_focused_human(
+        title="git-worktree-inventory",
+        summary="Read-only local Git example that inspects the current checkout, linked worktrees, and uncommitted paths before choosing a Git action.",
+        path="examples/git-worktree-inventory.yaml",
+        demonstrates=["Inspecting local Git state without changing it", "Combining two read-only operations", "Publishing a small decision-ready summary"],
+        related_topics=["operations", "examples", "workflow-rules"],
     ),
     "set-active-task-from-gitx": _example_focused_human(
         title="set-active-task-from-gitx",

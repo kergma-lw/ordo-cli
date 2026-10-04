@@ -217,6 +217,9 @@
     "connector.shell.command": {
       "describe_readiness": "ready"
     },
+    "examples.git-worktree-inventory": {
+      "describe_readiness": "ready"
+    },
     "examples.include-args": {
       "describe_readiness": "ready"
     },

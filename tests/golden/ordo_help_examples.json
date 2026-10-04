@@ -48,6 +48,22 @@
       "verified": true
     },
     {
+      "definition": "Read-only local Git example that inspects the current checkout, linked worktrees, and uncommitted paths before choosing a Git action.",
+      "name": "git-worktree-inventory",
+      "path": "examples/git-worktree-inventory.yaml",
+      "related_topics": [
+        "operations",
+        "examples",
+        "workflow-rules"
+      ],
+      "shows": [
+        "read_only_git_inspection",
+        "sequential_probe_composition",
+        "small_published_summary"
+      ],
+      "verified": true
+    },
+    {
       "definition": "Native task-activation sequence that checks project policy, updates status, fetches and fast-forwards the base, selects a task branch, and remembers task state, with an optional explicit trusted-code hook.",
       "name": "set-active-task-from-gitx",
       "path": "examples/set-active-task-from-gitx.yaml",

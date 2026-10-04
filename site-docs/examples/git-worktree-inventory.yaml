@@ -1,17 +1,24 @@
 version: 0
+# Read-only starting point: discover this checkout, any linked worktrees, and
+# local changes before choosing a Git action. It does not change the repository.
 workflow: inspect-git-worktree-inventory
 blocks:
   - guards: []
   - steps:
-      - name: inspect-worktrees
+      # First inspect every checkout that shares this repository.
+      - name: list-worktrees
         uses: git.worktrees
         register: worktree_inventory
+
+      # Then inspect the current checkout for uncommitted paths.
       - name: inspect-current-worktree
         uses: git.worktree
         register: current_worktree
-      - name: publish-summary
+
+      # Return the small set of facts needed to choose a safe next action.
+      - name: publish-worktree-inventory
         publish:
           current_path: step.worktree_inventory.outputs.current_path
           worktree_count: step.worktree_inventory.outputs.count
           dirty_paths: step.current_worktree.outputs.dirty_paths
-          summary: "Git worktree inventory workflow prepared"
+          summary: "Inspected the current Git worktree and its linked checkouts"

@@ -1391,7 +1391,7 @@ class OperationTest(unittest.TestCase):
                         "\n"
                         "worktree /tmp/demo-repo-linked\n"
                         "HEAD 2222222222222222222222222222222222222222\n"
-                        "detached true\n"
+                        "detached\n"
                         "\n"
                     ),
                     stderr="",
