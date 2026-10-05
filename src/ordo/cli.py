@@ -10,7 +10,7 @@ import sys
 from ordo import assess_workflow_readiness, check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
 from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
-from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
+from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows, review_playbook_static
 from ordo.runtime.human_messages import render_gate_failure_message, render_guard_failure_message
 from ordo.runtime.nexting import build_next_candidate, classify_missing_input_kind_for_workflow, rank_next_candidates
 
@@ -71,9 +71,11 @@ Examples:
   ordo-playbook check close-task --json
 """
 
-REVIEW_MODE_HELP = """usage: ordo-playbook [options] review WORKFLOW
+REVIEW_MODE_HELP = """usage: ordo-playbook [options] review [WORKFLOW]
 
-Review authoring-quality findings for the selected workflow without making changes.
+Without WORKFLOW, review every declared workflow from authored playbook material.
+This playbook_static review does not activate workflows or run contextual checks,
+state reads, or probes. With WORKFLOW, review one workflow in its current context.
 
 Default output is intended to be concise:
   - overall review status
@@ -81,6 +83,7 @@ Default output is intended to be concise:
   - all findings with compact details (top_findings)
 
 Examples:
+  ordo-playbook review
   ordo-playbook review set-active-task
   ordo-playbook --profile backend --input issue_number=42 review set-active-task
   ordo-playbook review close-task --json
@@ -276,6 +279,8 @@ def main() -> int:
 
     if args.mode in {"next", "graph"}:
         _reject_global_command_workflow_argument(args, parser=parser)
+    elif args.mode == "review" and len(command) == 1:
+        args.workflow = None
     else:
         args.workflow = _resolve_execution_workflow_name(args, parser=parser)
 
@@ -292,6 +297,8 @@ def main() -> int:
             return _run_next_mode(args, input_overrides=input_overrides)
         if args.mode == "graph":
             return _run_graph_mode(args, input_overrides=input_overrides)
+        if args.mode == "review" and args.workflow is None:
+            return _run_playbook_static_review(args)
         try:
             activated = activate_playbook(
                 workflow_name=args.workflow,
@@ -371,6 +378,41 @@ def main() -> int:
             set_default_connector_provider(previous_provider)
         else:
             clear_default_connector_provider()
+
+
+def _run_playbook_static_review(args) -> int:
+    """Emit the no-argument authored-playbook review without activation."""
+
+    try:
+        payload = review_playbook_static(playbook_path=args.playbook_file)
+    except PlaybookError as exc:
+        return _emit_error(exc, as_json=args.json, requested_mode="review")
+    if args.json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print(json.dumps(_summarize_playbook_static_review_payload(payload), indent=2, sort_keys=True))
+    return 1 if payload["blocking_finding_count"] or payload["unavailable_workflow_count"] else 0
+
+
+def _summarize_playbook_static_review_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Keep the aggregate review readable while retaining per-workflow findings."""
+
+    return {
+        "mode": payload["mode"],
+        "status": payload["status"],
+        "scope": payload["scope"],
+        "review_status": payload["review_status"],
+        "finding_count": payload["finding_count"],
+        "blocking_finding_count": payload["blocking_finding_count"],
+        "advisory_finding_count": payload["advisory_finding_count"],
+        "pipe_style_advisory_count": payload["pipe_style_advisory_count"],
+        "workflow_count": payload["workflow_count"],
+        "reviewed_workflow_count": payload["reviewed_workflow_count"],
+        "unavailable_workflow_count": payload["unavailable_workflow_count"],
+        "contextual_checks_not_run": True,
+        "results": payload["results"],
+    }
 
 
 def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_working_directories=None, *, progress_steps: bool = False) -> RuntimeResult:

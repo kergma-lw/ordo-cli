@@ -104,6 +104,27 @@ def _build_static_review_findings(workflow: Workflow) -> _StaticReviewFindings:
     )
 
 
+def static_review_findings(workflow: Workflow) -> list[dict[str, object]]:
+    """Return authored-workflow findings without runtime analysis.
+
+    This is the public boundary used by playbook-wide review.  Keep its order
+    aligned with the static portion of a single-workflow review while leaving
+    contextual checks to :func:`review_workflow`.
+    """
+
+    static = _build_static_review_findings(workflow)
+    return [
+        *static.profile_switch_literals,
+        *static.structured_conditions,
+        *static.gate_recommendations,
+        *static.first_step_applicability_guards,
+        *static.adapter_bindings,
+        *static.workflow_profile_bindings,
+        *static.input_descriptions,
+        *static.inline_fan_out_complexity,
+    ]
+
+
 def _build_contextual_review_findings(
     workflow: Workflow,
     check_result: RuntimeResult,

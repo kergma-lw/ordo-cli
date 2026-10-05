@@ -33,6 +33,8 @@
 - `review` must not treat every declared workflow input as automatic missing-validation debt; it should distinguish meaningful control/effect inputs, profile-carried ambient context, and unused declarations.
 - `review` must treat trusted profile-provided consumed context separately from user-driven validation candidates and must not require early re-validation of that context by default.
 - Independently of missing-validation advice, `review` must warn about undocumented root input declarations and declared inputs without either a non-user source or a playbook caller slot. These `input_authoring` advisories must not alter activation or other runtime-mode semantics, and available static findings must survive an unavailable review.
+- `review` without a workflow name must aggregate static authoring findings for every declared playbook workflow without activation, caller inputs, state reads, or probes. Its result must state that contextual checks did not run and group unavailable entries with their diagnostics.
+- In that aggregate result, missing input descriptions and absent non-user input sources or caller slots are blocking findings; structural or style recommendations are advisory. The aggregate command must return a failing process result for blocking findings or unavailable workflows, without changing single-workflow review exit behavior.
 - Profile-supplied surplus context must not force workflows to declare unused values merely to activate successfully.
 - The runtime must distinguish profile-supplied surplus context from explicit user-supplied unknown inputs.
 - Default `review` and `check` outputs must not surface ordinary expected profile-surplus context as user-facing diagnostics.

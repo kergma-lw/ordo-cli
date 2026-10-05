@@ -23,6 +23,10 @@ When a workflow consumes a value such as `repository` from the selected profile 
 
 Its primary value is authoring-quality review rather than executability truth.
 
+`ordo-playbook review` without a workflow name is a playbook-wide static pass. It reports findings grouped by declared workflow from authored playbook and workflow files only. It does not activate a workflow, choose caller inputs, read state, or run probes; contextual checks remain exclusive to `ordo-playbook review <workflow>`.
+
+Its aggregate result labels findings as `blocking` or `advisory`. Missing input descriptions and missing non-user input sources or caller slots are blocking because dependent instruction generation cannot rely on an incomplete input contract. Style and structural recommendations remain advisory; the result separately counts pipe-style recommendations so they are prominent without blocking. The aggregate command exits nonzero for blocking findings or unavailable workflows; this classification and exit behavior do not change `review <workflow>`.
+
 Statically knowable expression mistakes should ideally surface here or in adjacent validation surfaces before `execute` is needed.
 For example, a builtin `format` expression whose placeholder count cannot match its argument count is an authoring-time problem, not merely a runtime surprise.
 

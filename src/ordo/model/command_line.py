@@ -24,7 +24,8 @@ COMMAND_LINE_HUMAN = declare_human({
             "heading": "Choose a mode",
             "items": [
                 "`ordo-playbook check <workflow>` answers whether the workflow can run now without changing anything.",
-                "`ordo-playbook review <workflow>` reports workflow-quality issues without changing anything.",
+                "`ordo-playbook review` checks every declared workflow using authored playbook material only. It does not resolve caller inputs, read current state, or run probes. Missing input descriptions and missing input sources block dependent generation; style recommendations remain advisory. The report separately counts pipe-style recommendations so they remain visible.",
+                "`ordo-playbook review <workflow>` reports workflow-quality issues for one workflow in its current context without changing anything.",
                 "`ordo-playbook plan <workflow>` shows the work the workflow would perform without changing anything.",
                 "`ordo-playbook run <workflow>` performs the workflow's real work and reports its result.",
                 "`ordo-playbook explain <workflow>` explains why the workflow can or cannot run now.",
@@ -54,7 +55,7 @@ COMMAND_LINE_HUMAN = declare_human({
             "heading": "Practical next steps",
             "items": [
                 "Run `ordo-playbook workflows list` when you do not yet know the workflow name.",
-                "Run `ordo-playbook check <workflow>` and `ordo-playbook review <workflow>` before relying on a changed workflow.",
+                "Run `ordo-playbook review` to check the whole playbook, then `ordo-playbook check <workflow>` and `ordo-playbook review <workflow>` before relying on a changed workflow.",
                 "Run `ordo-playbook plan <workflow>` to inspect intended work before `ordo-playbook run <workflow>` makes changes.",
                 "Use `ordo-help command-line --json` when a tool needs the complete command contract.",
             ],
