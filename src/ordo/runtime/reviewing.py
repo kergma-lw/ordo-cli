@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from ordo.model.github_repository import normalize_github_repository
@@ -60,6 +61,70 @@ def find_input_description_findings(declared_inputs: Mapping[str, object]) -> li
             "evidence": {"input": name, "suggested_fix": "add_input_description"},
         })
     return findings
+
+
+@dataclass(frozen=True)
+class _StaticReviewFindings:
+    """Authored-workflow findings, kept independent of runtime analysis."""
+
+    profile_switch_literals: list[dict[str, object]]
+    structured_conditions: list[dict[str, object]]
+    gate_recommendations: list[dict[str, object]]
+    first_step_applicability_guards: list[dict[str, object]]
+    adapter_bindings: list[dict[str, object]]
+    workflow_profile_bindings: list[dict[str, object]]
+    input_descriptions: list[dict[str, object]]
+    inline_fan_out_complexity: list[dict[str, object]]
+
+
+@dataclass(frozen=True)
+class _ContextualReviewFindings:
+    """Findings that require the current check result or connector context."""
+
+    diagnostic_hints: list[dict[str, object]]
+    missing_input_validation: list[dict[str, object]]
+    unused_declared_inputs: list[dict[str, object]]
+    recommended_probe_coverage: list[dict[str, object]]
+    cross_repository_overrides: list[dict[str, object]]
+    runtime_fan_out_cardinality: list[dict[str, object]]
+
+
+def _build_static_review_findings(workflow: Workflow) -> _StaticReviewFindings:
+    """Build findings that can later be batched from authored workflows alone."""
+
+    return _StaticReviewFindings(
+        profile_switch_literals=_find_profile_switch_literal_string_hints(workflow),
+        structured_conditions=_find_string_condition_structured_form_hints(workflow),
+        gate_recommendations=_find_gate_recommendation_hints(workflow),
+        first_step_applicability_guards=_find_first_step_applicability_guard_hints(workflow),
+        adapter_bindings=_find_unnecessary_with_root_adapter_bindings(workflow),
+        workflow_profile_bindings=_find_workflow_profile_binding_hints(workflow),
+        input_descriptions=find_input_description_findings(workflow.declared_inputs),
+        inline_fan_out_complexity=_find_inline_fan_out_complexity_findings(workflow),
+    )
+
+
+def _build_contextual_review_findings(
+    workflow: Workflow,
+    check_result: RuntimeResult,
+    *,
+    profile: Profile | None,
+    connector_provider: ConnectorProvider | None,
+) -> _ContextualReviewFindings:
+    """Build findings whose meaning depends on the current runtime context."""
+
+    return _ContextualReviewFindings(
+        diagnostic_hints=_find_diagnostic_review_hints(check_result),
+        missing_input_validation=_find_missing_input_validation(workflow, check_result, profile=profile),
+        unused_declared_inputs=_find_unused_declared_inputs(workflow, check_result, profile=profile),
+        recommended_probe_coverage=_find_missing_recommended_probe_coverage(workflow, check_result),
+        cross_repository_overrides=_find_cross_repository_override_hints(workflow, profile=profile),
+        runtime_fan_out_cardinality=_find_runtime_fan_out_cardinality_findings(
+            workflow,
+            check_result,
+            connector_provider=connector_provider,
+        ),
+    )
 
 
 def review_workflow(
@@ -149,26 +214,70 @@ def _build_review_findings(
     profile: Profile | None,
     connector_provider: ConnectorProvider | None,
 ) -> list[dict[str, object]]:
+    static = _build_static_review_findings(workflow)
+    contextual = _build_contextual_review_findings(
+        workflow,
+        check_result,
+        profile=profile,
+        connector_provider=connector_provider,
+    )
     findings: list[dict[str, object]] = []
-    findings.extend(_find_diagnostic_review_hints(check_result))
-    findings.extend(_find_profile_switch_literal_string_hints(workflow))
-    findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
-    findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
-    findings.extend(_find_missing_recommended_probe_coverage(workflow, check_result))
-    findings.extend(_find_cross_repository_override_hints(workflow, profile=profile))
-    findings.extend(_find_string_condition_structured_form_hints(workflow))
-    findings.extend(_find_gate_recommendation_hints(workflow))
-    findings.extend(_find_first_step_applicability_guard_hints(workflow))
-    findings.extend(_find_unnecessary_with_root_adapter_bindings(workflow))
-    findings.extend(_find_workflow_profile_binding_hints(workflow))
-    findings.extend(find_input_description_findings(workflow.declared_inputs))
+    # Preserve the historical public finding order while sourcing each entry
+    # from one explicit review layer.
+    findings.extend(contextual.diagnostic_hints)
+    findings.extend(static.profile_switch_literals)
+    findings.extend(contextual.missing_input_validation)
+    findings.extend(contextual.unused_declared_inputs)
+    findings.extend(contextual.recommended_probe_coverage)
+    findings.extend(contextual.cross_repository_overrides)
+    findings.extend(static.structured_conditions)
+    findings.extend(static.gate_recommendations)
+    findings.extend(static.first_step_applicability_guards)
+    findings.extend(static.adapter_bindings)
+    findings.extend(static.workflow_profile_bindings)
+    findings.extend(static.input_descriptions)
     findings.extend(
-        _find_bounded_fan_out_authoring_findings(
-            workflow,
+        _merge_fan_out_review_findings(
+            static.inline_fan_out_complexity,
+            contextual.runtime_fan_out_cardinality,
             check_result,
-            connector_provider=connector_provider,
         )
     )
+    return findings
+
+
+def _merge_fan_out_review_findings(
+    static_findings: list[dict[str, object]],
+    contextual_findings: list[dict[str, object]],
+    check_result: RuntimeResult,
+) -> list[dict[str, object]]:
+    """Restore the established per-step order while keeping layers independent."""
+
+    by_path: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for finding in [*static_findings, *contextual_findings]:
+        path = finding.get("path")
+        if not isinstance(path, list):
+            continue
+        step_path = tuple(path[:-1] if finding.get("code") == "review.workflow.fan_out.runtime_only_cardinality" else path)
+        by_path.setdefault(step_path, []).append(finding)
+
+    findings: list[dict[str, object]] = []
+    for item in check_result.outputs.get("preflight_step_items", []):
+        if not isinstance(item, dict):
+            continue
+        path = ("blocks", str(item.get("block_index")), "steps", str(item.get("step_index")))
+        findings.extend(by_path.pop(path, []))
+    for finding in [*static_findings, *contextual_findings]:
+        path = finding.get("path")
+        if not isinstance(path, list):
+            continue
+        step_path = tuple(path[:-1] if finding.get("code") == "review.workflow.fan_out.runtime_only_cardinality" else path)
+        pending = by_path.get(step_path)
+        if pending and finding in pending:
+            findings.append(finding)
+            pending.remove(finding)
+            if not pending:
+                del by_path[step_path]
     return findings
 
 
@@ -401,7 +510,41 @@ def _find_profile_switch_literal_string_hints(workflow: Workflow) -> list[dict[s
     return findings
 
 
-def _find_bounded_fan_out_authoring_findings(
+def _find_inline_fan_out_complexity_findings(workflow: Workflow) -> list[dict[str, object]]:
+    """Find complex inline fan-out bodies from authored workflow structure only."""
+
+    findings: list[dict[str, object]] = []
+    for path, step in _iter_workflow_steps(workflow):
+        if step.for_each is None or step.steps is None:
+            continue
+        conditional_inner_steps = [inner.name for inner in step.steps if inner.if_ is not None]
+        if len(step.steps) <= 2 and not conditional_inner_steps:
+            continue
+        findings.append(
+            {
+                "code": "review.workflow.fan_out.inline_body_complexity",
+                "level": "warning",
+                "category": "fan_out_authoring",
+                "message": f"Fan-out step '{step.name}' has an inline repeated body that may be too complex to keep inline",
+                "path": list(path),
+                "evidence": {
+                    "step": step.name,
+                    "body_kind": "inline_repeated_steps",
+                    "inner_step_count": len(step.steps),
+                    "conditional_inner_steps": conditional_inner_steps,
+                    "suggested_fix": "extract_reusable_fan_out_fragment",
+                    "suggested_rewrite": {
+                        "step": _suggested_fan_out_fragment_step(step.name, step),
+                        "fragment_steps": [inner.to_contract() for inner in step.steps],
+                    },
+                    "reason": "large or branchy inline repeated bodies are harder to review than extracted reusable fragments",
+                },
+            }
+        )
+    return findings
+
+
+def _find_runtime_fan_out_cardinality_findings(
     workflow: Workflow,
     check_result: RuntimeResult,
     *,
@@ -417,30 +560,6 @@ def _find_bounded_fan_out_authoring_findings(
         authored_step = authored_steps.get(step_name)
         if authored_step is None or authored_step.for_each is None:
             continue
-        if authored_step.steps is not None:
-            conditional_inner_steps = [inner.name for inner in authored_step.steps if inner.if_ is not None]
-            if len(authored_step.steps) > 2 or conditional_inner_steps:
-                findings.append(
-                    {
-                        "code": "review.workflow.fan_out.inline_body_complexity",
-                        "level": "warning",
-                        "category": "fan_out_authoring",
-                        "message": f"Fan-out step '{step_name}' has an inline repeated body that may be too complex to keep inline",
-                        "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index"))],
-                        "evidence": {
-                            "step": step_name,
-                            "body_kind": item.get("body_kind"),
-                            "inner_step_count": len(authored_step.steps),
-                            "conditional_inner_steps": conditional_inner_steps,
-                            "suggested_fix": "extract_reusable_fan_out_fragment",
-                            "suggested_rewrite": {
-                                "step": _suggested_fan_out_fragment_step(step_name, authored_step),
-                                "fragment_steps": [inner.to_contract() for inner in authored_step.steps],
-                            },
-                            "reason": "large or branchy inline repeated bodies are harder to review than extracted reusable fragments",
-                        },
-                    }
-                )
         cardinality_status = _fan_out_cardinality_status(
             authored_step,
             workflow,
@@ -476,6 +595,25 @@ def _find_bounded_fan_out_authoring_findings(
                 }
             )
     return findings
+
+
+def _iter_workflow_steps(workflow: Workflow) -> list[tuple[tuple[str, ...], Step]]:
+    steps: list[tuple[tuple[str, ...], Step]] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, StepBlock):
+            continue
+        steps.extend(_iter_steps(block.steps, path=("blocks", str(block_index), "steps")))
+    return steps
+
+
+def _iter_steps(steps: list[Step], *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], Step]]:
+    result: list[tuple[tuple[str, ...], Step]] = []
+    for index, step in enumerate(steps):
+        step_path = path + (str(index),)
+        result.append((step_path, step))
+        if step.steps is not None:
+            result.extend(_iter_steps(step.steps, path=step_path + ("steps",)))
+    return result
 
 
 def _workflow_steps_by_name(workflow: Workflow) -> dict[str, object]:
