@@ -15,7 +15,7 @@ from ordo.model.profile import Profile
 from ordo.model.workflow import Step, StepBlock, Workflow, normalize_workflow_input_declaration, workflow_input_has_default, workflow_input_required
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_payload, load_yaml_document, validate_workflow_document, validate_workflow_semantics
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
-from ordo.runtime.reviewing import find_input_description_findings
+from ordo.runtime.reviewing import find_input_description_findings, static_review_findings
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
 from ordo.runtime.local_expression_engine.core import (
     BuiltinCallNode,
@@ -279,6 +279,151 @@ def inspect_playbook_workflow(
     )
 
 
+def review_playbook_static(
+    *, playbook_path: str | Path | None = None, cwd: str | Path | None = None,
+) -> dict[str, object]:
+    """Review every declared workflow from authored playbook material only.
+
+    This intentionally does not activate workflows, choose profiles, resolve
+    inputs, read state, or construct a connector provider.
+    """
+
+    path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
+    payload = _load_playbook_document(path)
+    workflows = _require_mapping(payload, "workflows", playbook_path=path)
+    _, _, launch_profile, _ = _load_launch_profile(payload, path=path, profile_name=None)
+    results: list[dict[str, object]] = []
+    for authored_name, entry in workflows.items():
+        workflow_name = authored_name if isinstance(authored_name, str) else str(authored_name)
+        try:
+            findings, workflow_path = _review_static_workflow_entry(
+                workflow_name=workflow_name,
+                workflow_entry=entry,
+                playbook_payload=payload,
+                playbook_path=path,
+                cwd=cwd,
+                launch_profile=launch_profile,
+            )
+        except PlaybookError as exc:
+            findings = _classify_static_review_findings(exc.review_findings)
+            results.append({
+                "workflow": workflow_name,
+                "status": "unavailable",
+                "review_status": "unavailable",
+                "finding_count": len(findings),
+                "blocking_finding_count": sum(1 for finding in findings if finding["severity"] == "blocking"),
+                "advisory_finding_count": sum(1 for finding in findings if finding["severity"] == "advisory"),
+                "findings": findings,
+                "diagnostics": [diagnostic.to_contract() for diagnostic in exc.diagnostics],
+            })
+            continue
+        findings = _classify_static_review_findings(findings)
+        results.append({
+            "workflow": workflow_name,
+            "file": str(workflow_path),
+            "status": "ok",
+            "review_status": "clean" if not findings else "needs_attention",
+            "finding_count": len(findings),
+            "blocking_finding_count": sum(1 for finding in findings if finding["severity"] == "blocking"),
+            "advisory_finding_count": sum(1 for finding in findings if finding["severity"] == "advisory"),
+            "findings": findings,
+        })
+
+    finding_count = sum(item["finding_count"] for item in results)
+    blocking_finding_count = sum(item["blocking_finding_count"] for item in results)
+    advisory_finding_count = sum(item["advisory_finding_count"] for item in results)
+    pipe_style_advisory_count = sum(
+        1 for item in results for finding in item["findings"]
+        if finding["code"] == "review.workflow.adapter_pipe_style_preferred"
+    )
+    unavailable_count = sum(1 for item in results if item["status"] == "unavailable")
+    return {
+        "mode": "review",
+        "status": "ok",
+        "scope": "playbook_static",
+        "playbook": str(path),
+        "review_status": "clean" if not finding_count and not unavailable_count else "needs_attention",
+        "finding_count": finding_count,
+        "blocking_finding_count": blocking_finding_count,
+        "advisory_finding_count": advisory_finding_count,
+        "pipe_style_advisory_count": pipe_style_advisory_count,
+        "workflow_count": len(results),
+        "reviewed_workflow_count": len(results) - unavailable_count,
+        "unavailable_workflow_count": unavailable_count,
+        "contextual_checks_not_run": True,
+        "results": results,
+    }
+
+
+_STATIC_REVIEW_ADVISORY_CODES = frozenset({
+    "review.workflow.adapter_pipe_style_preferred",
+    "review.workflow.guard.preferred_for_first_step_applicability",
+    "review.workflow.step_gate.preferred_for_readiness_check",
+})
+
+
+def _classify_static_review_findings(findings: tuple[dict[str, object], ...] | list[dict[str, object]]) -> list[dict[str, object]]:
+    """Mark aggregate-only findings by their instruction-generation impact."""
+
+    classified: list[dict[str, object]] = []
+    for finding in findings:
+        severity = "advisory" if finding.get("code") in _STATIC_REVIEW_ADVISORY_CODES else "blocking"
+        classified.append({**finding, "severity": severity})
+    return classified
+
+
+def _review_static_workflow_entry(
+    *,
+    workflow_name: str,
+    workflow_entry: object,
+    playbook_payload: dict[str, object],
+    playbook_path: Path,
+    cwd: str | Path | None,
+    launch_profile: Profile | None,
+) -> tuple[list[dict[str, object]], Path]:
+    """Load and statically review one entry without playbook activation."""
+
+    if not isinstance(workflow_entry, dict):
+        raise _playbook_error(
+            "playbook.workflow.entry_invalid",
+            f"Workflow '{workflow_name}' must be a mapping",
+            path=("workflows", workflow_name),
+            details={"playbook": str(playbook_path), "workflow": workflow_name},
+        )
+    _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=playbook_path)
+    workflow_file = _require_string(workflow_entry, "file", playbook_path=playbook_path, path=("workflows", workflow_name, "file"))
+    workflow_path = _resolve_catalog_file(playbook_dir=playbook_path.parent, default_subdir="workflows", raw=workflow_file)
+    raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
+    raw_inputs = raw_workflow.get("inputs")
+    findings = _playbook_input_authoring_findings(
+        workflow_name=workflow_name,
+        raw_inputs=raw_inputs,
+        workflow_entry=workflow_entry,
+        profile=launch_profile,
+        include_descriptions=False,
+    )
+    validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
+    if not validation_report.ok:
+        raise PlaybookError(validation_report.diagnostics, tuple(findings))
+    compiled_workflow = _compile_workflow_payload(
+        raw_workflow,
+        workflow_name=workflow_name,
+        workflow_entry=workflow_entry,
+        playbook_payload=playbook_payload,
+        playbook_dir=playbook_path.parent,
+        playbook_path=playbook_path,
+    )
+    try:
+        workflow = load_workflow_payload(compiled_workflow, source=str(workflow_path.resolve()), launch_dir=Path.cwd() if cwd is None else Path(cwd))
+    except LoadError as exc:
+        raise PlaybookError(exc.diagnostics, tuple(findings)) from exc
+    semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
+    if not semantic_report.ok:
+        raise PlaybookError(semantic_report.diagnostics, tuple(findings))
+    findings.extend(static_review_findings(workflow))
+    return findings, workflow_path
+
+
 def build_playbook_static_graph(
     *, playbook_path: str | Path | None = None, profile_name: str | None = None,
     input_overrides: dict[str, object] | None = None,
@@ -420,6 +565,44 @@ def _input_authoring_contract(
     return contract
 
 
+def _playbook_input_authoring_findings(
+    *,
+    workflow_name: str,
+    raw_inputs: object,
+    workflow_entry: dict[str, object],
+    profile: Profile | None,
+    include_descriptions: bool,
+) -> list[dict[str, object]]:
+    """Return playbook-owned input findings without resolving caller values."""
+
+    if not isinstance(raw_inputs, dict):
+        return []
+    findings = find_input_description_findings(raw_inputs) if include_descriptions else []
+    bound_inputs, caller_inputs, optional_inputs = _split_workflow_entry_inputs(workflow_entry.get("with"))
+    for name, declaration in raw_inputs.items():
+        if not isinstance(name, str):
+            continue
+        contract = _input_authoring_contract(name, declaration, bound_inputs, caller_inputs, optional_inputs, profile)
+        if contract["coverage"] != "missing":
+            continue
+        required = contract["required"]
+        slot = f"{name}:" if required else f"{name}?:"
+        findings.append({
+            "code": "review.playbook.input_caller_slot_missing",
+            "level": "warning",
+            "category": "input_authoring",
+            "message": f"Workflow input '{name}' has no non-user source or caller slot; expose it with '{slot}' in the playbook entry's with mapping",
+            "path": ["workflows", workflow_name, "with", name],
+            "evidence": {
+                "input": name,
+                "required": required,
+                "suggested_fix": "expose_caller_input",
+                "suggested_rewrite": slot,
+            },
+        })
+    return findings
+
+
 def _load_launch_profile(
     payload: dict[str, object], *, path: Path, profile_name: str | None,
 ) -> tuple[str | None, str | None, Profile | None, Path | None]:
@@ -524,30 +707,13 @@ def _activate_playbook(
 
     raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
     raw_inputs = raw_workflow.get("inputs")
-    if isinstance(raw_inputs, dict):
-        review_findings.extend(find_input_description_findings(raw_inputs))
-        bound_inputs, caller_inputs, optional_inputs = _split_workflow_entry_inputs(workflow_entry.get("with"))
-        for name, declaration in raw_inputs.items():
-            if not isinstance(name, str):
-                continue
-            contract = _input_authoring_contract(name, declaration, bound_inputs, caller_inputs, optional_inputs, profile)
-            if contract["coverage"] != "missing":
-                continue
-            required = contract["required"]
-            slot = f"{name}:" if required else f"{name}?:"
-            review_findings.append({
-                "code": "review.playbook.input_caller_slot_missing",
-                "level": "warning",
-                "category": "input_authoring",
-                "message": f"Workflow input '{name}' has no non-user source or caller slot; expose it with '{slot}' in the playbook entry's with mapping",
-                "path": ["workflows", workflow_name, "with", name],
-                "evidence": {
-                    "input": name,
-                    "required": required,
-                    "suggested_fix": "expose_caller_input",
-                    "suggested_rewrite": slot,
-                },
-            })
+    review_findings.extend(_playbook_input_authoring_findings(
+        workflow_name=workflow_name,
+        raw_inputs=raw_inputs,
+        workflow_entry=workflow_entry,
+        profile=profile,
+        include_descriptions=True,
+    ))
     validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
     if not validation_report.ok:
         raise PlaybookError(validation_report.diagnostics)

@@ -1585,6 +1585,8 @@ Use mocked GitHub responses for connector scenarios and the bounded fixture exec
 - `review` must not treat every declared workflow input as automatic missing-validation debt; it should distinguish meaningful control/effect inputs, profile-carried ambient context, and unused declarations.
 - `review` must treat trusted profile-provided consumed context separately from user-driven validation candidates and must not require early re-validation of that context by default.
 - Independently of missing-validation advice, `review` must warn about undocumented root input declarations and declared inputs without either a non-user source or a playbook caller slot. These `input_authoring` advisories must not alter activation or other runtime-mode semantics, and available static findings must survive an unavailable review.
+- `review` without a workflow name must aggregate static authoring findings for every declared playbook workflow without activation, caller inputs, state reads, or probes. Its result must state that contextual checks did not run and group unavailable entries with their diagnostics.
+- In that aggregate result, missing input descriptions and absent non-user input sources or caller slots are blocking findings; structural or style recommendations are advisory. The aggregate command must return a failing process result for blocking findings or unavailable workflows, without changing single-workflow review exit behavior.
 - Profile-supplied surplus context must not force workflows to declare unused values merely to activate successfully.
 - The runtime must distinguish profile-supplied surplus context from explicit user-supplied unknown inputs.
 - Default `review` and `check` outputs must not surface ordinary expected profile-surplus context as user-facing diagnostics.
@@ -2643,6 +2645,10 @@ Profile-provided consumed context is still meaningful workflow input, but it is 
 When a workflow consumes a value such as `repository` from the selected profile as trusted execution context, `review` should not require the workflow to re-validate that context in early guards unless the value also acts as an explicit control-bearing choice.
 
 Its primary value is authoring-quality review rather than executability truth.
+
+`ordo-playbook review` without a workflow name is a playbook-wide static pass. It reports findings grouped by declared workflow from authored playbook and workflow files only. It does not activate a workflow, choose caller inputs, read state, or run probes; contextual checks remain exclusive to `ordo-playbook review <workflow>`.
+
+Its aggregate result labels findings as `blocking` or `advisory`. Missing input descriptions and missing non-user input sources or caller slots are blocking because dependent instruction generation cannot rely on an incomplete input contract. Style and structural recommendations remain advisory; the result separately counts pipe-style recommendations so they are prominent without blocking. The aggregate command exits nonzero for blocking findings or unavailable workflows; this classification and exit behavior do not change `review <workflow>`.
 
 Statically knowable expression mistakes should ideally surface here or in adjacent validation surfaces before `execute` is needed.
 For example, a builtin `format` expression whose placeholder count cannot match its argument count is an authoring-time problem, not merely a runtime surprise.
@@ -5967,6 +5973,8 @@ When a caller is adding or changing a workflow, `ordo-help` should make the auth
 
 - `ordo-playbook check <workflow>` answers whether the workflow is applicable and execution-ready now.
 - `ordo-playbook review <workflow>` answers whether the workflow has authoring-quality findings.
+- `ordo-playbook review` without a workflow name gives a playbook-wide static authoring report. It does not activate workflows or run contextual checks, state reads, or probes.
+- Its report separates blocking input-contract gaps from advisory authoring recommendations and separately counts pipe-style recommendations. It exits nonzero only for blocking findings or unavailable workflows; `review <workflow>` keeps its established exit behavior.
 - `check` and `review` are complementary authoring passes; neither replaces the other.
 
 The public help surface should present this pairing in at least the `overview`, `workflow-rules`, and `command-line` topics so a zero-knowledge caller does not infer that `check` alone is sufficient workflow sign-off.

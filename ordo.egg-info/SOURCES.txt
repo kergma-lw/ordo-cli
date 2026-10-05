@@ -363,6 +363,7 @@ tests/test_package_layout.py
 tests/test_plan_mode.py
 tests/test_playbook_activation.py
 tests/test_playbook_optional_input_activation.py
+tests/test_playbook_static_review.py
 tests/test_plugin_sdk_spike.py
 tests/test_preflight_interpreter.py
 tests/test_probe_state_equivalence.py

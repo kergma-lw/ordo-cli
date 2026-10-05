@@ -114,6 +114,8 @@ When a caller is adding or changing a workflow, `ordo-help` should make the auth
 
 - `ordo-playbook check <workflow>` answers whether the workflow is applicable and execution-ready now.
 - `ordo-playbook review <workflow>` answers whether the workflow has authoring-quality findings.
+- `ordo-playbook review` without a workflow name gives a playbook-wide static authoring report. It does not activate workflows or run contextual checks, state reads, or probes.
+- Its report separates blocking input-contract gaps from advisory authoring recommendations and separately counts pipe-style recommendations. It exits nonzero only for blocking findings or unavailable workflows; `review <workflow>` keeps its established exit behavior.
 - `check` and `review` are complementary authoring passes; neither replaces the other.
 
 The public help surface should present this pairing in at least the `overview`, `workflow-rules`, and `command-line` topics so a zero-knowledge caller does not infer that `check` alone is sufficient workflow sign-off.
