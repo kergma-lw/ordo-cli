@@ -6,6 +6,10 @@ inputs:
   repo_dir:
     description: Optional working directory for this launch entry
     required: false
+  output_format:
+    description: Result presentation format
+    default: text
+    allowed_values: [text, json]
 state_needs:
   shared_state: {}
 let:

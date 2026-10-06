@@ -33,12 +33,10 @@ from .local_expression_engine.core import (
     StepReferenceNode,
     UnaryNode,
     ValueExpressionNode,
-    collect_local_expression_dependencies,
     render_expression_text,
 )
 from .local_expressions import LocalExpressionParseError, extract_embedded_local_expression, parse_condition_local_expression, parse_value_local_expression
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
-from .preflight_steps import classify_preflight_step
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
@@ -69,8 +67,6 @@ class _StaticReviewFindings:
 
     profile_switch_literals: list[dict[str, object]]
     structured_conditions: list[dict[str, object]]
-    gate_recommendations: list[dict[str, object]]
-    first_step_applicability_guards: list[dict[str, object]]
     adapter_bindings: list[dict[str, object]]
     workflow_profile_bindings: list[dict[str, object]]
     input_descriptions: list[dict[str, object]]
@@ -95,8 +91,6 @@ def _build_static_review_findings(workflow: Workflow) -> _StaticReviewFindings:
     return _StaticReviewFindings(
         profile_switch_literals=_find_profile_switch_literal_string_hints(workflow),
         structured_conditions=_find_string_condition_structured_form_hints(workflow),
-        gate_recommendations=_find_gate_recommendation_hints(workflow),
-        first_step_applicability_guards=_find_first_step_applicability_guard_hints(workflow),
         adapter_bindings=_find_unnecessary_with_root_adapter_bindings(workflow),
         workflow_profile_bindings=_find_workflow_profile_binding_hints(workflow),
         input_descriptions=find_input_description_findings(workflow.declared_inputs),
@@ -116,8 +110,6 @@ def static_review_findings(workflow: Workflow) -> list[dict[str, object]]:
     return [
         *static.profile_switch_literals,
         *static.structured_conditions,
-        *static.gate_recommendations,
-        *static.first_step_applicability_guards,
         *static.adapter_bindings,
         *static.workflow_profile_bindings,
         *static.input_descriptions,
@@ -169,7 +161,6 @@ def review_workflow(
     )
     if check_result.status in {RuntimeStatus.VALIDATION_ERROR, RuntimeStatus.RESOLUTION_ERROR}:
         validation_findings = _find_diagnostic_review_hints(check_result)
-        validation_findings.extend(_find_first_step_applicability_guard_hints(workflow))
         validation_findings.extend(find_input_description_findings(workflow.declared_inputs))
         return RuntimeResult(
             mode=Mode.REVIEW,
@@ -252,8 +243,6 @@ def _build_review_findings(
     findings.extend(contextual.recommended_probe_coverage)
     findings.extend(contextual.cross_repository_overrides)
     findings.extend(static.structured_conditions)
-    findings.extend(static.gate_recommendations)
-    findings.extend(static.first_step_applicability_guards)
     findings.extend(static.adapter_bindings)
     findings.extend(static.workflow_profile_bindings)
     findings.extend(static.input_descriptions)
@@ -380,65 +369,6 @@ def _find_string_condition_structured_form_hints(workflow: Workflow) -> list[dic
             }
         )
     return findings
-
-
-def _find_gate_recommendation_hints(workflow: Workflow) -> list[dict[str, object]]:
-    findings: list[dict[str, object]] = []
-    for block_index, block in enumerate(workflow.blocks):
-        if not isinstance(block, StepBlock):
-            continue
-        for step_index, step in enumerate(block.steps):
-            if step.gate is not None or step.if_ is None or step.operation is None:
-                continue
-            leaf_expressions = [expression for _, expression, _ in _collect_condition_surface_expressions(step.if_, path=())]
-            if len(leaf_expressions) < 2:
-                continue
-            if not any("step." in expression for expression in leaf_expressions):
-                continue
-            findings.append(
-                {
-                    "code": "review.workflow.step_gate.preferred_for_readiness_check",
-                    "level": "warning",
-                    "category": "condition_authoring",
-                    "message": "Use step-level gate for runtime-derived readiness checks before a mutating step instead of encoding them as if-skip logic",
-                    "path": ["blocks", str(block_index), "steps", str(step_index), "if"],
-                    "evidence": {
-                        "step": step.name,
-                        "suggested_form": "gate",
-                        "reason": "readiness and admission failures for mutating steps should fail clearly rather than silently skip",
-                    },
-                }
-            )
-    return findings
-
-
-def _find_first_step_applicability_guard_hints(workflow: Workflow) -> list[dict[str, object]]:
-    candidate = _first_effectful_action_step(workflow)
-    if candidate is None:
-        return []
-    path, step = candidate
-    if step.if_ is None:
-        return []
-    condition_roots = _condition_roots_for_guard_like_review(step.if_)
-    if condition_roots is None:
-        return []
-    return [
-        {
-            "code": "review.workflow.guard.preferred_for_first_step_applicability",
-            "level": "warning",
-            "category": "control_surface_authoring",
-            "message": "This if guards the first effectful action using only pre-step facts; consider guards if the workflow should be treated as not applicable when this condition is false.",
-            "path": [*path, "if"],
-            "evidence": {
-                "step": step.name,
-                "first_effectful_action": True,
-                "condition_roots": sorted(condition_roots),
-                "contains_step_root": False,
-                "suggested_surface": "guards",
-                "reason": "the first effectful action is being skipped based on facts that are already available before step execution",
-            },
-        }
-    ]
 
 
 def _find_unnecessary_with_root_adapter_bindings(workflow: Workflow) -> list[dict[str, object]]:
@@ -713,53 +643,6 @@ def _collect_condition_surface_expressions(value: object, *, path: tuple[str, ..
     except Exception:
         return []
     return [(path + relative_path, expression, LocalExpressionContext.STEP_CONDITION) for relative_path, expression in iter_condition_expression_leaves(normalized)]
-
-
-def _first_effectful_action_step(workflow: Workflow) -> tuple[tuple[str, ...], Step] | None:
-    for block_index, block in enumerate(workflow.blocks):
-        if not isinstance(block, StepBlock):
-            continue
-        candidate = _first_effectful_action_step_in_steps(block.steps, path=("blocks", str(block_index), "steps"))
-        if candidate is not None:
-            return candidate
-    return None
-
-
-def _first_effectful_action_step_in_steps(steps: list[Step], *, path: tuple[str, ...]) -> tuple[tuple[str, ...], Step] | None:
-    for step_index, step in enumerate(steps):
-        step_path = path + (str(step_index),)
-        if _is_effectful_action_boundary(step):
-            return step_path, step
-        if step.steps is not None:
-            candidate = _first_effectful_action_step_in_steps(step.steps, path=step_path + ("steps",))
-            if candidate is not None:
-                return candidate
-    return None
-
-
-def _is_effectful_action_boundary(step: Step) -> bool:
-    return classify_preflight_step(step) in {"effectful", "unknown"}
-
-
-def _condition_roots_for_guard_like_review(value: object) -> set[str] | None:
-    allowed_roots = {"inputs", "args", "state", "probe"}
-    roots: set[str] = set()
-    expressions = _collect_condition_surface_expressions(value, path=())
-    if not expressions:
-        return None
-    for _, expression, _ in expressions:
-        try:
-            parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
-        except LocalExpressionParseError:
-            return None
-        dependencies = collect_local_expression_dependencies(parsed.value.root)
-        current_roots = {dependency.name for dependency in dependencies if dependency.kind in {"root", "observation"}}
-        if "step" in current_roots:
-            return None
-        if any(root not in allowed_roots for root in current_roots):
-            return None
-        roots.update(current_roots)
-    return roots
 
 
 def _iter_string_condition_surfaces(workflow: Workflow) -> list[tuple[tuple[str, ...], str]]:

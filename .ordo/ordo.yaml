@@ -14,20 +14,20 @@ workflows:
   create-task:
     file: workflows/create-task.yml
     description: Create a task in Backlog
-    category: task-lifecycle
+    category: Task lifecycle
     with:
       title:
       body:
   task-to-ready:
     file: workflows/task-to-ready.yml
     description: Move a task or bug to Ready
-    category: task-lifecycle
+    category: Task lifecycle
     with:
       issue_number:
   set-active-task:
     file: workflows/set-active-task.yml
     description: Start or resume work on an issue
-    category: task-lifecycle
+    category: Task lifecycle
     with:
       issue_number:
     state_bindings:
@@ -35,7 +35,7 @@ workflows:
   task-commit:
     file: workflows/task-commit.yml
     description: Stage and commit the active task worktree
-    category: task-lifecycle
+    category: Task lifecycle
     when: Use after making active-task changes and before moving the task to review.
     with:
       message:
@@ -44,13 +44,13 @@ workflows:
   task-to-review:
     file: workflows/task-to-review.yml
     description: Open the local diff and move a task to In review
-    category: task-lifecycle
+    category: Task lifecycle
     state_bindings:
       common_state: common_state
   task-reopen-review:
     file: workflows/task-reopen-review.yml
     description: Invalidate review and return the active task to In progress
-    category: task-lifecycle
+    category: Task lifecycle
     when: Use after review feedback or a follow-up change invalidates the reviewed revision.
     with:
       reason:
@@ -59,14 +59,14 @@ workflows:
   publish-task:
     file: workflows/publish-task.yml
     description: Push the prepared task branch and find or create its PR
-    category: task-lifecycle
+    category: Task lifecycle
     when: Publish committed review changes, including updates to an existing PR, without waiting for CI or requesting merge.
     state_bindings:
       common_state: common_state
   merge-task:
     file: workflows/merge-task.yml
     description: Ask GitHub to merge the published PR or observe a saved merge request
-    category: task-lifecycle
+    category: Task lifecycle
     when: Run to request merge of the verified published head or observe a saved request; GitHub enforces merge eligibility. Never pushes or creates a PR.
     with:
       merge_method?:
@@ -76,7 +76,7 @@ workflows:
   close-task:
     file: workflows/close-task.yml
     description: Close a remotely merged task and clean up locally
-    category: task-lifecycle
+    category: Task lifecycle
     with:
       close_comment?:
     state_bindings:
@@ -84,7 +84,7 @@ workflows:
   cancel-task:
     file: workflows/cancel-task.yml
     description: Cancel the active task with an English reason
-    category: task-lifecycle
+    category: Task lifecycle
     with:
       reason:
     state_bindings:
@@ -127,16 +127,6 @@ workflows:
     with:
       pr_repository:
       pull_number:
-  uncovered-snippet-handles:
-    file: workflows/uncovered-snippet-handles.yml
-    description: Show the public help handles that still lack snippet-backed examples
-    category: inspect
-    when: Use when you want only the unresolved handle names rather than the full snippet coverage payload.
-  not-ready-describe-handles:
-    file: workflows/not-ready-describe-handles.yml
-    description: Show the public help handles whose describe surfaces are not yet marked ready
-    category: inspect
-    when: Use when you want the describe-quality backlog rather than snippet coverage gaps.
   issue-comment:
     file: workflows/issue-comment.yml
     description: Add a comment to one issue from this repository context
@@ -173,6 +163,16 @@ workflows:
     file: workflows/stories-in-progress.yml
     description: Show Story issues that are In progress in the project
     category: inspect
+  uncovered-snippet-handles:
+    file: workflows/uncovered-snippet-handles.yml
+    description: Show the public help handles that still lack snippet-backed examples
+    category: inspect
+    when: Use when you want only the unresolved handle names rather than the full snippet coverage payload.
+  not-ready-describe-handles:
+    file: workflows/not-ready-describe-handles.yml
+    description: Show the public help handles whose describe surfaces are not yet marked ready
+    category: inspect
+    when: Use when you want the describe-quality backlog rather than snippet coverage gaps.
   create-story:
     file: workflows/create-story.yml
     description: Create a new Story issue with a Tasks section
@@ -213,28 +213,28 @@ workflows:
   set-task-size:
     file: workflows/set-task-size.yml
     description: Update the project Size field for one open task in this repository
-    category: field-update
+    category: Field update
     with:
       issue_number:
       size:
   set-task-estimate:
     file: workflows/set-task-estimate.yml
     description: Update the project Estimate field for one open task in this repository
-    category: field-update
+    category: Field update
     with:
       issue_number:
       estimate:
   set-task-iteration:
     file: workflows/set-task-iteration.yml
     description: Update the project Iteration field for one open task in this repository
-    category: field-update
+    category: Field update
     with:
       issue_number:
       iteration:
   set-task-priority:
     file: workflows/set-task-priority.yml
     description: Update the project Priority field for one open task in this repository
-    category: field-update
+    category: Field update
     with:
       issue_number:
       priority:

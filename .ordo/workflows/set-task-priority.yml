@@ -1,11 +1,15 @@
 version: 0
 workflow: set-task-priority
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue number.
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
   priority:
-    hint: Use one of P0, P1, P2, P3
+    description: Task priority (P0, P1, P2, or P3).
+    allowed_values: [P0, P1, P2, P3]
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
   project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number,

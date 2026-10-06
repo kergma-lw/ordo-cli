@@ -1,11 +1,15 @@
 version: 0
 workflow: set-task-size
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue number.
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
   size:
-    hint: Use one of XS, S, M, L, XL
+    description: Task size (XS, S, M, L, or XL).
+    allowed_values: [XS, S, M, L, XL]
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
   project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number,

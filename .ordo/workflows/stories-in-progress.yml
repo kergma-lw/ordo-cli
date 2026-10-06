@@ -1,8 +1,10 @@
 version: 0
 workflow: stories-in-progress
 inputs:
-  repository: {}
-  project_id: {}
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
 blocks:
 - guards:
   - inputs.project_id != ""

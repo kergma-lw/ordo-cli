@@ -23,6 +23,9 @@ def normalize_workflow_input_declaration(name: str, declaration: JSONValue) -> t
         hint = declaration.get("hint")
         if isinstance(hint, str):
             normalized["hint"] = hint
+        allowed_values = declaration.get("allowed_values")
+        if isinstance(allowed_values, list):
+            normalized["allowed_values"] = list(allowed_values)
 
         has_default = "default" in declaration
         if has_default:

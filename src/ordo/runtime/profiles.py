@@ -40,6 +40,27 @@ class WorkflowProfileApplicationResult:
         return self.status is RuntimeStatus.OK
 
 
+def validate_workflow_input_allowed_values(workflow: Workflow, inputs: dict[str, object], *, code: str) -> tuple[Diagnostic, ...]:
+    """Validate resolved input values against declared string enumerations."""
+
+    diagnostics: list[Diagnostic] = []
+    for name, declaration in workflow.declared_inputs.items():
+        if not isinstance(name, str) or not isinstance(declaration, dict) or name not in inputs:
+            continue
+        allowed_values = declaration.get("allowed_values")
+        if isinstance(allowed_values, list) and inputs[name] not in allowed_values:
+            diagnostics.append(_diagnostic(
+                code=code,
+                message=f"Workflow input '{name}' must be one of its allowed_values",
+                path=("inputs", name),
+                workflow=workflow.workflow,
+                input=name,
+                value=inputs[name],
+                allowed_values=allowed_values,
+            ))
+    return tuple(diagnostics)
+
+
 def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileCompositionResult:
     """Compose profiles left-to-right without silent semantic mutation."""
 
@@ -259,6 +280,17 @@ def apply_runtime_profile_switch(workflow: Workflow, profile: Profile) -> Workfl
         if key in protected_keys:
             continue
         merged_inputs[key] = value
+
+    diagnostics = validate_workflow_input_allowed_values(
+        workflow, merged_inputs, code="runtime.workflow.input_not_allowed",
+    )
+    if diagnostics:
+        return WorkflowProfileApplicationResult(
+            status=RuntimeStatus.VALIDATION_ERROR,
+            diagnostics=diagnostics,
+            active_profile=profile.name,
+            active_overrides=profile.overrides,
+        )
 
     return WorkflowProfileApplicationResult(
         status=RuntimeStatus.OK,

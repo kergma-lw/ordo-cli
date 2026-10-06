@@ -18,6 +18,7 @@ COMMAND_LINE_HUMAN = declare_human({
                 "`ordo-playbook workflows show <workflow>` shows what a named workflow needs before you run it.",
                 "`ordo-playbook next` suggests the most useful workflow to consider next in the current context.",
                 "`ordo-playbook graph` shows how published workflows share persistent data. Run it to see which workflows write, read, or remove that data; the result shows relationships, not a required run order. No active task is required.",
+                "`ordo-playbook agent-instructions` reviews the whole playbook, then shows the compact Ordo-managed section for repository agent instructions when it is clean. Add `--write` only when you want it to update the repository AGENTS.md file.",
             ],
         },
         {
@@ -30,6 +31,14 @@ COMMAND_LINE_HUMAN = declare_human({
                 "`ordo-playbook run <workflow>` performs the workflow's real work and reports its result.",
                 "`ordo-playbook explain <workflow>` explains why the workflow can or cannot run now.",
                 "After adding or changing a workflow, run both `check` and `review`: readiness and workflow quality are separate questions.",
+            ],
+        },
+        {
+            "heading": "Repository instructions",
+            "items": [
+                "Run `ordo-playbook agent-instructions` to inspect the generated compact workflow guidance without changing files after a clean whole-playbook review.",
+                "Run `ordo-playbook agent-instructions --write` to update only the managed section of the repository AGENTS.md file after that same clean review. Any finding reports the review and leaves the section unavailable and the file unchanged.",
+                "The command does not choose workflows at runtime or replace repository guidance outside its marked section.",
             ],
         },
         {

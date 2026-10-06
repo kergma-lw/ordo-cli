@@ -34,6 +34,7 @@ but workflow files do not own the implementation logic of either surface.
 - explicit authored workflow-local returns through `result` steps.
 - explicit authored global publication through `publish` steps.
 - optional author-provided invocation hints on input declarations.
+- optional `allowed_values` string enumerations on input declarations.
 - future bounded fan-out on `run` when it remains one workflow-composition surface rather than a general looping language.
 - an optional top-level `profile` when one project-local workflow is intentionally bound to one execution profile.
 
@@ -102,6 +103,7 @@ The public activation-input contract must stay readable from the root workflow.
 - Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
 - Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
 - Input-level `hint` text may help humans and agents choose values, but it remains guidance rather than a validation constraint.
+- Input-level `allowed_values` is an activation-time constraint for a fixed non-empty set of unique strings; defaults must belong to the set. Guards still own contextual, type, and non-string validation.
 - If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references and read-only representation-adapter invocations whose missingness semantics are contractually meaningful.
 
 ## What is undesirable

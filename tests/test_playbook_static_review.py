@@ -88,6 +88,39 @@ class PlaybookStaticReviewTest(unittest.TestCase):
         self.assertEqual(result["results"][0]["diagnostics"][0]["code"], "playbook.workflow.entry_invalid")
         self.assertEqual(result["results"][1]["diagnostics"][0]["code"], "load.workflow.include.not_found")
 
+    def test_checks_selected_profile_and_entry_binding_against_allowed_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_playbook(
+                root,
+                workflows="""
+                sample:
+                  file: sample.yml
+                  with:
+                    status: closed
+                """,
+                files={"sample.yml": """
+                    version: 0
+                    workflow: sample
+                    inputs:
+                      status:
+                        allowed_values: [ready, queued]
+                    blocks: [{steps: []}]
+                """},
+            )
+            playbook = root / ".ordo" / "ordo.yaml"
+            payload = playbook.read_text(encoding="utf-8")
+            playbook.write_text(payload + "profiles:\n  selected:\n    file: selected.yml\ndefaults:\n  profile: selected\n", encoding="utf-8")
+            (root / ".ordo" / "profiles").mkdir()
+            (root / ".ordo" / "profiles" / "selected.yml").write_text("name: selected\ninputs:\n  status: invalid\n", encoding="utf-8")
+            result = review_playbook_static(playbook_path=playbook)
+
+        self.assertEqual(result["results"][0]["review_status"], "unavailable")
+        self.assertEqual(
+            [diagnostic["code"] for diagnostic in result["results"][0]["diagnostics"]],
+            ["review.workflow.input_not_allowed", "review.workflow.input_not_allowed"],
+        )
+
     def test_cli_review_without_workflow_returns_nonzero_for_blocking_findings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

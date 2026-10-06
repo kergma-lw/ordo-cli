@@ -3,7 +3,8 @@ workflow: issue-comment
 inputs:
   number:
     description: Issue number
-  repository: {}
+  repository:
+    description: GitHub repository.
   body:
     description: Comment body
     hint: Use English comment text

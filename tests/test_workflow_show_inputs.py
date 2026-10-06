@@ -25,7 +25,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
             "shorthand": False,
             "bound": {},
             "profile_value": {},
-            "required_slot": {"required": False, "default": 0, "description": "Caller slot value", "hint": "Provide a number"},
+            "required_slot": {"required": False, "default": "P1", "description": "Caller slot value", "hint": "Provide a priority", "allowed_values": ["P0", "P1", "P2", "P3"]},
             "optional_slot": {"required": False},
             "required_optional_slot": {"required": True},
             "all_sources": {"default": "fallback"},
@@ -89,8 +89,9 @@ class WorkflowShowInputsTest(unittest.TestCase):
             self.assertNotIn("sources", item)
             self.assertNotIn("caller_slot", item)
         self.assertEqual(plain["inputs"]["required_slot"], {
-            "required": True, "default": 0, "description": "Caller slot value", "hint": "Provide a number",
+            "required": True, "default": "P1", "description": "Caller slot value", "hint": "Provide a priority", "allowed_values": ["P0", "P1", "P2", "P3"],
         })
+        self.assertEqual(payload["inputs"]["required_slot"]["allowed_values"], ["P0", "P1", "P2", "P3"])
         self.assertEqual(plain["inputs"]["required_optional_slot"], {"required": False})
         self.assertEqual(plain["inputs"]["optional_slot"], {"required": False})
         for removed in ("declared_inputs", "caller_inputs", "optional_caller_inputs"):
@@ -143,7 +144,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
                     self.assertEqual(status, 0)
                     activated = activate_playbook(
                         workflow_name="sample", playbook_path=self.playbook, profile_name=profile_name,
-                        input_overrides={"missing": "override", "required_slot": 1, "required_optional_slot": 1, "profile_value": 1},
+                        input_overrides={"missing": "override", "required_slot": "P1", "required_optional_slot": 1, "profile_value": 1},
                     )
                     if as_json:
                         self.assertEqual(payload["launch_profile"], {

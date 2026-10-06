@@ -1,10 +1,14 @@
 version: 0
 workflow: set-task-iteration
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue number.
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
   iteration:
+    description: Iteration.
     hint: Use the iteration name
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)

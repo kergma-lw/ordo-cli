@@ -353,34 +353,6 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertFalse(any(item["code"] == "review.workflow.step_condition.structured_form_preferred" for item in result.outputs["findings"]))
 
-    def test_review_recommends_gate_for_runtime_readiness_if_on_mutating_step(self) -> None:
-        workflow = load_workflow_text(
-            '''
-version: 0
-workflow: readiness-check
-blocks:
-  - steps:
-      - name: observed-a
-        value: true
-        register: observed_a
-      - name: observed-b
-        value: true
-        register: observed_b
-      - name: mutate
-        if:
-          - step.observed_a.outputs.value
-          - step.observed_b.outputs.value
-        uses: shell.command
-        with:
-          command: "printf ok"
-'''
-        )
-
-        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_gate.preferred_for_readiness_check")
-        self.assertEqual(finding["path"], ["blocks", "0", "steps", "2", "if"])
-
     def test_review_recommends_structured_form_for_long_string_gate(self) -> None:
         workflow = load_workflow_text(
             '''
@@ -412,95 +384,6 @@ blocks:
 
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_condition.structured_form_preferred")
         self.assertEqual(finding["path"], ["blocks", "0", "steps", "4", "gate"])
-
-    def test_review_recommends_guard_for_first_step_if_using_pre_step_facts(self) -> None:
-        workflow = load_workflow_text(
-            '''
-version: 0
-workflow: maybe-run
-blocks:
-  - steps:
-      - name: mutate
-        if: inputs.enabled and state.shared_state[inputs.mode_key] == "ready"
-        uses: shell.command
-        with:
-          command: "printf ok"
-'''
-        )
-
-        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.guard.preferred_for_first_step_applicability")
-        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "if"])
-        self.assertEqual(finding["evidence"]["condition_roots"], ["inputs", "state"])
-        self.assertFalse(finding["evidence"]["contains_step_root"])
-        self.assertTrue(finding["evidence"]["first_effectful_action"])
-
-    def test_review_does_not_recommend_guard_for_first_step_if_using_step_root(self) -> None:
-        workflow = load_workflow_text(
-            '''
-version: 0
-workflow: maybe-run
-blocks:
-  - steps:
-      - name: observe
-        value: true
-        register: observed
-      - name: mutate
-        if: step.observed.outputs.value
-        uses: shell.command
-        with:
-          command: "printf ok"
-'''
-        )
-
-        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        self.assertFalse(any(item["code"] == "review.workflow.guard.preferred_for_first_step_applicability" for item in result.outputs["findings"]))
-
-    def test_review_still_recommends_guard_even_when_other_guards_exist(self) -> None:
-        workflow = load_workflow_text(
-            '''
-version: 0
-workflow: maybe-run
-guards:
-  - inputs.ticket
-blocks:
-  - steps:
-      - name: mutate
-        if: inputs.enabled
-        uses: shell.command
-        with:
-          command: "printf ok"
-'''
-        )
-
-        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        self.assertTrue(any(item["code"] == "review.workflow.guard.preferred_for_first_step_applicability" for item in result.outputs["findings"]))
-
-    def test_review_does_not_recommend_guard_after_earlier_effectful_action(self) -> None:
-        workflow = load_workflow_text(
-            '''
-version: 0
-workflow: maybe-run
-blocks:
-  - steps:
-      - name: comment-first
-        uses: shell.command
-        with:
-          command: "printf first"
-      - name: mutate-later
-        if: inputs.enabled
-        uses: shell.command
-        with:
-          command: "printf second"
-'''
-        )
-
-        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        self.assertFalse(any(item["code"] == "review.workflow.guard.preferred_for_first_step_applicability" for item in result.outputs["findings"]))
 
     def test_review_counts_for_each_input_usage_inside_inline_profile_switch(self) -> None:
         workflow = load_workflow_text(

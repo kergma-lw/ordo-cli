@@ -36,6 +36,8 @@
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 - Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
 - Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.
+- Workflow input declarations may carry `allowed_values` as a non-empty list of unique strings; activation rejects values outside the declared set.
+- A default for an input with `allowed_values` must be one of those strings. Contextual, non-string, and type validation remain guard responsibilities.
 
 ## Product boundary
 

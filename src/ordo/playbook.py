@@ -16,6 +16,7 @@ from ordo.model.workflow import Step, StepBlock, Workflow, normalize_workflow_in
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_payload, load_yaml_document, validate_workflow_document, validate_workflow_semantics
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.reviewing import find_input_description_findings, static_review_findings
+from ordo.runtime.profiles import validate_workflow_input_allowed_values
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
 from ordo.runtime.local_expression_engine.core import (
     BuiltinCallNode,
@@ -357,8 +358,6 @@ def review_playbook_static(
 
 _STATIC_REVIEW_ADVISORY_CODES = frozenset({
     "review.workflow.adapter_pipe_style_preferred",
-    "review.workflow.guard.preferred_for_first_step_applicability",
-    "review.workflow.step_gate.preferred_for_readiness_check",
 })
 
 
@@ -420,6 +419,18 @@ def _review_static_workflow_entry(
     semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
     if not semantic_report.ok:
         raise PlaybookError(semantic_report.diagnostics, tuple(findings))
+    bound_inputs, _, _ = _split_workflow_entry_inputs(_optional_mapping(
+        workflow_entry, "with", playbook_path=playbook_path, path=("workflows", workflow_name, "with"),
+    ))
+    input_diagnostics = tuple(diagnostic for inputs in (
+        workflow.inputs,
+        {} if launch_profile is None else launch_profile.inputs,
+        bound_inputs,
+    ) for diagnostic in validate_workflow_input_allowed_values(
+        workflow, inputs, code="review.workflow.input_not_allowed",
+    ))
+    if input_diagnostics:
+        raise PlaybookError(input_diagnostics, tuple(findings))
     findings.extend(static_review_findings(workflow))
     return findings, workflow_path
 
@@ -994,6 +1005,9 @@ def _validate_activation_inputs(
                 details={"workflow": workflow.workflow, "input": key},
             )
         )
+    diagnostics.extend(validate_workflow_input_allowed_values(
+        workflow, inputs, code="playbook.workflow.input_not_allowed",
+    ))
     if diagnostics:
         raise PlaybookError(tuple(diagnostics))
 

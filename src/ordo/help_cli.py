@@ -352,7 +352,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "prefer": [
             "put applicability checks near the top of the workflow",
             "for non-trivial workflows, phase guards in a stable order such as environment applicability, input validation, domain invariants, and structural preconditions",
-            "when adding or changing workflow inputs, stop and validate each input at the guard boundary before moving on to downstream steps",
+            "when adding or changing workflow inputs, use allowed_values for a fixed set of strings; validate all other input shape and contextual requirements at the guard boundary before moving on to downstream steps",
             "when workflow success depends on an externally observable fact and a public probe surface can read it, prefer explicit guard probes; use read-only probe steps only when the observed fact must be reused later or a guard probe is not a good fit",
             "use input-validation filters such as value | is_string, value | is_number, value | is_integer, value | is_boolean, value | in(...), value | eq(...), and value | ne(...) when they make the input contract more explicit",
             "design guards so check and explain can name domain inapplicability before any mutating step runs",
@@ -380,7 +380,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "prefer": [
             "when introducing or changing any workflow input, pause and decide how that input is validated before continuing with step authoring",
             "add an early guard for each new or changed input whenever a public validation surface exists",
-            "for string inputs prefer value | is_string; for numbers prefer value | is_number or value | is_integer; for booleans prefer value | is_boolean; for enumerated values prefer value | in(...), value | eq(...), or value | ne(...) as appropriate",
+            "for a fixed set of string values, declare allowed_values on the input; for other string inputs prefer value | is_string; for numbers prefer value | is_number or value | is_integer; for booleans prefer value | is_boolean; use guards for contextual or non-string constraints",
             "after validating input shape, separately decide which observed preconditions make the workflow applicable to the current target context",
             "if no suitable public validation surface exists, name that exact gap explicitly instead of silently omitting validation",
             "treat existing workflows as style references, not as waivers for missing input validation",
@@ -746,7 +746,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only.",
             "One intentionally project-local workflow subtree must bind itself to one fixed execution profile through workflow.profile.",
             "Document every root input with a non-blank description and expose inputs without a default, selected launch-profile value, or entry binding through playbook with caller slots: x: for required inputs, x?: for optional inputs. Review reports input_authoring warnings; CLI overrides do not suppress them or change activation errors.",
-            "Plain workflows show omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json keeps all fields unchanged, including original normalized required, caller_slot, the launch_profile source label and initial activation name and source, not the final bound workflow profile.",
+            "Plain workflows show omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields, including allowed_values, are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json keeps all fields unchanged, including original normalized required, caller_slot, the launch_profile source label and initial activation name and source, not the final bound workflow profile.",
             "Inspect the main caller interface with ordo-playbook workflows show <workflow>: plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. --json retains the unchanged full declaration contract with normalized required, caller_slot, sources, and coverage. Coverage reports source presence, not execution readiness; required caller slots still require caller input. Launch-profile values are not exposed, and CLI input overrides or runtime profile switches do not count as authored sources.",
             "Plain workflows show adds top-level warnings only for required workflow inputs with coverage missing, including declarations hidden from inputs. Each warning has code discovery.workflow.input_source_missing, input, message, and hint: no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot; expose a caller slot or supply a source. Optional missing declarations do not warn, and warnings is omitted when none qualify. --json is unchanged. This uses authored source presence without readiness or state analysis; check, review, plan, run, explain, and next are unchanged.",
         ],
@@ -1505,7 +1505,6 @@ def build_workflow_rules_response() -> JSONObject:
             "validate both the request shape and the observed target context",
             "name important values early",
             "use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only when one local step or local branch is optional inside an already-valid path",
-            "when the first effectful action is skipped by an if that depends only on pre-step facts, treat that as a strong signal to consider guards instead",
             "distinguish authored probe intent from successful probe materialization: a guard may already express the right probe shape even when the observation could not be completed from the currently available pre-step facts",
             "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text",
             "do not use with{root: ...} if the same adapter binding can be expressed with pipe-style syntax; use with{root: ...} only as a fallback when the pipe-style form is not valid in the current construct",
@@ -1607,6 +1606,7 @@ def build_command_line_response() -> JSONObject:
                     "In --json only, input sources list every present workflow_default, launch_profile, and entry_binding in that order, and coverage is provided when any source exists, caller_slot when only a slot exists, or missing when neither exists, using the same source-presence rule as review.playbook.input_caller_slot_missing. In both outputs, default appears only when declared, including null; binding appears only for a concrete static entry binding. Selected profile values are never exposed.",
                     "In --json only, top-level launch_profile reports the initial activation name and source, not the final bound workflow profile: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. The launch_profile input source label is also JSON-only. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
                     "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
+                    "You need to generate or update the compact Ordo-managed section in repository agent instructions from the playbook's published workflow catalog.",
                     "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
                     "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",
                     "Check may defer top-level state mutations after conditions and gates to inspect later independent guards without simulating writes. Plan keeps non-reusable nodes; run executes admitted mutations once in order.",
@@ -1614,6 +1614,7 @@ def build_command_line_response() -> JSONObject:
                 "do_not_use_for": [
                     "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-rules surfaces.",
                     "Treating CLI command examples as executable verified snippets: the current snippet harness cannot validate CLI activation examples. Authored YAML excerpts verify source parity only, not CLI discovery or activation output.",
+                    "Updating repository agent guidance outside its marked Ordo-managed section; agent-instructions preserves that text.",
                     "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
                     "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
                     "Assuming nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, and profile switches cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred.",
@@ -1645,6 +1646,12 @@ def build_command_line_response() -> JSONObject:
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
                     {"name": "next", "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"},
                     {"name": "graph", "summary": "Show how workflows connect through persistent state."},
+                ],
+                "repository_commands": [
+                    {
+                        "name": "agent-instructions [--write]",
+                        "summary": "Review the whole playbook, then generate compact workflow guidance for AGENTS.md from published playbook data; --write updates only the marked section when the review is clean.",
+                    },
                 ],
                 "next_priority": [
                     "prefer workflows tied to the active state-backed work context over unrelated utility workflows",
@@ -1696,6 +1703,8 @@ def build_command_line_response() -> JSONObject:
                     "ordo-playbook workflows show inspect-issue",
                     "ordo-playbook next",
                     "ordo-playbook graph",
+                    "ordo-playbook agent-instructions",
+                    "ordo-playbook agent-instructions --write",
                     "ordo-playbook plan inspect-issue",
                     "ordo-playbook --profile review plan inspect-issue",
                     "ordo-playbook --input enabled=true plan inspect-issue",
@@ -4304,12 +4313,12 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "inspect_next": ["routine_contract.routines", "routine_contract.entry.summary", "workflow-rules.routine.*"],
         },
         "workflow.inputs": {
-            "definition": "Top-level workflow field for declaring the named activation inputs that the workflow may require, treat as optional, or prefill with defaults before the workflow may run.",
+            "definition": "Top-level workflow field for declaring the named activation inputs that the workflow may require, treat as optional, prefill with defaults, or restrict to a fixed set of strings before the workflow may run.",
             "use_when": [
                 "The workflow needs a declared external request shape instead of reading undeclared caller values implicitly.",
                 "Plain workflows show adds top-level warnings only for required workflow declarations with coverage missing, even though those declarations are hidden from inputs. Each warning contains code discovery.workflow.input_source_missing, input, message, and hint: no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot; expose a caller slot or supply a source. Optional missing declarations do not warn; warnings is omitted when none qualify. --json is unchanged. This performs no readiness or state analysis and changes none of check, review, plan, run, explain, or next.",
                 "Plain output omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json keeps all fields unchanged, including original normalized required, caller_slot, the launch_profile source label and initial activation name and source, not the final bound workflow profile.",
-                "Guards, steps, or result logic should be able to reference activation inputs through one explicit contract surface.",
+                "Use allowed_values when one input accepts only a fixed non-empty set of unique strings. Activation rejects any other value, and a declared default must be one of the set.",
                 "Give every root input a non-blank description, including optional, defaulted, profile-supplied, and unused inputs. Review reports review.workflow.input_description_missing (warning, input_authoring; suggested_fix: add_input_description) for absent, null, empty, or whitespace-only descriptions.",
                 "Inspect the main caller interface through ordo-playbook workflows show <workflow>: plain output keeps the JSON-shaped serialized envelope but filters inputs to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. Use --json for the unchanged full declaration contract, including inputs not exposed to callers, sources, and coverage. Retained plain records preserve description/hint when provided and default only when declared (including null), while required reports caller-slot obligation. Static entry values appear as binding; selected profile values are not exposed. Authored source coverage is not execution readiness.",
             ],
@@ -4336,7 +4345,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "do_not_use_for": [
                 "Assuming undeclared caller keys are tolerated; unknown activation inputs are rejected by contract.",
-                "Treating input declaration as sufficient validation guidance; authoring still needs explicit input validation guards when semantics require them.",
+                "Using allowed_values for non-string, type, state, or observed-context validation; use guards when those semantics require them.",
                 "Treating input_authoring warnings as new activation requirements: existing errors and check, plan, run, explain, and next semantics are unchanged. Available static findings survive review_status unavailable.",
             ],
             "nearest_surfaces": [

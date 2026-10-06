@@ -8,6 +8,7 @@ import re
 import sys
 
 from ordo import assess_workflow_readiness, check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
+from ordo.agent_instructions import AgentInstructionsError, render_agent_instructions, update_agent_instructions
 from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows, review_playbook_static
@@ -23,6 +24,18 @@ Examples:
   ordo-playbook workflows list
   ordo-playbook workflows show inspect-issue
   ordo-playbook workflows show inspect-issue --json
+"""
+
+AGENT_INSTRUCTIONS_HELP = """usage: ordo-playbook [--file PATH] [--json] agent-instructions [--write]
+
+Generate the compact Ordo-managed section for the repository AGENTS.md file.
+The command reviews the whole playbook first. Any finding reports the review and
+does not show or change AGENTS.md. Without --write, a clean review prints the
+generated section; with --write, it also updates the marked section in AGENTS.md.
+
+Examples:
+  ordo-playbook agent-instructions
+  ordo-playbook agent-instructions --write
 """
 
 
@@ -213,8 +226,14 @@ def main() -> int:
     if len(sys.argv) >= 3 and sys.argv[1] == "workflows" and sys.argv[2] in {"-h", "--help"}:
         print(WORKFLOWS_HELP)
         return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == "agent-instructions" and sys.argv[2] in {"-h", "--help"}:
+        print(AGENT_INSTRUCTIONS_HELP)
+        return 0
     if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "workflows":
         print(WORKFLOWS_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "agent-instructions":
+        print(AGENT_INSTRUCTIONS_HELP)
         return 0
 
     parser = argparse.ArgumentParser(
@@ -227,7 +246,8 @@ def main() -> int:
             "deeper reference:\n"
             "  run `ordo-help` for the detailed Ordo reference model, capabilities, and examples\n\n"
             "discovery:\n"
-            "  workflows  list workflow entries or show one workflow contract summary\n\n"
+            "  workflows  list workflow entries or show one workflow contract summary\n"
+            "  agent-instructions  generate compact repository agent instructions\n\n"
             "execution:\n"
             "  review   review authoring-quality findings without making changes\n"
             "  check    check whether the workflow can be run now, without making changes\n"
@@ -262,6 +282,7 @@ def main() -> int:
         help="during run, emit each step name to stderr right before execution",
     )
     parser.add_argument("--json", action="store_true", help="emit full JSON payload including diagnostics")
+    parser.add_argument("--write", action="store_true", help="write generated agent instructions when supported by the selected command")
     parser.add_argument("command", nargs="*", help=argparse.SUPPRESS)
     args = parser.parse_args()
     command = list(args.command)
@@ -269,6 +290,10 @@ def main() -> int:
         parser.error("missing command")
     if command[0] == "workflows":
         return _run_workflow_discovery_args(args, command[1:], parser=parser)
+    if command[0] == "agent-instructions":
+        return _run_agent_instructions_args(args, command[1:], parser=parser)
+    if args.write:
+        parser.error("--write is only supported with agent-instructions")
     if command[0] not in {"review", "check", "plan", "explain", "run", "next", "graph"}:
         parser.error(f"unknown command: {command[0]}")
     args.mode = command[0]
@@ -393,6 +418,95 @@ def _run_playbook_static_review(args) -> int:
     else:
         print(json.dumps(_summarize_playbook_static_review_payload(payload), indent=2, sort_keys=True))
     return 1 if payload["blocking_finding_count"] or payload["unavailable_workflow_count"] else 0
+
+
+def _run_agent_instructions_args(args, argv: list[str], *, parser: argparse.ArgumentParser) -> int:
+    """Render or safely write the repository's compact managed instructions."""
+
+    if argv:
+        parser.error("agent-instructions does not accept positional arguments")
+    if args.profile or args.input_overrides or args.input_files or args.progress_steps:
+        parser.error("agent-instructions accepts only --file, --json, and --write")
+    try:
+        review = review_playbook_static(playbook_path=args.playbook_file)
+        if review["finding_count"] or review["unavailable_workflow_count"]:
+            payload: dict[str, object] = {
+                "mode": "agent-instructions",
+                "status": "blocked",
+                "reason": "playbook_review_findings",
+                "review": _summarize_playbook_static_review_payload(review),
+                "written": False,
+            }
+            _emit_agent_instructions_payload(payload, as_json=args.json)
+            return 1
+        section, repository_root = render_agent_instructions(playbook_path=args.playbook_file)
+        payload = {
+            "mode": "agent-instructions",
+            "status": "ok",
+            "repository_root": str(repository_root),
+            "path": str(repository_root / "AGENTS.md"),
+            "section": section,
+            "written": False,
+        }
+        if args.write:
+            target, action = update_agent_instructions(section=section, repository_root=repository_root)
+            payload.pop("section")
+            payload.update(
+                {
+                    "path": str(target),
+                    "action": action,
+                    "written": True,
+                    "next_step": "Reload the agent to apply the updated instructions.",
+                }
+            )
+    except (PlaybookError, AgentInstructionsError, OSError, UnicodeError) as exc:
+        payload = {"mode": "agent-instructions", "status": "error", "message": str(exc), "written": False}
+        _emit_agent_instructions_payload(payload, as_json=args.json)
+        return 1
+    _emit_agent_instructions_payload(payload, as_json=args.json)
+    return 0
+
+
+def _emit_agent_instructions_payload(payload: dict[str, object], *, as_json: bool) -> None:
+    if as_json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+        return
+    if payload["status"] == "ok" and not payload["written"]:
+        print(payload["section"], end="")
+        return
+    if payload["status"] == "blocked":
+        _render_agent_instructions_findings(payload)
+        return
+    print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _render_agent_instructions_findings(payload: dict[str, object]) -> None:
+    """Render aggregate static-review findings without unrelated clean entries."""
+
+    review = payload["review"]
+    assert isinstance(review, dict)
+    print(
+        "agent-instructions: blocked "
+        f"({review['finding_count']} findings: "
+        f"{review['blocking_finding_count']} blocking, "
+        f"{review['advisory_finding_count']} advisory)"
+    )
+    for result in review["results"]:
+        assert isinstance(result, dict)
+        workflow = result["workflow"]
+        findings = result.get("findings", [])
+        if findings:
+            for finding in findings:
+                assert isinstance(finding, dict)
+                path = ".".join(finding["path"])
+                print(f"{workflow}:{path}: {finding['severity']}: {finding['message']}")
+            continue
+        if result.get("review_status") == "unavailable":
+            diagnostics = result.get("diagnostics", [])
+            for diagnostic in diagnostics:
+                assert isinstance(diagnostic, dict)
+                print(f"{workflow}: unavailable {diagnostic['code']}: {diagnostic['message']}")
 
 
 def _summarize_playbook_static_review_payload(payload: dict[str, object]) -> dict[str, object]:
@@ -590,7 +704,7 @@ def _build_relaxed_next_candidate(entry, *, order_index: int, args, candidate_in
         return None
     placeholder_overrides = dict(candidate_input_overrides)
     for name in missing_inputs:
-        placeholder_overrides.setdefault(name, _next_placeholder_value(name))
+        placeholder_overrides.setdefault(name, _next_placeholder_value(name, workflow_contract=workflow_contract))
     try:
         activated = activate_playbook(
             workflow_name=entry.workflow_name,
@@ -948,7 +1062,12 @@ def _missing_input_names_from_diagnostics(diagnostics) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _next_placeholder_value(name: str) -> str:
+def _next_placeholder_value(name: str, *, workflow_contract=None) -> str:
+    declaration = getattr(workflow_contract, "declared_inputs", {}).get(name)
+    if isinstance(declaration, dict):
+        allowed_values = declaration.get("allowed_values")
+        if isinstance(allowed_values, list) and allowed_values:
+            return allowed_values[0]
     return f"__ordo_next_placeholder__{name}"
 
 

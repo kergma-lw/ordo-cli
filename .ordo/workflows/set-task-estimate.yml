@@ -1,10 +1,14 @@
 version: 0
 workflow: set-task-estimate
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue number.
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
   estimate:
+    description: Task estimate.
     hint: Use a numeric value
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)

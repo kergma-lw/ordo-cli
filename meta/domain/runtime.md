@@ -14,8 +14,6 @@ Answers whether the authored workflow is structurally strong and explicit enough
 
 It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
 
-It should also distinguish optional-routing step conditions from late admission gates and may recommend `gate` when a long `if` is actually expressing readiness for a mutating step.
-
 For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, trusted profile-provided consumed context, profile-carried ambient surplus, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
 
 Profile-provided consumed context is still meaningful workflow input, but it is not automatically user-driven validation debt.

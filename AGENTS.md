@@ -17,77 +17,79 @@ When a workflow covers the task, use it instead of reproducing its checks manual
 - Read the detailed reference → `ordo-help`
 - Pass caller values with repeatable `--input KEY=VALUE`; use `--input-file KEY=PATH` for raw file content.
 
-### Inspect
+### inspect
 
-- Repository status → `ordo-playbook run global-status`
-- View an issue → `ordo-playbook run issue-view --input number=<issue-number>`
-- View issue comments → `ordo-playbook run issue-view-comments --input number=<issue-number> --input limit=<limit>`
-- Inspect a pull request → `ordo-playbook run pr-view --input pull_number=<pull-number>`
-- Digest a pull request → `ordo-playbook run pr-digest --input pr_repository=<owner/repo> --input pull_number=<pull-number>`
-- List backlog stories → `ordo-playbook run stories-backlog`
-- List in-progress stories → `ordo-playbook run stories-in-progress`
-- Find uncovered help handles → `ordo-playbook run uncovered-snippet-handles`
-- Find unready describe handles → `ordo-playbook run not-ready-describe-handles`
+- Show local branch, worktree, cached upstream counts, task, and hook status → `ordo-playbook run global-status`
+- Show one issue from this repository context without changing state → `ordo-playbook run issue-view --input number=<number>`
+- Show comments for one issue from this repository context without changing state → `ordo-playbook run issue-view-comments --input number=<number> --input limit=<limit>`
+- Show one pull request inspection snapshot without changing state → `ordo-playbook run pr-view --input pull_number=<pull-number>`
+- Show a richer pull request digest with review, checks, and timeline highlights → `ordo-playbook run pr-digest --input pr_repository=<pr-repository> --input pull_number=<pull-number>`
+- Show Story issues that are in Backlog in the project → `ordo-playbook run stories-backlog`
+- Show Story issues that are In progress in the project → `ordo-playbook run stories-in-progress`
+- Show the public help handles that still lack snippet-backed examples → `ordo-playbook run uncovered-snippet-handles`
+- Show the public help handles whose describe surfaces are not yet marked ready → `ordo-playbook run not-ready-describe-handles`
 
 ### Task lifecycle
 
-- Create a task → `ordo-playbook run create-task --input title=<title> --input body=<body>`
-- Move a task to Ready → `ordo-playbook run task-to-ready --input issue_number=<issue-number>`
-- Start or resume a task → `ordo-playbook run set-active-task --input issue_number=<issue-number>`
-- Commit the active task worktree → `ordo-playbook run task-commit --input message=<message>`
-- Move the local task to review → `ordo-playbook run task-to-review`
-- Reopen a reviewed active task → `ordo-playbook run task-reopen-review --input reason=<english-reason>`
-- Publish a prepared task → `ordo-playbook run publish-task`
-- Merge a published task → `ordo-playbook run merge-task [--input merge_method=<merge-method>] [--input base_branch=<base-branch>]`
-- Close a merged task → `ordo-playbook run close-task [--input close_comment=<close-comment>]`
-- Cancel a task → `ordo-playbook run cancel-task --input reason=<reason>`
+- Create a task in Backlog → `ordo-playbook run create-task --input title=<title> --input body=<body>`
+- Move a task or bug to Ready → `ordo-playbook run task-to-ready --input issue_number=<issue-number>`
+- Start or resume work on an issue → `ordo-playbook run set-active-task --input issue_number=<issue-number>`
+- Stage and commit the active task worktree → `ordo-playbook run task-commit --input message=<message>`
+- Open the local diff and move a task to In review → `ordo-playbook run task-to-review`
+- Invalidate review and return the active task to In progress → `ordo-playbook run task-reopen-review --input reason=<reason>`
+- Push the prepared task branch and find or create its PR → `ordo-playbook run publish-task`
+- Ask GitHub to merge the published PR or observe a saved merge request → `ordo-playbook run merge-task [--input base_branch=<base-branch>] [--input merge_method=<merge|squash|rebase>]`
+- Close a remotely merged task and clean up locally → `ordo-playbook run close-task [--input close_comment=<close-comment>]`
+- Cancel the active task with an English reason → `ordo-playbook run cancel-task --input reason=<reason>`
 
-### Context
+### context
 
-- Show current task context → `ordo-playbook run current-task-context`
+- Show the stored active task or story context for this repository → `ordo-playbook run current-task-context`
 
-### Collaboration
+### collaboration
 
-- Comment on an issue → `ordo-playbook run issue-comment --input number=<issue-number> --input body=<body>`
+- Add a comment to one issue from this repository context → `ordo-playbook run issue-comment --input number=<number> --input body=<body>`
 
-### Meta
+### meta
 
-- Rebuild meta packs → `ordo-playbook run meta-packs-build`
+- Regenerate derived meta packs from source docs → `ordo-playbook run meta-packs-build`
 
-### Verify
+### verify
 
-- Run all tests → `ordo-playbook run verify-all-tests`
-- Audit tracked files for secrets → `ordo-playbook run audit-secrets-tree`
-- Run the publication audit → `ordo-playbook run audit-publication`
+- Run the full repository pytest suite from a clean worktree → `ordo-playbook run verify-all-tests`
+- Scan current tracked worktree files with pinned Gitleaks and sanitized output → `ordo-playbook run audit-secrets-tree`
+- Run isolated secret, Python, dependency vulnerability lookup, shell, and publication-inventory checks through one audit workflow → `ordo-playbook run audit-publication`
 
-### Create
+### create
 
-- Create a story → `ordo-playbook run create-story --input title=<title> --input body=<body>`
+- Create a new Story issue with a Tasks section → `ordo-playbook run create-story --input title=<title> --input body=<body>`
 
-### Story
+### story
 
-- Show story tasks → `ordo-playbook run story-tasks-show --input issue_number=<issue-number>`
-- Add a story task reference → `ordo-playbook run story-task-add --input issue_number=<story-number> --input task_repository=<owner/repo> --input task_issue_number=<task-number>`
-- Show ready story tasks → `ordo-playbook run story-tasks-ready --input issue_number=<story-number>`
+- Show the raw Tasks section for one story issue → `ordo-playbook run story-tasks-show --input issue_number=<issue-number>`
+- Add one task reference to the Tasks section of a story issue → `ordo-playbook run story-task-add --input issue_number=<issue-number> --input task_repository=<task-repository> --input task_issue_number=<task-issue-number>`
+- Show Ready tasks referenced from a story Tasks section → `ordo-playbook run story-tasks-ready --input issue_number=<issue-number>`
 
-### Emergency
+### emergency
 
-- Force-close an issue → `ordo-playbook run force-close-issue --input number=<issue-number> --input confirm_break_glass=FORCE_CLOSE --input close_comment=<close-comment>`
+- Close one issue directly, bypassing normal lifecycle checks → `ordo-playbook run force-close-issue --input number=<number> --input confirm_break_glass=<FORCE_CLOSE> --input close_comment=<close-comment>`
 
 ### Field update
 
-- Set task size → `ordo-playbook run set-task-size --input issue_number=<issue-number> --input size=<XS|S|M|L|XL>`
-- Set task estimate → `ordo-playbook run set-task-estimate --input issue_number=<issue-number> --input estimate=<estimate>`
-- Set task iteration → `ordo-playbook run set-task-iteration --input issue_number=<issue-number> --input iteration=<iteration>`
-- Set task priority → `ordo-playbook run set-task-priority --input issue_number=<issue-number> --input priority=<P0|P1|P2|P3>`
+- Update the project Size field for one open task in this repository → `ordo-playbook run set-task-size --input issue_number=<issue-number> --input size=<XS|S|M|L|XL>`
+- Update the project Estimate field for one open task in this repository → `ordo-playbook run set-task-estimate --input issue_number=<issue-number> --input estimate=<estimate>`
+- Update the project Iteration field for one open task in this repository → `ordo-playbook run set-task-iteration --input issue_number=<issue-number> --input iteration=<iteration>`
+- Update the project Priority field for one open task in this repository → `ordo-playbook run set-task-priority --input issue_number=<issue-number> --input priority=<P0|P1|P2|P3>`
 
-If no workflow in this section is an obvious match, say that no known matching workflow is available. Do not invoke discovery merely to search for one, invent a workflow, or silently replace a workflow with a manual command sequence.
+### Operating rules
 
-If a workflow covers the task, use it as the canonical entrypoint instead of reproducing its checks manually.
-
-Prefer the minimal command sequence that answers the request. Do not run
-unrelated preflight commands or replace a suitable workflow with a guessed
-manual command sequence.
+- Use `ordo-playbook workflows list` as the default discovery surface.
+- If no workflow in this section is an obvious match, say that no known matching workflow is available. Do not invoke discovery merely to search for one, invent a workflow, or silently replace a workflow with a manual command sequence.
+- Do not run unrelated preflight commands or replace a suitable workflow with a guessed manual command sequence.
+- Do not replace a missing or unknown workflow with a self-chosen direct command, helper script, or legacy command just because the intent seems clear.
+- If no suitable workflow exists, use `.AGENTS.md.pre-ordo-backup` only as reference material, inspect the current Ordo help and discovery surface, propose the missing workflow, and discuss it before using any legacy procedure directly.
+- Do not treat legacy helper scripts or TUI commands as the primary interface.
+- Use a direct command or temporary legacy bypass only when the user explicitly asks for or approves it.
 <!-- END ORDO MANAGED SECTION -->
 
 ## Meta source layout
@@ -120,30 +122,6 @@ manual command sequence.
 - Create or recreate this environment with `/usr/bin/python3.12 -m venv /home/ww/projects/ordo/.venv`.
 - Use this environment for testing, local runs, dependency installation, and other Python-based project commands.
 - Prefer invoking tools through the virtual environment explicitly, for example `/home/ww/projects/ordo/.venv/bin/python`, or activate it before running project commands.
-
-## Operational workflows (Ordo-first)
-
-- `ordo-playbook` is the canonical operational entrypoint.
-- If a suitable workflow exists, do not use a direct command instead of it.
-- `ordo-playbook` command modes from `--help`:
-  - Discovery: `workflows`
-  - Execution: `review`, `check`, `plan`, `explain`, `run`, `next`
-- Example:
-  - inspect available workflows: `ordo-playbook workflows list`
-  - execute a workflow: `ordo-playbook run <workflow>`
-- Use `ordo-playbook workflows list` as the default discovery surface.
-- If a suitable `ordo-*`/`ordo-playbook` workflow exists, run it directly.
-- Do not run unrelated preflight shell commands (`ls`, `pwd`, ad-hoc env checks, etc.) before an Ordo workflow unless they are strictly required for the workflow to succeed or the user explicitly asked for them.
-- Prefer the minimal command sequence that answers the user request.
-- Do not improvise operational entrypoints from memory or by guessing the most likely shell command.
-- Hard rule: do not replace a missing or unknown workflow with a self-chosen “obvious” direct command (`gh`, `git`, `npm`, `python`, helper script, ad-hoc one-liner, etc.) just because the intent seems clear.
-- If no suitable workflow exists yet:
-  - use `.AGENTS.md.pre-ordo-backup` only as reference material;
-  - inspect the current Ordo help/discovery surface;
-  - propose how the missing workflow should look;
-  - discuss it with the user before executing any legacy ritual directly.
-- Do not treat legacy helper scripts or TUI commands as the primary interface.
-- A direct command or temporary legacy bypass is allowed only when the user explicitly asks for it or explicitly approves the bypass.
 
 ## End-user workflow verification
 
