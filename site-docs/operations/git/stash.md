@@ -42,7 +42,7 @@ Use `ordo-help operation git.stash --json` when you need the exact machine-reada
 Inspect the current stash list before later workflow steps decide whether hidden local work needs recovery or acknowledgement.
 
 ```yaml
-      - name: inspect-stash
+      - name: Inspect stash
         uses: git.stash
         register: stash_info
 ```
@@ -54,16 +54,18 @@ Inspect stash inventory alongside repository state so workflows can distinguish 
 version: 0
 workflow: inspect-git-stash-context
 blocks:
-  - guards: []
-  - steps:
-      - name: inspect-stash
+   - guards: []
+   - steps:
+      # Inspect stash and repository state.
+      - name: Inspect stash
         uses: git.stash
         register: stash_info
-      - name: inspect-repository-state
+      - name: Inspect repository state
         uses: git.state
         register: repo_state
-      - name: publish-summary
+      - name: Publish summary
         publish:
           stash_count: step.stash_info.outputs.count
           has_staged_changes: step.repo_state.outputs.has_staged_changes
+          summary: "Git stash inspection workflow prepared"
 ```

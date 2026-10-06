@@ -44,7 +44,7 @@ Use `ordo-help operation git.integrate.rebase_onto --json` when you need the exa
 Rewrite one topic branch onto a new base when the workflow intentionally wants branch-range replay rather than merge-based integration.
 
 ```yaml
-      - name: rebase-branch-onto-new-base
+      - name: Rebase branch onto new base
         if: inputs.strategy == "rebase"
         uses: git.integrate.rebase_onto
         with:

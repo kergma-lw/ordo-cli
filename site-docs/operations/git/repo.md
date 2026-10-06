@@ -42,7 +42,7 @@ Use `ordo-help operation git.repo --json` when you need the exact machine-readab
 Inspect repository-level Git context before making narrower branch, upstream, or worktree decisions.
 
 ```yaml
-      - name: inspect-repo
+      - name: Inspect repository
         uses: git.repo
         register: repo_info
 ```

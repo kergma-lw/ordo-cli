@@ -44,7 +44,7 @@ Use `ordo-help operation git.integrate.cherry_pick --json` when you need the exa
 Cherry-pick one chosen commit when the workflow wants a targeted backport-style transplant instead of integrating the whole source ref.
 
 ```yaml
-      - name: cherry-pick-target-commit
+      - name: Cherry-pick target commit
         if: inputs.strategy == "cherry-pick"
         uses: git.integrate.cherry_pick
         with:

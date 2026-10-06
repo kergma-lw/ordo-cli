@@ -42,7 +42,7 @@ Use `ordo-help operation git.range --json` when you need the exact machine-reada
 Compare two Git revision endpoints when the workflow needs merge-base and ahead/behind facts rather than one exact ref lookup.
 
 ```yaml
-      - name: inspect-range
+      - name: Inspect reference range
         uses: git.range
         with:
           base: inputs.base_ref
@@ -60,20 +60,21 @@ inputs:
   base_ref: {}
   head_ref: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: inspect-ref
+   - guards: []
+   - steps:
+      # Inspect the reference and compare its range.
+      - name: Inspect reference
         uses: git.ref
         with:
           ref: inputs.ref_name
         register: ref_info
-      - name: inspect-range
+      - name: Inspect reference range
         uses: git.range
         with:
           base: inputs.base_ref
           head: inputs.head_ref
         register: range_info
-      - name: publish-summary
+      - name: Publish summary
         publish:
           ref_exists: step.ref_info.outputs.exists
           ahead_count: step.range_info.outputs.ahead_count

@@ -52,7 +52,7 @@ Use `ordo-help operation gh.pr.comments --json` when you need the exact machine-
 Inspect the top-level pull request conversation thread with one explicit limit and register the resulting comment list.
 
 ```yaml
-  - name: load-pr-comments
+  - name: Load pull request comments
     uses: gh.pr.comments
     with:
       repository: inputs.repository

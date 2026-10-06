@@ -42,7 +42,7 @@ Use `ordo-help operation git.branch --json` when you need the exact machine-read
 Read the current checkout branch before making a branch-specific decision or publishing branch context.
 
 ```yaml
-      - name: read-current-branch
+      - name: Read current branch
         uses: git.branch
         register: current_branch
 ```
@@ -56,30 +56,33 @@ workflow: manage-git-branches
 inputs:
   branch_name: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: read-current-branch
+   - guards: []
+   - steps:
+      # Inspect the current branch and branch inventory.
+      - name: Read current branch
         uses: git.branch
         register: current_branch
-      - name: list-branches
+      - name: List branches
         uses: git.branches
         register: branches
-      - name: create-feature-branch
+
+      # Create and switch to the feature branch.
+      - name: Create feature branch
         uses: git.branch.create
         with:
           branch: inputs.branch_name
           start_point: "HEAD"
-      - name: switch-to-feature-branch
+      - name: Switch to feature branch
         uses: git.branch.switch
         with:
           branch: inputs.branch_name
-      - name: delete-stale-branch
+
+      # Demonstrate routine branch cleanup.
+      - name: Delete stale branch
         uses: git.branch.delete
         with:
           branch: "stale/demo"
-      - name: publish-summary
+      - name: Publish summary
         publish:
           current_branch: step.current_branch.outputs.value
-          inventory_count: step.branches.outputs.count
-          summary: "Git branch workflow prepared"
 ```

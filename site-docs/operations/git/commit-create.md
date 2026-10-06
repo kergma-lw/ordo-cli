@@ -45,7 +45,7 @@ Use `ordo-help operation git.commit.create --json` when you need the exact machi
 Create one ordinary Git commit from the current index after the staged changes are ready.
 
 ```yaml
-      - name: create-commit
+      - name: Create commit
         if: inputs.operation == "create"
         uses: git.commit.create
         with:

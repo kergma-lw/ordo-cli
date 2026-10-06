@@ -52,7 +52,7 @@ Use `ordo-help operation gh.pr.timeline --json` when you need the exact machine-
 Inspect lifecycle events from the pull request timeline with one explicit limit before summarizing history.
 
 ```yaml
-  - name: load-pr-timeline
+  - name: Load pull request timeline
     uses: gh.pr.timeline
     with:
       repository: inputs.repository

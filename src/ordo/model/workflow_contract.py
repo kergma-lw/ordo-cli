@@ -223,7 +223,7 @@ WORKFLOW_FOCUSED_DESCRIBE_HUMAN: dict[str, HumanDeclaration] = {
         "inspect_next": ["workflow.state_needs", "workflow.state_bindings", "workflow.step.state_set", "state_set.single_target_entry"],
     }),
     "workflow.inputs": declare_human({
-        "definition": "Top-level field that declares the activation inputs a workflow accepts, requires, gives defaults, or restricts to named string values.",
+        "definition": "Top-level field that declares the activation inputs a workflow accepts, requires, or gives defaults, or restricts to named string values.",
         "use_when": ["The workflow needs an explicit caller request shape.", "Guards, steps, or results need named activation values."],
         "do_not_use_for": ["Fragment arguments; use workflow.fragment.args.", "Values owned by one playbook entry; use playbook.workflows.with."],
         "nearest_surfaces": [{"handle": "workflow.inputs_contract", "summary": "Input declaration and activation rules"}, {"handle": "playbook.workflows.with", "summary": "Values supplied by a playbook entry"}, {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run input override"}],

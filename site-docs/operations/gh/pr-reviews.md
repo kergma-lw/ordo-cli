@@ -52,7 +52,7 @@ Use `ordo-help operation gh.pr.reviews --json` when you need the exact machine-r
 Inspect submitted pull-request reviews with one explicit limit before interpreting approval or change-request history.
 
 ```yaml
-  - name: load-pr-reviews
+  - name: Load pull request reviews
     uses: gh.pr.reviews
     with:
       repository: inputs.repository

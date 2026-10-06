@@ -54,7 +54,7 @@ Use `ordo-help operation gh.repo --json` when you need the exact machine-readabl
 Inspect one GitHub repository's normalized identity and fork relationship before deciding whether hosted fork sync applies.
 
 ```yaml
-  - name: inspect-repository
+  - name: Inspect repository
     uses: gh.repo
     register: repo_snapshot
 ```
@@ -70,13 +70,14 @@ connector_contexts:
     repository: acme/public-mirror # Literal ASCII OWNER/REPO default, not a URL or authorization allowlist.
 blocks:
 - steps:
-  - name: inspect-repository
+  # Inspect, synchronize, and report repository state.
+  - name: Inspect repository
     uses: gh.repo
     register: repo_snapshot
-  - name: sync-default-branch
+  - name: Sync default branch
     uses: gh.repo.sync
     register: sync_result
-  - name: publish-summary
+  - name: Publish summary
     value:
       repository: step.repo_snapshot.outputs.repository
       branch: step.sync_result.outputs.branch

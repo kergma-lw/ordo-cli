@@ -42,7 +42,7 @@ Use `ordo-help operation git.tags --json` when you need the exact machine-readab
 Inspect a version-sorted Git tag inventory when the workflow needs more than one exact tag lookup.
 
 ```yaml
-      - name: inspect-release-tags
+      - name: Inspect release tags
         uses: git.tags
         with:
           match: "v*"
@@ -59,20 +59,21 @@ workflow: inspect-git-tags
 inputs:
   tag_name: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: inspect-exact-tag
+   - guards: []
+   - steps:
+      # Inspect exact and release tags, then publish the summary.
+      - name: Inspect exact tag
         uses: git.tag
         with:
           name: inputs.tag_name
         register: exact_tag
-      - name: inspect-release-tags
+      - name: Inspect release tags
         uses: git.tags
         with:
           match: "v*"
           match_kind: "glob"
         register: release_tags
-      - name: publish-summary
+      - name: Publish summary
         publish:
           tag_exists: step.exact_tag.outputs.exists
           release_tag_count: step.release_tags.outputs.count

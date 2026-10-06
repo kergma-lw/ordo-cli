@@ -52,7 +52,7 @@ Use `ordo-help operation gh.repo.sync --json` when you need the exact machine-re
 Sync one hosted GitHub fork repository's default branch from its parent repository through the published repo.sync action.
 
 ```yaml
-  - name: sync-default-branch
+  - name: Sync default branch
     uses: gh.repo.sync
     register: sync_result
 ```

@@ -52,7 +52,7 @@ Use `ordo-help operation gh.pr.diff --json` when you need the exact machine-read
 Inspect changed files and bounded diff content from one pull request before reacting to code-level changes.
 
 ```yaml
-  - name: load-pr-diff
+  - name: Load pull request diff
     uses: gh.pr.diff
     with:
       repository: inputs.repository

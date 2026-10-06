@@ -52,7 +52,7 @@ Use `ordo-help operation gh.pr.review_comments --json` when you need the exact m
 Inspect line-level review comments with one explicit limit when the workflow needs file-anchored reviewer feedback.
 
 ```yaml
-  - name: load-pr-review-comments
+  - name: Load pull request review comments
     uses: gh.pr.review_comments
     with:
       repository: inputs.repository

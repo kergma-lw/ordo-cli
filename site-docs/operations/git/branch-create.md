@@ -44,7 +44,7 @@ Use `ordo-help operation git.branch.create --json` when you need the exact machi
 Create one new local feature branch from HEAD without switching the current checkout automatically.
 
 ```yaml
-      - name: create-feature-branch
+      - name: Create feature branch
         uses: git.branch.create
         with:
           branch: inputs.branch_name

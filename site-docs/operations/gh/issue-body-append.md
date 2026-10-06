@@ -54,7 +54,7 @@ Use `ordo-help operation gh.issue.body.append --json` when you need the exact ma
 Append one extra note to the existing issue body while preserving earlier body content.
 
 ```yaml
-  - name: append-body-note
+  - name: Append body note
     uses: gh.issue.body.append
     with:
       repository: inputs.repository

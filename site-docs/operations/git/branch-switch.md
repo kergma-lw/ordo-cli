@@ -44,7 +44,7 @@ Use `ordo-help operation git.branch.switch --json` when you need the exact machi
 Switch the current checkout onto the created feature branch before later branch-specific work begins.
 
 ```yaml
-      - name: switch-to-feature-branch
+      - name: Switch to feature branch
         uses: git.branch.switch
         with:
           branch: inputs.branch_name

@@ -53,7 +53,7 @@ Use `ordo-help operation gh.issue.comment.add --json` when you need the exact ma
 Add one human-facing follow-up comment to the issue conversation without rewriting the issue body.
 
 ```yaml
-  - name: add-close-comment
+  - name: Add closing comment
     uses: gh.issue.comment.add
     with:
       repository: inputs.repository

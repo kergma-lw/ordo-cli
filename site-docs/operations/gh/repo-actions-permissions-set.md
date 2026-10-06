@@ -52,7 +52,7 @@ Use `ordo-help operation gh.repo.actions.permissions.set --json` when you need t
 Set one repository's GitHub Actions enabled flag as an explicit leaf mutation step.
 
 ```yaml
-  - name: disable-actions
+  - name: Disable Actions
     uses: gh.repo.actions.permissions.set
     with:
       enabled: false

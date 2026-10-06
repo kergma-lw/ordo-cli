@@ -45,7 +45,7 @@ Use `ordo-help operation git.worktree --json` when you need the exact machine-re
 Inspect the current dirty-path set and worktree cleanliness before staging or other Git mutations depend on those details.
 
 ```yaml
-      - name: inspect-worktree-before-staging
+      - name: Inspect worktree before staging
         uses: git.worktree
         register: worktree_before
 ```

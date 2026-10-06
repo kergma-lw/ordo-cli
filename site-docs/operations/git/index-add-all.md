@@ -44,7 +44,7 @@ Use `ordo-help operation git.index.add_all --json` when you need the exact machi
 Stage the whole current Git worktree once the workflow has already decided that every pending change belongs in the next staging batch.
 
 ```yaml
-      - name: stage-all-worktree-changes
+      - name: Stage all worktree changes
         uses: git.index.add_all
         register: stage_all
 ```

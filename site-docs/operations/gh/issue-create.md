@@ -55,7 +55,7 @@ Use `ordo-help operation gh.issue.create --json` when you need the exact machine
 Create one new GitHub issue and register its returned reference for later steps.
 
 ```yaml
-  - name: create-issue
+  - name: Create issue
     uses: gh.issue.create
     with:
       repository: inputs.repository

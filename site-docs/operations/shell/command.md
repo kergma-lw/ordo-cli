@@ -55,7 +55,7 @@ Use `ordo-help operation shell.command --json` when you need the exact machine-r
 Run one explicit legacy shell command step when the workflow is documenting or containing compatibility behavior rather than teaching shell.command as a preferred new design.
 
 ```yaml
-      - name: run-legacy-shell-command
+      - name: Run legacy shell command
         uses: shell.command
         with:
           command: "printf 'legacy check'"
@@ -69,14 +69,15 @@ Show shell.command only inside an explicitly legacy compatibility workflow so th
 version: 0
 workflow: legacy-shell-command-compatibility
 blocks:
-  - guards: []
-  - steps:
-      - name: run-legacy-shell-command
+   - guards: []
+   - steps:
+      # Run the legacy command and publish its result.
+      - name: Run legacy shell command
         uses: shell.command
         with:
           command: "printf 'legacy check'"
         register: shell_result
-      - name: publish-summary
+      - name: Publish summary
         publish:
           exit_code: step.shell_result.outputs.exit_code
           summary: "Legacy shell command workflow prepared"

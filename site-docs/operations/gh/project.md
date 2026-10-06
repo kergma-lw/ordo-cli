@@ -51,7 +51,7 @@ Use `ordo-help operation gh.project --json` when you need the exact machine-read
 Confirm one GitHub Project identity before branching into field-level or membership-level project logic.
 
 ```yaml
-      - name: load-project
+      - name: Load project
         uses: gh.project
         with:
           project_id: inputs.project_id
@@ -67,27 +67,28 @@ workflow: inspect-project-field-probes
 inputs:
   project_id: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: load-project
+   - guards: []
+   - steps:
+      # Inspect the project, Status field, and Done option.
+      - name: Load project
         uses: gh.project
         with:
           project_id: inputs.project_id
         register: project
-      - name: load-status-field
+      - name: Load Status field
         uses: gh.project.field
         with:
           project_id: inputs.project_id
           field: "Status"
         register: status_field
-      - name: check-done-option
+      - name: Check Done option
         uses: gh.project.field.option
         with:
           project_id: inputs.project_id
           field: "Status"
           option: "Done"
         register: done_option
-      - name: publish-summary
+      - name: Publish summary
         publish:
           project_title: step.project.outputs.title
           field_kind: step.status_field.outputs.kind
