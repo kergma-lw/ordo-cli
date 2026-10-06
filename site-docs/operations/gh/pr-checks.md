@@ -90,7 +90,7 @@ Use `ordo-help operation gh.pr.checks --json` when you need the exact machine-re
 Inspect status contexts and check runs for the pull request head before merge-readiness decisions.
 
 ```yaml
-  - name: load-pr-checks
+  - name: Load pull request checks
     uses: gh.pr.checks
     with:
       repository: inputs.repository

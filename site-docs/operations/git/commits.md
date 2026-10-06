@@ -42,7 +42,7 @@ Use `ordo-help operation git.commits --json` when you need the exact machine-rea
 Read a bounded Git commit-history slice when the workflow needs commit texts instead of diffs or a history diagram.
 
 ```yaml
-      - name: read-recent-commits
+      - name: Read recent commits
         uses: git.commits
         with:
           limit: 5
@@ -61,32 +61,31 @@ inputs:
   commit_message: {}
   target_commit: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: read-recent-commits
+   - guards: []
+   - steps:
+      # Apply the selected history change.
+      - name: Read recent commits
         uses: git.commits
         with:
           limit: 5
           rev: "HEAD"
         register: recent_commits
-      - name: create-commit
+      - name: Create commit
         if: inputs.operation == "create"
         uses: git.commit.create
         with:
           message: inputs.commit_message
-      - name: amend-head-commit
+      - name: Amend latest commit
         if: inputs.operation == "amend"
         uses: git.commit.amend
         with:
           message: "Tighten commit wording"
-      - name: revert-target-commit
+      - name: Revert target commit
         if: inputs.operation == "revert"
         uses: git.commit.revert
         with:
           commit: inputs.target_commit
-      - name: publish-summary
+      - name: Publish summary
         publish:
           recent_count: step.recent_commits.outputs.count
-          sampled_rev: step.recent_commits.outputs.rev
-          summary: "Choose exactly one reviewed history change: create, amend, or revert."
 ```

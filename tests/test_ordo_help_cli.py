@@ -3082,6 +3082,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(playbook["run_success_surface"], "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced")
         self.assertIn("ordo-playbook workflows list", playbook["examples"])
         self.assertIn("ordo-playbook graph", playbook["examples"])
+        self.assertIn("ordo-playbook agent-instructions --write", playbook["examples"])
+        self.assertEqual(playbook["repository_commands"][0]["name"], "agent-instructions [--write]")
         self.assertIn("ordo-playbook plan inspect-issue", playbook["examples"])
         self.assertIn("ordo-playbook --progress-steps run inspect-issue", playbook["examples"])
         self.assertIn("prefer workflows tied to the active state-backed work context", playbook["next_priority"][0])

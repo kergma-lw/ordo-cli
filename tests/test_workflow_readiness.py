@@ -193,3 +193,16 @@ blocks:
         [sentinel.candidate], requested_profile="fixture", input_override_keys=[],
         playbook_path=str(entry.playbook_path), include_graph=False,
     )
+
+
+def test_next_uses_an_allowed_value_for_a_missing_enumerated_input():
+    workflow = runtime.load_workflow_text('''version: 0
+workflow: candidate
+inputs:
+  status:
+    allowed_values: [ready, queued]
+blocks:
+  - steps: []
+''')
+
+    assert cli._next_placeholder_value("status", workflow_contract=workflow) == "ready"

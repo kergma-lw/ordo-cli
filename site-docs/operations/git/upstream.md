@@ -44,7 +44,7 @@ Use `ordo-help operation git.upstream --json` when you need the exact machine-re
 Inspect the current branch's tracked remote and branch names before deciding whether publication is appropriate.
 
 ```yaml
-      - name: inspect-upstream
+      - name: Inspect upstream
         uses: git.upstream
         register: upstream_info
 ```
@@ -56,15 +56,16 @@ Publish repository context and the current branch's tracked remote and branch re
 version: 0
 workflow: inspect-git-repo-upstream
 blocks:
-  - guards: []
-  - steps:
-      - name: inspect-repo
+   - guards: []
+   - steps:
+      # Inspect repository and upstream settings.
+      - name: Inspect repository
         uses: git.repo
         register: repo_info
-      - name: inspect-upstream
+      - name: Inspect upstream
         uses: git.upstream
         register: upstream_info
-      - name: publish-summary
+      - name: Publish summary
         publish:
           repo_root: step.repo_info.outputs.root
           upstream_configured: step.upstream_info.outputs.configured

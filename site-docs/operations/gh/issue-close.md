@@ -51,7 +51,7 @@ Use `ordo-help operation gh.issue.close --json` when you need the exact machine-
 Close one existing GitHub issue after earlier workflow steps have already selected the target issue number.
 
 ```yaml
-  - name: close-issue
+  - name: Close issue
     uses: gh.issue.close
     with:
       repository: inputs.repository

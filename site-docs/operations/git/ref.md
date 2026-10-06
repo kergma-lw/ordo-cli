@@ -42,7 +42,7 @@ Use `ordo-help operation git.ref --json` when you need the exact machine-readabl
 Inspect one exact Git ref before branching on existence, symbolic-target behavior, or downstream comparison choices.
 
 ```yaml
-      - name: inspect-ref
+      - name: Inspect reference
         uses: git.ref
         with:
           ref: inputs.ref_name

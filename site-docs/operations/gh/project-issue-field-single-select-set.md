@@ -61,7 +61,7 @@ Use `ordo-help operation gh.project.issue.field_single_select.set --json` when y
 Set one selectable project field such as Status by its visible option name after membership is ensured.
 
 ```yaml
-      - name: set-status
+      - name: Set status
         uses: gh.project.issue.field_single_select.set
         with:
           repository: inputs.repository

@@ -53,7 +53,7 @@ Use `ordo-help operation gh.project.field --json` when you need the exact machin
 Inspect one named GitHub Project field and register its kind and option metadata for later decisions.
 
 ```yaml
-      - name: load-status-field
+      - name: Load Status field
         uses: gh.project.field
         with:
           project_id: inputs.project_id

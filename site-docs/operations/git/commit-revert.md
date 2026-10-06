@@ -44,7 +44,7 @@ Use `ordo-help operation git.commit.revert --json` when you need the exact machi
 Create a compensating revert commit for one target commit while preserving visible history.
 
 ```yaml
-      - name: revert-target-commit
+      - name: Revert target commit
         if: inputs.operation == "revert"
         uses: git.commit.revert
         with:

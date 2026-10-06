@@ -42,7 +42,7 @@ Use `ordo-help operation git.worktrees --json` when you need the exact machine-r
 Inspect the repository-wide worktree inventory before later steps reason about current versus sibling checkouts.
 
 ```yaml
-      - name: inspect-worktrees
+      - name: List worktrees
         uses: git.worktrees
         register: worktree_inventory
 ```
@@ -52,18 +52,25 @@ Inspect repository worktrees together with current-worktree cleanliness so the w
 
 ```yaml
 version: 0
+# Read-only starting point: discover this checkout, any linked worktrees, and
+# local changes before choosing a Git action. It does not change the repository.
 workflow: inspect-git-worktree-inventory
 blocks:
   - guards: []
   - steps:
-      - name: inspect-worktrees
+      # Inspect repository worktrees and the current checkout.
+      - name: List worktrees
         uses: git.worktrees
         register: worktree_inventory
-      - name: inspect-current-worktree
+
+      - name: Inspect current worktree
         uses: git.worktree
         register: current_worktree
-      - name: publish-summary
+
+      - name: Publish worktree inventory
         publish:
           current_path: step.worktree_inventory.outputs.current_path
           worktree_count: step.worktree_inventory.outputs.count
+          dirty_paths: step.current_worktree.outputs.dirty_paths
+          summary: "Inspected the current Git worktree and its linked checkouts"
 ```

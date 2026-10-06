@@ -147,6 +147,7 @@ ordo.egg-info/entry_points.txt
 ordo.egg-info/requires.txt
 ordo.egg-info/top_level.txt
 src/ordo/__init__.py
+src/ordo/agent_instructions.py
 src/ordo/app.py
 src/ordo/cli.py
 src/ordo/external_failures.py
@@ -244,6 +245,7 @@ src/ordo/runtime/local_expression_engine/__init__.py
 src/ordo/runtime/local_expression_engine/core.py
 src/ordo/runtime/local_expression_engine/registry.py
 src/ordo/types/__init__.py
+tests/test_agent_instructions.py
 tests/test_audit_bandit_reviewed.py
 tests/test_audit_bandit_shellcheck.py
 tests/test_audit_gitleaks_history.py

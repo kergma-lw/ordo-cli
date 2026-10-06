@@ -81,6 +81,31 @@ class RuntimeProfileSwitchTest(unittest.TestCase):
         self.assertEqual(seen_inputs[0]["repository"], "explicit/repo")
         self.assertEqual(seen_inputs[0]["repo_dir"], "/tmp/frontend")
 
+    def test_profile_switch_rejects_value_outside_allowed_values(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"status": "ready"},
+            declared_inputs={"status": {"allowed_values": ["ready", "queued"]}},
+            guards=(),
+            steps=(
+                Step(name="switch", profile_switch="frontend"),
+                Step(name="main", operation=OperationRef("shell.command", with_={"command": "echo hi"})),
+            ),
+        )
+        frontend = Profile(name="frontend", inputs={"status": "closed"})
+
+        result = execute_workflow(
+            workflow,
+            available_profiles={"frontend": frontend},
+            profile_working_directories={"frontend": None},
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "runtime.workflow.input_not_allowed")
+        self.assertNotIn("main", result.outputs["executed_steps"])
+
 
 if __name__ == "__main__":
     unittest.main()

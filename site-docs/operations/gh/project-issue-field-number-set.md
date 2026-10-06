@@ -60,7 +60,7 @@ Use `ordo-help operation gh.project.issue.field_number.set --json` when you need
 Write one numeric project field such as Estimate after the issue is attached to the project.
 
 ```yaml
-      - name: set-estimate
+      - name: Set estimate
         uses: gh.project.issue.field_number.set
         with:
           repository: inputs.repository

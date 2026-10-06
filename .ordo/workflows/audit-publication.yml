@@ -4,9 +4,9 @@ inputs:
   scanner:
     default: all
     description: Run all configured checks or one named scanner; a single selection is not a full publication audit.
+    allowed_values: [all, gitleaks-tree, gitleaks-history, gitleaks-metadata, bandit, semgrep, pip-audit, shellcheck, inventory]
 blocks:
 - guards:
-  - inputs.scanner | in(["all", "gitleaks-tree", "gitleaks-history", "gitleaks-metadata", "bandit", "semgrep", "pip-audit", "shellcheck", "inventory"])
   - git.repo.exists
 - steps:
   - name: Audit tracked worktree files with Gitleaks

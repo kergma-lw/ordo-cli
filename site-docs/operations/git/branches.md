@@ -42,7 +42,7 @@ Use `ordo-help operation git.branches --json` when you need the exact machine-re
 Load the branch inventory when the workflow needs the available local and remote branch set instead of only the current branch.
 
 ```yaml
-      - name: list-branches
+      - name: List branches
         uses: git.branches
         register: branches
 ```

@@ -54,12 +54,12 @@ Use `ordo-help operation fs.file --json` when you need the exact machine-readabl
 Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines.
 
 ```yaml
-  - name: inspect-file
+  - name: Inspect file
     uses: fs.file
     with:
       path: inputs.file_path
     register: inspected
-  - name: summarize-file
+  - name: Publish file summary
     publish:
       basename: step.inspected.outputs.basename
       size: step.inspected.outputs.size
@@ -78,12 +78,13 @@ inputs:
     description: Explicit path to a UTF-8 regular file; no real-file default.
 blocks:
 - steps:
-  - name: inspect-file
+  # Inspect the file and publish its summary.
+  - name: Inspect file
     uses: fs.file
     with:
       path: inputs.file_path
     register: inspected
-  - name: summarize-file
+  - name: Publish file summary
     publish:
       basename: step.inspected.outputs.basename
       size: step.inspected.outputs.size

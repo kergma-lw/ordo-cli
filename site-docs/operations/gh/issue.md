@@ -70,7 +70,7 @@ Use `ordo-help operation gh.issue --json` when you need the exact machine-readab
 Inspect one GitHub issue and register the typed snapshot for later workflow decisions.
 
 ```yaml
-  - name: inspect-created-issue
+  - name: Inspect created issue
     uses: gh.issue
     with:
       repository: inputs.repository
@@ -91,33 +91,36 @@ inputs:
   close_comment: Closing after syncing the checklist.
 blocks:
 - steps:
-  - name: create-issue
+  # Create and inspect the issue.
+  - name: Create issue
     uses: gh.issue.create
     with:
       repository: inputs.repository
       title: inputs.title
       body: inputs.initial_body
     register: created_issue
-  - name: inspect-created-issue
+  - name: Inspect created issue
     uses: gh.issue
     with:
       repository: inputs.repository
       issue_number: step.created_issue.outputs.number
     register: issue_snapshot
-  - name: add-close-comment
+
+  # Update the issue discussion and body.
+  - name: Add closing comment
     uses: gh.issue.comment.add
     with:
       repository: inputs.repository
       issue_number: step.created_issue.outputs.number
       body: inputs.close_comment
-  - name: append-body-note
+  - name: Append body note
     uses: gh.issue.body.append
     with:
       repository: inputs.repository
       issue_number: step.created_issue.outputs.number
       text: "Follow-up note: checklist synced."
       separator: "\n\n"
-  - name: replace-body
+  - name: Replace issue body
     uses: gh.issue.body.replace
     with:
       repository: inputs.repository
@@ -126,14 +129,15 @@ blocks:
         Document the onboarding checklist.
 
         Checklist synced.
-  - name: list-comments
+  # Review the final issue state and close it.
+  - name: List issue comments
     uses: gh.issue.comments
     with:
       repository: inputs.repository
       issue_number: step.created_issue.outputs.number
       limit: 20
     register: comments_snapshot
-  - name: close-issue
+  - name: Close issue
     uses: gh.issue.close
     with:
       repository: inputs.repository

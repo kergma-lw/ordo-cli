@@ -123,11 +123,6 @@ If one `gate` surface is observation-capable at top level, the runtime model sho
 - Explain gate blocking distinctly from skip and generic execution failure.
 - Preserve structured condition shape closely enough to explain nested `all`, `any`, and `not` reasoning.
 
-### `review`
-
-- Recognize when a long `if` expression is actually encoding readiness or admission semantics for a later mutating step.
-- Prefer recommending structured `gate` for that case.
-
 ## Authoring guidance
 
 Prefer structured `gate` form when a step has multiple readiness clauses.

@@ -53,7 +53,7 @@ Use `ordo-help operation gh.issue.body.replace --json` when you need the exact m
 Rewrite the full issue body when the workflow owns the canonical issue description.
 
 ```yaml
-  - name: replace-body
+  - name: Replace issue body
     uses: gh.issue.body.replace
     with:
       repository: inputs.repository

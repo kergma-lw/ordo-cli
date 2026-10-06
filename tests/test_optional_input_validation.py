@@ -64,6 +64,28 @@ class OptionalInputValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.inputs.unknown_field")
 
+    def test_allowed_values_must_be_unique_strings_and_include_the_default(self) -> None:
+        cases = (
+            ("allowed_values: []", "validation.workflow.inputs.allowed_values.empty"),
+            ("allowed_values: [ready, 1]", "validation.workflow.inputs.allowed_values.item_type"),
+            ("allowed_values: [ready, ready]", "validation.workflow.inputs.allowed_values.duplicate"),
+            ("allowed_values: [ready]\ndefault: queued", "validation.workflow.inputs.allowed_values.default_membership"),
+        )
+        for declaration, expected_code in cases:
+            with self.subTest(declaration=declaration):
+                declaration = declaration.replace("\n", "\n                        ")
+                report = validate_workflow_text(textwrap.dedent(f"""
+                    version: 0
+                    workflow: publish
+                    inputs:
+                      status:
+                        {declaration}
+                    blocks:
+                      - steps: []
+                """))
+                self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+                self.assertIn(expected_code, {diagnostic.code for diagnostic in report.diagnostics})
+
     def test_playbook_rejects_optional_caller_slot_with_concrete_value(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

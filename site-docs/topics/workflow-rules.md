@@ -294,7 +294,7 @@ Express workflow applicability near the start of the workflow, not as a late dis
 
 - put applicability checks near the top of the workflow
 - for non-trivial workflows, phase guards in a stable order such as environment applicability, input validation, domain invariants, and structural preconditions
-- when adding or changing workflow inputs, stop and validate each input at the guard boundary before moving on to downstream steps
+- when adding or changing workflow inputs, use allowed_values for a fixed set of strings; validate all other input shape and contextual requirements at the guard boundary before moving on to downstream steps
 - when workflow success depends on an externally observable fact and a public probe surface can read it, prefer explicit guard probes; use read-only probe steps only when the observed fact must be reused later or a guard probe is not a good fit
 - use input-validation filters such as value | is_string, value | is_number, value | is_integer, value | is_boolean, value | in(...), value | eq(...), and value | ne(...) when they make the input contract more explicit
 - design guards so check and explain can name domain inapplicability before any mutating step runs
@@ -325,7 +325,7 @@ Treat input validation as a default authoring step whenever you introduce or mod
 
 - when introducing or changing any workflow input, pause and decide how that input is validated before continuing with step authoring
 - add an early guard for each new or changed input whenever a public validation surface exists
-- for string inputs prefer value | is_string; for numbers prefer value | is_number or value | is_integer; for booleans prefer value | is_boolean; for enumerated values prefer value | in(...), value | eq(...), or value | ne(...) as appropriate
+- for a fixed set of string values, declare allowed_values on the input; for other string inputs prefer value | is_string; for numbers prefer value | is_number or value | is_integer; for booleans prefer value | is_boolean; use guards for contextual or non-string constraints
 - after validating input shape, separately decide which observed preconditions make the workflow applicable to the current target context
 - if no suitable public validation surface exists, name that exact gap explicitly instead of silently omitting validation
 - treat existing workflows as style references, not as waivers for missing input validation

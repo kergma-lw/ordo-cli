@@ -223,7 +223,7 @@ WORKFLOW_FOCUSED_DESCRIBE_HUMAN: dict[str, HumanDeclaration] = {
         "inspect_next": ["workflow.state_needs", "workflow.state_bindings", "workflow.step.state_set", "state_set.single_target_entry"],
     }),
     "workflow.inputs": declare_human({
-        "definition": "Top-level field that declares the activation inputs a workflow accepts, requires, or gives defaults.",
+        "definition": "Top-level field that declares the activation inputs a workflow accepts, requires, or gives defaults, or restricts to named string values.",
         "use_when": ["The workflow needs an explicit caller request shape.", "Guards, steps, or results need named activation values."],
         "do_not_use_for": ["Fragment arguments; use workflow.fragment.args.", "Values owned by one playbook entry; use playbook.workflows.with."],
         "nearest_surfaces": [{"handle": "workflow.inputs_contract", "summary": "Input declaration and activation rules"}, {"handle": "playbook.workflows.with", "summary": "Values supplied by a playbook entry"}, {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run input override"}],
@@ -231,8 +231,8 @@ WORKFLOW_FOCUSED_DESCRIBE_HUMAN: dict[str, HumanDeclaration] = {
     }),
     "workflow.inputs_contract": declare_human({
         "definition": "Rules for declaring, accessing, validating, and rejecting workflow activation inputs.",
-        "use_when": ["You need the required/default rules or unknown-input behavior at activation."],
-        "do_not_use_for": ["Assuming undeclared caller keys are accepted.", "Treating input declaration as semantic validation; use guards when validation is needed."],
+        "use_when": ["You need the required/default rules, allowed string values, or unknown-input behavior at activation."],
+        "do_not_use_for": ["Assuming undeclared caller keys are accepted.", "Using allowed_values for non-string or contextual validation; use guards when validation depends on type, state, or observed facts."],
         "nearest_surfaces": [{"handle": "workflow.inputs", "summary": "Input declaration field"}, {"handle": "workflow-rules.input_validation_default", "summary": "Guidance for validating inputs"}, {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run input value"}],
         "inspect_next": ["workflow.inputs", "workflow-rules.input_validation_default", "command-line.ordo-playbook.flag.input"],
     }),
@@ -477,6 +477,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             {"name": "default", "required": False, "type": "json", "authoring_role": "input_default_value", "runtime_effect": "applies_when_input_is_missing"},
             {"name": "description", "required": False, "type": "string", "authoring_role": "input_meaning"},
             {"name": "hint", "required": False, "type": "string", "authoring_role": "input_guidance", "validation_effect": "none"},
+            {"name": "allowed_values", "required": False, "type": "array[string]", "authoring_role": "input_string_enumeration", "validation_effect": "rejects_values_outside_the_declared_set"},
         ],
         "declared_keys_required_at_activation": False,
         "requiredness_surface": "per_input_required_field",
@@ -488,6 +489,7 @@ WORKFLOW_CONTRACT: JSONObject = {
         "rejects_unknown_activation_inputs": True,
         "empty_string_is_distinct_value": True,
         "null_is_distinct_from_missing": True,
+        "allowed_values_semantics": "non_empty_unique_strings_only; default_must_be_a_member; activation_rejects_other_values",
         "validated_by": "runtime",
     },
     "include_contract": {

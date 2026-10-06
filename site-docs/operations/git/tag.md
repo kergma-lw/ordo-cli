@@ -42,7 +42,7 @@ Use `ordo-help operation git.tag --json` when you need the exact machine-readabl
 Inspect one exact Git tag before branching on its existence or publishing its ref and object identity.
 
 ```yaml
-      - name: inspect-exact-tag
+      - name: Inspect exact tag
         uses: git.tag
         with:
           name: inputs.tag_name

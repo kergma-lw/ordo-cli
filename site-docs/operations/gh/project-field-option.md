@@ -50,7 +50,7 @@ Use `ordo-help operation gh.project.field.option --json` when you need the exact
 Check whether one named selectable value is valid for the inspected GitHub Project field.
 
 ```yaml
-      - name: check-done-option
+      - name: Check Done option
         uses: gh.project.field.option
         with:
           project_id: inputs.project_id

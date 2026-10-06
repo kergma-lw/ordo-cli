@@ -44,7 +44,7 @@ Use `ordo-help operation git.integrate.merge --json` when you need the exact mac
 Merge one target ref into the current checkout when the workflow explicitly wants an integration commit instead of a fast-forward-only update.
 
 ```yaml
-      - name: merge-target-ref
+      - name: Merge target reference
         if: inputs.strategy == "merge"
         uses: git.integrate.merge
         with:
@@ -65,37 +65,38 @@ inputs:
   upstream_ref: {}
   branch_name: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: compare-branch-range
+   - guards: []
+   - steps:
+      # Apply the selected integration strategy.
+      - name: Compare branch range
         uses: git.range
         with:
           base: inputs.upstream_ref
           head: inputs.branch_name
         register: branch_range
-      - name: merge-target-ref
+      - name: Merge target reference
         if: inputs.strategy == "merge"
         uses: git.integrate.merge
         with:
           ref: inputs.target_ref
-      - name: fast-forward-target-ref
+      - name: Fast-forward target reference
         if: inputs.strategy == "fast-forward"
         uses: git.integrate.merge_ff_only
         with:
           ref: inputs.target_ref
-      - name: cherry-pick-target-commit
+      - name: Cherry-pick target commit
         if: inputs.strategy == "cherry-pick"
         uses: git.integrate.cherry_pick
         with:
           commit: inputs.target_commit
-      - name: rebase-branch-onto-new-base
+      - name: Rebase branch onto new base
         if: inputs.strategy == "rebase"
         uses: git.integrate.rebase_onto
         with:
           onto: inputs.onto_ref
           upstream: inputs.upstream_ref
           branch: inputs.branch_name
-      - name: publish-summary
+      - name: Publish summary
         publish:
           merge_base: step.branch_range.outputs.merge_base
           compared_head: step.branch_range.outputs.head_oid

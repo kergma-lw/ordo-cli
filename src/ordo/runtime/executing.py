@@ -1498,6 +1498,20 @@ def _execute_profile_switch_step(
     target_working_directory = None if profile_working_directories is None else profile_working_directories.get(profile_name)
     previous = None if current_profile is None else current_profile.name
     applied = apply_runtime_profile_switch(workflow, target_profile)
+    if not applied.ok:
+        return (
+            OperationResult(
+                status="failed",
+                summary="Runtime profile switch rejected input values",
+                diagnostics=applied.diagnostics,
+            ),
+            current_profile,
+            previous,
+            previous,
+            () if current_profile is None else current_profile.overrides,
+            None if previous is None or profile_working_directories is None else profile_working_directories.get(previous),
+            workflow,
+        )
     switched_workflow = workflow if applied.workflow is None else applied.workflow
     return (
         OperationResult(

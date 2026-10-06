@@ -1,9 +1,12 @@
 version: 0
 workflow: story-tasks-ready
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue number.
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
 let:
   story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
   story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
@@ -15,7 +18,7 @@ blocks:
 
   - steps:
       - name: Extract story task refs
-        value: '${markdown["Tasks"].list_items with{root: story_body}}'
+        value: ${story_body | markdown["Tasks"].list_items}
         register: task_refs
 
       - name: Load ready story task item details in batch

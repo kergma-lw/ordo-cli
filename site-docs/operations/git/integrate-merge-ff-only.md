@@ -44,7 +44,7 @@ Use `ordo-help operation git.integrate.merge_ff_only --json` when you need the e
 Advance the current checkout to one target ref only when the histories already allow a fast-forward update.
 
 ```yaml
-      - name: fast-forward-target-ref
+      - name: Fast-forward target reference
         if: inputs.strategy == "fast-forward"
         uses: git.integrate.merge_ff_only
         with:

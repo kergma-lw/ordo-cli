@@ -44,7 +44,7 @@ Use `ordo-help operation git.commit.amend --json` when you need the exact machin
 Amend the current HEAD commit when the workflow intentionally wants history rewriting instead of another follow-up commit.
 
 ```yaml
-      - name: amend-head-commit
+      - name: Amend latest commit
         if: inputs.operation == "amend"
         uses: git.commit.amend
         with:

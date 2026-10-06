@@ -42,7 +42,7 @@ Use `ordo-help operation git.state --json` when you need the exact machine-reada
 Inspect one combined Git repository-state snapshot after staging decisions need branch, cleanliness, and stash facts together.
 
 ```yaml
-      - name: inspect-repository-state
+      - name: Inspect repository state
         uses: git.state
         register: repo_state
 ```
@@ -54,18 +54,19 @@ Inspect the dirty worktree, stage the full batch, then read one combined reposit
 version: 0
 workflow: inspect-and-stage-git-worktree
 blocks:
-  - guards: []
-  - steps:
-      - name: inspect-worktree-before-staging
+   - guards: []
+   - steps:
+      # Inspect, stage, and report worktree changes.
+      - name: Inspect worktree before staging
         uses: git.worktree
         register: worktree_before
-      - name: stage-all-worktree-changes
+      - name: Stage all worktree changes
         uses: git.index.add_all
         register: stage_all
-      - name: inspect-repository-state
+      - name: Inspect repository state
         uses: git.state
         register: repo_state
-      - name: publish-summary
+      - name: Publish summary
         publish:
           dirty_paths_before: step.worktree_before.outputs.dirty_paths
           staged_all: step.stage_all.outputs.staged

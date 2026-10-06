@@ -180,6 +180,18 @@ class InputAuthoringReviewTest(unittest.TestCase):
         self.assertEqual(caught.exception.diagnostics[0].details["missing_kind"], "caller_required_slot")
         self.assertNotIn(SLOT_CODE, {item["code"] for item in caught.exception.review_findings})
 
+    def test_activation_rejects_merged_value_outside_allowed_values(self):
+        self.write_playbook(
+            {"status": {"allowed_values": ["ready", "queued"]}},
+            bindings={"status": "ready"},
+        )
+        with self.assertRaises(PlaybookError) as caught:
+            activate_playbook(
+                workflow_name="sample", playbook_path=self.playbook,
+                input_overrides={"status": "closed"},
+            )
+        self.assertEqual(caught.exception.diagnostics[0].code, "playbook.workflow.input_not_allowed")
+
     def test_optional_caller_slot_does_not_relax_required_workflow_input(self):
         self.write_playbook({"value": {}}, bindings={"value?": None})
         with self.assertRaises(PlaybookError) as caught:

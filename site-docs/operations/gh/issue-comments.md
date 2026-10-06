@@ -52,7 +52,7 @@ Use `ordo-help operation gh.issue.comments --json` when you need the exact machi
 Inspect the issue comment thread with one explicit limit and register the resulting comment snapshot.
 
 ```yaml
-  - name: list-comments
+  - name: List issue comments
     uses: gh.issue.comments
     with:
       repository: inputs.repository

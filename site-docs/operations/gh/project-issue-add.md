@@ -55,7 +55,7 @@ Use `ordo-help operation gh.project.issue.add --json` when you need the exact ma
 Attach the issue to the target GitHub Project only when the earlier membership probe reported exists=false.
 
 ```yaml
-      - name: add-to-project
+      - name: Add issue to project
         if: not step.membership.outputs.exists
         uses: gh.project.issue.add
         with:

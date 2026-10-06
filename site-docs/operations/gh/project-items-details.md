@@ -53,7 +53,7 @@ Use `ordo-help operation gh.project.items.details --json` when you need the exac
 Load richer project-backed content details such as state and label_names for a previously narrowed project item subset.
 
 ```yaml
-      - name: load-ready-item-details
+      - name: Load ready item details
         uses: gh.project.items.details
         with:
           project_id: inputs.project_id

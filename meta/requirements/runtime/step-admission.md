@@ -45,5 +45,4 @@
 ## Planning and review projections
 
 - `plan` should show read-only observations before a gated step and should preserve that the step executes only if the `gate` passes.
-- `review` should distinguish optional-routing `if` usage from readiness or admission `gate` usage.
-- `review` should prefer structured `gate` form for multi-clause readiness checks and may flag unreadable long string-form gates as weak authoring shape.
+- `review` may flag unreadable long string-form gates as weak authoring shape.

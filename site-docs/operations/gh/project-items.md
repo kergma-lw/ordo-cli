@@ -53,7 +53,7 @@ Use `ordo-help operation gh.project.items --json` when you need the exact machin
 Scan one GitHub Project for matching items before branching on collection size or reusing the matched item list later.
 
 ```yaml
-      - name: load-ready-items
+      - name: Load ready items
         uses: gh.project.items
         with:
           project_id: inputs.project_id
@@ -73,9 +73,10 @@ workflow: inspect-project-item-collections
 inputs:
   project_id: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: load-ready-items
+   - guards: []
+   - steps:
+      # Load ready items, their details, and a summary.
+      - name: Load ready items
         uses: gh.project.items
         with:
           project_id: inputs.project_id
@@ -84,7 +85,7 @@ blocks:
             - field: "Status"
               value: "Ready"
         register: ready_items
-      - name: load-ready-item-details
+      - name: Load ready item details
         uses: gh.project.items.details
         with:
           project_id: inputs.project_id
@@ -96,7 +97,7 @@ blocks:
             - "owner/repo#7"
             - "owner/repo#8"
         register: ready_item_details
-      - name: publish-summary
+      - name: Publish summary
         publish:
           ready_count: step.ready_items.outputs.count
           detailed_count: step.ready_item_details.outputs.count

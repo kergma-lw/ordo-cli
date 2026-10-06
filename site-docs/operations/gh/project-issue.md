@@ -71,7 +71,7 @@ Use `ordo-help operation gh.project.issue --json` when you need the exact machin
 Inspect whether one issue is already attached to the target GitHub Project before deciding whether to add it or mutate its fields.
 
 ```yaml
-      - name: load-membership
+      - name: Load project membership
         uses: gh.project.issue
         with:
           repository: inputs.repository
@@ -91,16 +91,17 @@ inputs:
   issue_number: {}
   project_id: {}
 blocks:
-  - guards: []
-  - steps:
-      - name: load-membership
+   - guards: []
+   - steps:
+      # Ensure the issue belongs to the project.
+      - name: Load project membership
         uses: gh.project.issue
         with:
           repository: inputs.repository
           issue_number: inputs.issue_number
           project_id: inputs.project_id
         register: membership
-      - name: add-to-project
+      - name: Add issue to project
         if: not step.membership.outputs.exists
         uses: gh.project.issue.add
         with:
@@ -108,7 +109,9 @@ blocks:
           issue_number: inputs.issue_number
           project_id: inputs.project_id
         register: membership_add
-      - name: set-estimate
+
+      # Set the project fields.
+      - name: Set estimate
         uses: gh.project.issue.field_number.set
         with:
           repository: inputs.repository
@@ -116,7 +119,7 @@ blocks:
           project_id: inputs.project_id
           field: "Estimate"
           value: 3
-      - name: set-iteration
+      - name: Set iteration
         uses: gh.project.issue.field_iteration.set
         with:
           repository: inputs.repository
@@ -124,7 +127,7 @@ blocks:
           project_id: inputs.project_id
           field: "Iteration"
           iteration: "Sprint 12"
-      - name: set-status
+      - name: Set status
         uses: gh.project.issue.field_single_select.set
         with:
           repository: inputs.repository

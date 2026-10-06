@@ -52,7 +52,7 @@ Use `ordo-help operation gh.repo.actions.permissions --json` when you need the e
 Read one repository's GitHub Actions permissions before toggling or restoring the hosted Actions enabled state.
 
 ```yaml
-  - name: read-actions-permissions
+  - name: Read Actions permissions
     uses: gh.repo.actions.permissions
     register: before
 ```
@@ -68,15 +68,16 @@ connector_contexts:
     repository: acme/public-mirror # Literal ASCII OWNER/REPO default, not a URL or authorization allowlist.
 blocks:
 - steps:
-  - name: read-actions-permissions
+  # Capture, disable, and restore Actions permissions.
+  - name: Read Actions permissions
     uses: gh.repo.actions.permissions
     register: before
-  - name: disable-actions
+  - name: Disable Actions
     uses: gh.repo.actions.permissions.set
     with:
       enabled: false
     register: disabled
-  - name: restore-actions
+  - name: Restore Actions
     uses: gh.repo.actions.permissions.set
     with:
       enabled: step.before.outputs.enabled

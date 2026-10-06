@@ -9,6 +9,7 @@ inputs:
   merge_method:
     default: squash
     description: GitHub merge method (merge, squash, or rebase).
+    allowed_values: [merge, squash, rebase]
 state_needs:
   common_state: {}
 let:
@@ -24,7 +25,6 @@ blocks:
   - inputs.repository | trim | ne("")
   - inputs.base_branch | is_string
   - inputs.base_branch | trim | ne("")
-  - inputs.merge_method | in(["merge", "squash", "rebase"])
   - issue_number | is_integer
   - issue_number | ne(0)
   - branch | is_string

@@ -76,7 +76,7 @@ from .local_expression_engine.core import (
 from .static_expression_diagnostics import collect_static_expression_diagnostics
 
 LET_RESERVED_NAMES = frozenset({"inputs", "args", "state", "step"})
-WORKFLOW_INPUT_DECLARATION_ALLOWED_FIELDS = frozenset({"required", "default", "description", "hint"})
+WORKFLOW_INPUT_DECLARATION_ALLOWED_FIELDS = frozenset({"required", "default", "description", "hint", "allowed_values"})
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -211,6 +211,46 @@ def _validate_workflow_input_declarations(value: JSONValue | None, *, source: st
                     input=input_name,
                 )
             )
+        allowed_values = declaration.get("allowed_values")
+        if allowed_values is not None:
+            allowed_path = ("inputs", input_name, "allowed_values")
+            if not isinstance(allowed_values, list):
+                diagnostics.append(_diagnostic(
+                    "validation.workflow.inputs.allowed_values.type",
+                    "Workflow input field 'allowed_values' must be a non-empty list of unique strings",
+                    allowed_path, source, input=input_name, actual_type=type(allowed_values).__name__,
+                ))
+            elif not allowed_values:
+                diagnostics.append(_diagnostic(
+                    "validation.workflow.inputs.allowed_values.empty",
+                    "Workflow input field 'allowed_values' must not be empty",
+                    allowed_path, source, input=input_name,
+                ))
+            else:
+                seen_values: set[str] = set()
+                for index, allowed_value in enumerate(allowed_values):
+                    value_path = allowed_path + (str(index),)
+                    if not isinstance(allowed_value, str):
+                        diagnostics.append(_diagnostic(
+                            "validation.workflow.inputs.allowed_values.item_type",
+                            "Workflow input field 'allowed_values' items must be strings",
+                            value_path, source, input=input_name, actual_type=type(allowed_value).__name__,
+                        ))
+                    elif allowed_value in seen_values:
+                        diagnostics.append(_diagnostic(
+                            "validation.workflow.inputs.allowed_values.duplicate",
+                            "Workflow input field 'allowed_values' items must be unique",
+                            value_path, source, input=input_name, value=allowed_value,
+                        ))
+                    else:
+                        seen_values.add(allowed_value)
+                if "default" in declaration and declaration["default"] not in allowed_values:
+                    diagnostics.append(_diagnostic(
+                        "validation.workflow.inputs.allowed_values.default_membership",
+                        "Workflow input default must be one of its allowed_values",
+                        ("inputs", input_name, "default"), source,
+                        input=input_name, value=declaration["default"], allowed_values=allowed_values,
+                    ))
         description = declaration.get("description")
         if description is not None and not isinstance(description, str):
             diagnostics.append(

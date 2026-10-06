@@ -61,7 +61,7 @@ Use `ordo-help operation gh.project.issue.field_iteration.set --json` when you n
 Move the project-backed issue into one named iteration after membership is already ensured.
 
 ```yaml
-      - name: set-iteration
+      - name: Set iteration
         uses: gh.project.issue.field_iteration.set
         with:
           repository: inputs.repository

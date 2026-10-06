@@ -45,7 +45,7 @@ Use `ordo-help operation git.branch.delete --json` when you need the exact machi
 Delete one stale local branch with the default force: false behavior (git branch -d), preserving Git's merged-branch check.
 
 ```yaml
-      - name: delete-stale-branch
+      - name: Delete stale branch
         uses: git.branch.delete
         with:
           branch: "stale/demo"
@@ -56,7 +56,7 @@ After independently verifying squash-merge cleanup eligibility, explicitly selec
 
 ```yaml
       # Caller has independently verified that this squash-merged branch is eligible for cleanup.
-      - name: delete-verified-squash-branch
+      - name: Delete verified squash branch
         uses: git.branch.delete
         with:
           branch: "squash/demo"

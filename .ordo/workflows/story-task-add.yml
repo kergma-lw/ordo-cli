@@ -1,12 +1,17 @@
 version: 0
 workflow: story-task-add
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue number.
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
   task_repository:
+    description: Task repository.
     hint: Use owner/repo format
-  task_issue_number: {}
+  task_issue_number:
+    description: Task issue number.
 let:
   story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
   task_issue: gh.issue(repository=inputs.task_repository, issue_number=inputs.task_issue_number)

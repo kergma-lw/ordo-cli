@@ -1,8 +1,10 @@
 version: 0
 workflow: current-task-context
 inputs:
-  repository: {}
-  project_id: {}
+  repository:
+    description: GitHub repository.
+  project_id:
+    description: GitHub project ID.
 state_needs:
   common_state: {}
 let:

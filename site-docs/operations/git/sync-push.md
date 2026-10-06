@@ -49,7 +49,7 @@ Use `ordo-help operation git.sync.push --json` when you need the exact machine-r
 Publish one local branch to an explicit configured remote name after refresh and inspection. Omitted/null remote instead uses the current branch's exact configured upstream remote, including nested names; run validates membership before transport.
 
 ```yaml
-      - name: push-branch
+      - name: Push branch
         uses: git.sync.push
         with:
           branch: inputs.branch_name

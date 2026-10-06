@@ -1540,6 +1540,8 @@ Use mocked GitHub responses for connector scenarios and the bounded fixture exec
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 - Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
 - Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.
+- Workflow input declarations may carry `allowed_values` as a non-empty list of unique strings; activation rejects values outside the declared set.
+- A default for an input with `allowed_values` must be one of those strings. Contextual, non-string, and type validation remain guard responsibilities.
 
 ## Product boundary
 
@@ -1686,8 +1688,7 @@ The runtime must be able to answer, in machine-readable form:
 ## Planning and review projections
 
 - `plan` should show read-only observations before a gated step and should preserve that the step executes only if the `gate` passes.
-- `review` should distinguish optional-routing `if` usage from readiness or admission `gate` usage.
-- `review` should prefer structured `gate` form for multi-clause readiness checks and may flag unreadable long string-form gates as weak authoring shape.
+- `review` may flag unreadable long string-form gates as weak authoring shape.
 
 <!-- source: requirements/runtime/state.md -->
 
@@ -2510,6 +2511,7 @@ but workflow files do not own the implementation logic of either surface.
 - explicit authored workflow-local returns through `result` steps.
 - explicit authored global publication through `publish` steps.
 - optional author-provided invocation hints on input declarations.
+- optional `allowed_values` string enumerations on input declarations.
 - future bounded fan-out on `run` when it remains one workflow-composition surface rather than a general looping language.
 - an optional top-level `profile` when one project-local workflow is intentionally bound to one execution profile.
 
@@ -2578,6 +2580,7 @@ The public activation-input contract must stay readable from the root workflow.
 - Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
 - Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
 - Input-level `hint` text may help humans and agents choose values, but it remains guidance rather than a validation constraint.
+- Input-level `allowed_values` is an activation-time constraint for a fixed non-empty set of unique strings; defaults must belong to the set. Guards still own contextual, type, and non-string validation.
 - If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references and read-only representation-adapter invocations whose missingness semantics are contractually meaningful.
 
 ## What is undesirable
@@ -2636,8 +2639,6 @@ The shared internal analysis-tree model lives in `meta/model/runtime/analysis-tr
 Answers whether the authored workflow is structurally strong and explicit enough for humans and agents.
 
 It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
-
-It should also distinguish optional-routing step conditions from late admission gates and may recommend `gate` when a long `if` is actually expressing readiness for a mutating step.
 
 For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, trusted profile-provided consumed context, profile-carried ambient surplus, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
 
@@ -5483,11 +5484,6 @@ If one `gate` surface is observation-capable at top level, the runtime model sho
 - Explain gate blocking distinctly from skip and generic execution failure.
 - Preserve structured condition shape closely enough to explain nested `all`, `any`, and `not` reasoning.
 
-### `review`
-
-- Recognize when a long `if` expression is actually encoding readiness or admission semantics for a later mutating step.
-- Prefer recommending structured `gate` for that case.
-
 ## Authoring guidance
 
 Prefer structured `gate` form when a step has multiple readiness clauses.
@@ -5912,7 +5908,7 @@ These actions are navigation surfaces over the public topic model rather than ad
 - `overview` should also explain that runtime diagnostics distinguish internal workflow/engine failures from external command or remote-system failures when that context is available.
 - `capabilities` exposes supported, unsupported, and planned surface states.
 - `model` aggregates the main authoring contracts over workflows, profiles, playbooks, and runtime state.
-- `command-line` exposes the public launch-command surface, stable flag semantics, the distinct roles of `ordo-playbook check` and `ordo-playbook review`, the broad no-argument `ordo-playbook next` continuation question, the top-level `ordo-playbook graph` topology surface, and the normalized external-failure payload fields surfaced by `run --json` when runtime has that context.
+- `command-line` exposes the public launch-command surface, stable flag semantics, the distinct roles of `ordo-playbook check` and `ordo-playbook review`, the broad no-argument `ordo-playbook next` continuation question, the top-level `ordo-playbook graph` topology surface, `ordo-playbook agent-instructions` for showing compact repository guidance only after a clean static review and its guarded `--write` update, and the normalized external-failure payload fields surfaced by `run --json` when runtime has that context.
 - `operations` exposes the public connector operation catalog.
 - `examples` exposes verified repository examples intended as public authoring references.
 - `snippet-coverage` exposes which describable handles do and do not publish canonical verified snippets.
