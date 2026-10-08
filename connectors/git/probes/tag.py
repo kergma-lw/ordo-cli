@@ -11,12 +11,12 @@ HUMAN = declare_human({'title': 'Git tag',
  'goal': 'A workflow needs to confirm one specific tag such as v1.2.3 before branching on release presence or '
          'publishing tag metadata.',
   'summary': 'Check one named Git tag and report whether it exists, which ref it occupies, and whether the stored '
-            'object is an annotated tag object or a lightweight commit ref.',
+             'object is an annotated tag object or a lightweight commit ref, including the peeled target identity.',
  'sections': [{'heading': 'Use when',
                'items': ['A workflow needs to confirm one specific tag such as v1.2.3 before branching on release '
                          'presence or publishing tag metadata.',
-                         'Later logic needs the single-tag existence result plus the raw tag ref and object identity, '
-                         'not a broader tag inventory.']},
+                          'Later logic needs the single-tag existence result plus the raw tag ref, stored object identity, '
+                          'and peeled target identity, not a broader tag inventory.']},
               {'heading': 'Do not use for',
                 'items': ['Listing or pattern-matching many tags; use connector.git.tags for the inventory.',
                          'Inferring the newest tag by version ordering across many candidates; use connector.git.tags '
@@ -43,10 +43,11 @@ HUMAN = declare_human({'title': 'Git tag',
 def info():
     return probe(
         name="tag",
-        human=git_human(HUMAN, provide="`name`: required; provide the exact tag to inspect in the current repository.", result="Returns name, ref, exists, oid, annotated, and repository_root. A missing tag succeeds with exists=false and unknown object facts; an invalid name or unreadable repository has no partial result."),
+        human=git_human(HUMAN, provide="`name`: required; provide the exact tag to inspect in the current repository.", result="Returns name, ref, exists, oid, annotated, target_oid, target_type, and repository_root. A missing tag succeeds with exists=false and unknown object facts; an invalid name or unreadable repository has no partial result."),
         summary=(
             "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; "
-            "for annotated tags this is the tag object's oid rather than the peeled target commit oid."
+            "for annotated tags this is the tag object's oid rather than the peeled target. "
+            "target_oid and target_type describe that peeled target."
         ),
         inputs={"name": "string"},
         outputs={
@@ -55,6 +56,8 @@ def info():
             "exists": "boolean",
             "oid": "string | null",
             "annotated": "boolean | null",
+            "target_oid": "string | null",
+            "target_type": "string | null",
             "repository_root": "string",
         },
         failure_modes=("probe_failed",),
@@ -107,6 +110,8 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     "exists": False,
                     "oid": None,
                     "annotated": None,
+                    "target_oid": None,
+                    "target_type": None,
                     "repository_root": repository_root,
                 },
                 raw=raw,
@@ -158,6 +163,59 @@ def run(ctx: OperationContext) -> OperationOutcome:
             raw={**raw, "type": object_type},
         )
 
+    peeled_ref = f"{ref}^{{}}"
+    try:
+        target_oid_command = ctx.command(
+            ["git", "rev-parse", "--verify", "--end-of-options", peeled_ref],
+            failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
+        )
+    except MappedOutcomeError as exc:
+        return fail_external_command(
+            code="probe_failed",
+            summary="Git tag target inspection failed",
+            diagnostic_code="probe.git_tag.command_failed",
+            reference=ctx.reference,
+            details={"name": tag_name},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
+    raw["target_oid"] = dict(target_oid_command.raw)
+    target_oid = target_oid_command.stdout.strip()
+    if not target_oid:
+        return fail_with_diagnostic(
+            code="probe_failed",
+            summary="Git rev-parse returned an empty peeled target oid for an existing tag",
+            diagnostic_code="probe.git_tag.empty_target_oid",
+            reference=ctx.reference,
+            raw=raw,
+        )
+
+    try:
+        target_type_command = ctx.command(
+            ["git", "cat-file", "-t", peeled_ref],
+            failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
+        )
+    except MappedOutcomeError as exc:
+        return fail_external_command(
+            code="probe_failed",
+            summary="Git tag target type inspection failed",
+            diagnostic_code="probe.git_tag.command_failed",
+            reference=ctx.reference,
+            details={"name": tag_name},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
+    raw["target_type"] = dict(target_type_command.raw)
+    target_type = target_type_command.stdout.strip()
+    if target_type not in {"commit", "tree", "blob"}:
+        return fail_with_diagnostic(
+            code="probe_failed",
+            summary="Git cat-file returned an unsupported peeled tag target type",
+            diagnostic_code="probe.git_tag.invalid_target_type",
+            reference=ctx.reference,
+            raw={**raw, "target_type": target_type},
+        )
+
     return ok(
         summary="Git tag inspected successfully",
         outputs={
@@ -166,6 +224,8 @@ def run(ctx: OperationContext) -> OperationOutcome:
             "exists": True,
             "oid": oid,
             "annotated": object_type == "tag",
+            "target_oid": target_oid,
+            "target_type": target_type,
             "repository_root": repository_root,
         },
         raw=raw,
