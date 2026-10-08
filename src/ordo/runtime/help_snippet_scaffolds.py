@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import textwrap
 
-from ordo.model.help_snippets import GH_ACTIONS_TARGETS
+from ordo.model.help_snippets import GH_ACTIONS_DISPATCH_TARGETS, GH_ACTIONS_TARGETS
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ GH_PR_MERGE_TARGETS = ("connector.gh.pr", "connector.gh.pr.checks", "connector.g
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=(*GH_PR_MERGE_TARGETS, *GH_ACTIONS_TARGETS, "connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create", "workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.fs.file", "connector.compose.project", "connector.compose.service", "connector.compose.start", "connector.compose.stop", "connector.compose.remove", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream", "connector.git.worktrees", "connector.shell.command", "examples.let-bindings", "examples.set-active-task-from-gitx"),
+    supported_targets=(*GH_PR_MERGE_TARGETS, *GH_ACTIONS_TARGETS, *GH_ACTIONS_DISPATCH_TARGETS, "connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create", "workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.fs.file", "connector.compose.project", "connector.compose.service", "connector.compose.start", "connector.compose.stop", "connector.compose.remove", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream", "connector.git.worktrees", "connector.shell.command", "examples.let-bindings", "examples.set-active-task-from-gitx"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -656,9 +656,9 @@ blocks:
 def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     """Return a standard workflow scaffold for one authored workflow fragment."""
 
-    if target in GH_ACTIONS_TARGETS or target in GH_PR_MERGE_TARGETS or target in {"connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create"}:
+    if target in (*GH_ACTIONS_TARGETS, *GH_ACTIONS_DISPATCH_TARGETS) or target in GH_PR_MERGE_TARGETS or target in {"connector.git.remote", "connector.gh.pr.list", "connector.gh.pr.create"}:
         return snippet
-    if target in {"connector.fs.file", "connector.compose.project", "connector.compose.service", "connector.compose.start", "connector.compose.stop", "connector.compose.remove"}:
+    if target in {"connector.fs.file", "connector.compose.project", "connector.compose.service", "connector.compose.start", "connector.compose.stop", "connector.compose.remove", "connector.runtime.uuid.generate"}:
         return f"{snippet}\n"
     if target in {"examples.let-bindings", "examples.set-active-task-from-gitx"}:
         return f"{snippet}\n"

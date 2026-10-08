@@ -193,6 +193,9 @@
     "connector.git.sync.fetch": {
       "describe_readiness": "ready"
     },
+    "connector.git.sync.fetch-tags": {
+      "describe_readiness": "ready"
+    },
     "connector.git.sync.push": {
       "describe_readiness": "ready"
     },
@@ -269,6 +272,9 @@
       "describe_readiness": "ready"
     },
     "connector.runtime.profile.use": {
+      "describe_readiness": "ready"
+    },
+    "connector.runtime.uuid.generate": {
       "describe_readiness": "ready"
     },
     "routine_contract": {
@@ -802,7 +808,13 @@
     "command-line.ordo-playbook.flag.progress_steps": {
       "describe_readiness": "ready"
     },
+    "connector.gh.actions.dispatch": {
+      "describe_readiness": "ready"
+    },
     "connector.gh.actions.run": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.actions.run.search": {
       "describe_readiness": "ready"
     },
     "connector.gh.actions.run.jobs": {

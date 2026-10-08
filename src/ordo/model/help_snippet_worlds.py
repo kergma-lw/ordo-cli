@@ -119,6 +119,7 @@ DEFAULT_SNIPPET_WORLD = SnippetWorld(
     actions={
         "gh.issue.comment.add": ActionFixture(status="ok", outputs={}),
         "gh.project.issue.field_single_select.set": ActionFixture(status="ok", outputs={}),
+        "runtime.uuid.generate": ActionFixture(status="ok", outputs={"uuid": "12345678-1234-4abc-8def-123456789abc"}),
     },
 )
 
@@ -290,6 +291,21 @@ def _actions_world(case: str) -> SnippetWorld:
 for _case in ("direct", "bridge", "null-suite", "no-run"):
     _world = _actions_world(_case)
     SNIPPET_WORLDS[_world.name] = _world
+
+
+SNIPPET_WORLDS["gh-actions-dispatch"] = SnippetWorld(
+    name="gh-actions-dispatch",
+    summary="One accepted manual Actions start request with literal workflow input values.",
+    inputs={"repository": "acme/mobile-app", "workflow": "deploy.yml", "ref": "main", "request_id": "deploy-900"},
+    state={}, probes={},
+    actions={"gh.actions.dispatch": ResolvedActionFixture(
+        status="ok",
+        with_={"repository": "acme/mobile-app", "workflow": "deploy.yml", "ref": "main", "inputs": {"dry_run": True}, "request_id": "deploy-900"},
+        outputs={"repository": "acme/mobile-app", "workflow": "deploy.yml", "ref": "main", "request_id": "deploy-900", "submission": "submitted",
+                 "run_id": 900, "url": "https://github.com/acme/mobile-app/actions/runs/900", "http_status": 200,
+                 "message": None, "errors": None},
+    )},
+)
 
 
 for _exists in (True, False):

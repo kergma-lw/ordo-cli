@@ -19,6 +19,7 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         git_upstream = registry.get_operation("git.upstream")
         git_commit_create = registry.get_operation("git.commit.create")
         runtime_profile_use = registry.get_operation("runtime.profile.use")
+        runtime_uuid_generate = registry.get_operation("runtime.uuid.generate")
 
         self.assertIsNotNone(issue)
         self.assertIsNotNone(shell_command)
@@ -31,6 +32,7 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         self.assertIsNotNone(git_sync_push)
         self.assertIsNotNone(git_commit_create)
         self.assertIsNotNone(runtime_profile_use)
+        self.assertIsNotNone(runtime_uuid_generate)
         assert issue is not None
         assert shell_command is not None
         assert git_commits is not None
@@ -42,6 +44,7 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         assert git_sync_push is not None
         assert git_commit_create is not None
         assert runtime_profile_use is not None
+        assert runtime_uuid_generate is not None
         self.assertEqual(issue.summary, "Probe operation 'gh.issue'")
         self.assertEqual(issue.tags, ("gh", "probe"))
         self.assertEqual(issue.examples[0]["reference"], "gh.issue")
@@ -80,6 +83,9 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         self.assertEqual(git_commit_create.invalidates_observations, ("git.ref.*", "git.tag", "git.tags", "git.worktree", "git.worktrees", "git.state", "git.range", "git.commits"))
         self.assertTrue(runtime_profile_use.deprecated)
         self.assertEqual(runtime_profile_use.replaced_by, ("workflow.step.profile_switch",))
+        self.assertEqual(runtime_uuid_generate.kind, "action")
+        self.assertEqual(runtime_uuid_generate.inputs, {})
+        self.assertEqual(runtime_uuid_generate.outputs, {"uuid": "string"})
 
     def test_registry_contract_exposes_richer_operation_metadata(self) -> None:
         registry = get_public_connector_registry()

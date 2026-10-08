@@ -109,6 +109,12 @@ def verify_help_snippet(
             verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
         )
 
+    if world == "gh-actions-dispatch":
+        return _execute_gh_actions_dispatch_snippet(
+            snippet=snippet, world=world, insertion_mode=insertion_mode,
+            target=target, effective_world=effective_world,
+        )
+
     if world == "gh-pr-create-new-only":
         return _execute_gh_pr_create_snippet(
             snippet=snippet, world=world, insertion_mode=insertion_mode,
@@ -325,6 +331,60 @@ def normalized_fixture_provider(world, *, references, calls, call_budget, strict
         registry=registry,
         guard_probe=lambda resolved, workflow: invoke(resolved, workflow, phase="probe"),
         step_executor=lambda resolved, workflow: invoke(resolved, workflow, phase="execute"),
+    )
+
+
+def _execute_gh_actions_dispatch_snippet(
+    *, snippet: str, world: str, insertion_mode: str, target: str,
+    effective_world: dict[str, object],
+) -> HelpSnippetRunnerResult:
+    """Execute the exact dispatch example with one explicit action fixture."""
+    from ordo.connectors.registry import get_public_connector_registry
+    from ordo.model.help_snippets import GH_ACTIONS_DISPATCH_TARGETS, GH_ACTIONS_DISPATCH_WORKFLOW
+    from .executing import execute_workflow
+    from .providers import ConnectorProvider
+    from .resolution import ResolvedOperation
+    from .value_resolution import resolve_runtime_value
+
+    if (insertion_mode != "workflow_fragment" or target not in GH_ACTIONS_DISPATCH_TARGETS
+            or snippet != GH_ACTIONS_DISPATCH_WORKFLOW):
+        raise ValueError("Fixture execution accepts only the exact published Actions dispatch workflow")
+    workflow = load_workflow_text(snippet, source=f"snippet-execution:{world}")
+    inputs = effective_world["inputs"]
+    if not isinstance(inputs, dict) or set(inputs) != set(workflow.declared_inputs):
+        raise ValueError("Actions dispatch fixture inputs must match declared workflow inputs")
+    fixture = effective_world.get("actions", {}).get("gh.actions.dispatch")
+    if not isinstance(fixture, dict) or set(fixture) != {"status", "with_", "outputs"}:
+        raise ValueError("Actions dispatch execution requires one complete action fixture")
+    registry = get_public_connector_registry()
+    contract = registry.get_operation("gh.actions.dispatch")
+    if contract is None or contract.kind != "action":
+        raise ValueError("Actions dispatch execution requires the public action contract")
+    _validate_normalized_fields(fixture["outputs"], contract.outputs, path="gh.actions.dispatch", strict_nulls=True)
+    workflow = replace(workflow, inputs=deepcopy(inputs), explicit_input_keys=tuple(inputs))
+    calls: list[dict[str, object]] = []
+
+    def invoke(resolved, current_workflow, *, phase):
+        if phase != "execute" or not isinstance(resolved, ResolvedOperation) or resolved.reference != "gh.actions.dispatch":
+            raise ValueError("Only the dispatch step may use the dispatch action fixture")
+        if calls:
+            raise ValueError("Dispatch example may submit only once")
+        resolved_inputs = resolved.resolved_inputs or resolve_runtime_value(resolved.declared_with, current_workflow)
+        if json.dumps(resolved_inputs, sort_keys=True) != json.dumps(fixture["with_"], sort_keys=True):
+            raise ValueError(f"Resolved fixture inputs differ for gh.actions.dispatch: {resolved_inputs!r}")
+        calls.append({"reference": resolved.reference, "phase": phase, "inputs": deepcopy(resolved_inputs)})
+        return OperationResult(status=fixture["status"], outputs=deepcopy(fixture["outputs"]))
+
+    provider = ConnectorProvider(
+        registry=registry,
+        guard_probe=lambda *_args: (_ for _ in ()).throw(ValueError("Dispatch example has no probe fixtures")),
+        step_executor=lambda resolved, current_workflow: invoke(resolved, current_workflow, phase="execute"),
+    )
+    result = execute_workflow(workflow, connector_provider=provider)
+    return HelpSnippetRunnerResult(
+        world_name=world, insertion_mode=insertion_mode, target=target,
+        workflow_text=snippet, effective_world=effective_world, status=result.status.value,
+        verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
     )
 
 

@@ -162,7 +162,9 @@ def complete_gh_operation_human(
 
 
 _GH_INPUT_STATUSES: dict[str, dict[str, str]] = {
+    "actions.dispatch": {"repository": "context-defaulted", "workflow": "required", "ref": "required", "inputs": "required", "request_id": "required"},
     "actions.run": {"repository": "context-defaulted", "run_id": "conditional", "check_suite_id": "conditional", "attempt": "optional"},
+    "actions.run.search": {"repository": "context-defaulted", "workflow": "required", "event": "required", "ref": "required", "request_id": "required"},
     "actions.run.jobs": {"repository": "context-defaulted", "run_id": "required", "attempt": "required"},
     "issue": {"repository": "context-defaulted", "issue_number": "required"},
     "issue.body.append": {"repository": "context-defaulted", "issue_number": "required", "text": "required", "separator": "optional"},

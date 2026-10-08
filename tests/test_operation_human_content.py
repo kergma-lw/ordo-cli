@@ -43,6 +43,7 @@ def test_every_published_operation_has_operation_specific_reader_content(referen
     ("compose.service", ("declared compose service name", "`declared` is true", "`state` is the observed service state", "`healthy` is true", "point-in-time observation")),
     ("shell.command", ("standard output", "partial changes")),
     ("runtime.profile.use", ("already declared", "later work in the current run")),
+    ("runtime.uuid.generate", ("lowercase uuid version 4", "practically negligible")),
     ("git.sync.push", ("local branch to publish", "rejected non-fast-forward push", "remote branch unchanged")),
     ("git.integrate.rebase_onto", ("branch to rewrite", "upstream boundary", "checks out (switches to) `branch`", "newly rebased head revision")),
     ("git.tags", ("latest", "null when no tag matches")),

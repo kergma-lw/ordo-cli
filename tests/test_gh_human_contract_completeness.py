@@ -7,7 +7,7 @@ from ordo.help_cli import build_model_response, build_operation_response
 
 def test_all_github_operations_name_inputs_results_and_material_boundaries():
     gh = next(connector for connector in build_model_response()["connectors"] if connector["namespace"] == "gh")
-    assert len(gh["operations"]) == 34
+    assert len(gh["operations"]) == 36
     for operation in gh["operations"]:
         sections = {section["heading"]: " ".join(section.get("items", ())) for section in operation["human"]["sections"]}
         assert {"Use when", "What to provide", "Result and boundary", "Do not use for"} <= set(sections), operation["name"]

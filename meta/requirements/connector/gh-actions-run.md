@@ -2,7 +2,7 @@
 
 ## Role and boundary
 
-- `gh.actions.run` and `gh.actions.run.jobs` are read-only probes for one Actions run attempt and its jobs. `gh.actions` is a namespace segment, not an executable operation.
+- `gh.actions.run`, `gh.actions.run.jobs`, and `gh.actions.run.search` are read-only probes for one Actions run attempt, its jobs, and a bounded correlated workflow-run collection respectively. `gh.actions` is a namespace segment, not an executable operation.
 - These probes expose GitHub API observations, not a tested-SHA attestation, immutable event snapshot, required-job selection, trusted-producer decision, or merge approval policy. PR head/base SHAs reported by the API do not prove the worker checkout.
 - They do not trigger, rerun, cancel, poll, download logs, or mutate runs. Multiple API reads are non-atomic even when an attempt is pinned and retrieval is complete.
 
@@ -12,6 +12,7 @@
 - The GitHub connector must be bootstrapped with an available, authenticated `gh` CLI and access to the requested repository. These observations target `github.com` and its official API; they do not grant access or configure authentication.
 - `gh.actions.run` requires exactly one non-null positive integer selector: `run_id` or `check_suite_id`. Optional positive integer `attempt` selects an exact attempt. Omitted or null `attempt` reads the latest observed attempt number and then retrieves that numbered attempt; it does not promise the newest attempt at return time.
 - `gh.actions.run.jobs` requires positive integer `run_id` and explicit positive integer `attempt`. Booleans are not integer identifiers. Jobs must never silently choose the latest attempt.
+- `gh.actions.run.search` requires a workflow ID or file name, exact event and ref strings, and a nonempty request ID. It lists only that workflow's runs under exact GitHub event/ref filters, then retains runs whose complete `display_title` equals the request ID. It returns all matches and never selects one.
 
 ## Association and identity
 

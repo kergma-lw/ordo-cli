@@ -1235,7 +1235,7 @@
       "appropriate_when": [
         "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
         "Typed public operations express product intent better than broad execution surfaces.",
-        "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to their associated Actions run; null association is found=false. Jobs are complete read-only observations, not merge policy. gh.actions is a namespace segment, not an executable operation.",
+        "Use gh.actions.dispatch to submit one manual GitHub Actions start request with a ref, inputs, and a saved request_id. Acceptance is not completion and an unknown submission must not be retried blindly. Use gh.actions.run.search with that exact request_id only when the dispatched workflow puts it in its complete run name; inspect zero or multiple matches under workflow policy before selecting one run. Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to their associated Actions run; null association is found=false. Jobs are complete read-only observations, not merge policy. gh.actions is a namespace segment, not an executable operation.",
         "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
         "Before proposing a new connector capability, inspect the existing operations and compose the narrow published operations that already express the work. Inspect connector.authoring only when that review leaves a stable, user-visible capability gap.",
         "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
@@ -1289,6 +1289,13 @@
           "topic": "model"
         },
         {
+          "command": "ordo-help describe connector.git.sync.fetch-tags --json",
+          "handle": "connector.git.sync.fetch-tags",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.sync.fetch-tags",
+          "topic": "model"
+        },
+        {
           "command": "ordo-help describe connector.git.sync.push --json",
           "handle": "connector.git.sync.push",
           "kind": "connector_operation",
@@ -1303,6 +1310,20 @@
           "topic": "model"
         },
         {
+          "command": "ordo-help describe connector.gh.actions.dispatch --json",
+          "handle": "connector.gh.actions.dispatch",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.actions.dispatch",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.actions.run.search --json",
+          "handle": "connector.gh.actions.run.search",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.actions.run.search",
+          "topic": "model"
+        },
+        {
           "command": "ordo-help describe connector.gh.actions.run --json",
           "handle": "connector.gh.actions.run",
           "kind": "connector_operation",
@@ -1314,6 +1335,13 @@
           "handle": "connector.gh.actions.run.jobs",
           "kind": "connector_operation",
           "summary": "Published connector operation metadata for gh.actions.run.jobs",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.runtime.uuid.generate --json",
+          "handle": "connector.runtime.uuid.generate",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for runtime.uuid.generate",
           "topic": "model"
         },
         {

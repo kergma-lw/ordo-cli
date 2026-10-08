@@ -190,9 +190,11 @@ FAMILY_HUMAN = declare_human({
             {'handle': 'connector.gh.pr', 'summary': 'Inspect the current facts for one selected pull request.'},
         ]},
         {'heading': 'Actions attempts', 'items': [
+            'Submit a manually dispatched workflow only after the surrounding workflow has decided to start it. Submission confirms acceptance, not completion; an unknown result must be inspected before another submission.',
             'Inspect a run by run ID or check-suite ID. When no attempt is supplied, the run result identifies the current attempt for this observation.',
             'Pass that returned run ID and attempt to the jobs operation when a later decision needs the jobs for the same attempt. A later Actions observation can change independently.',
         ], 'references': [
+            {'handle': 'connector.gh.actions.dispatch', 'summary': 'Submit one manual workflow start request with a ref and named inputs.'},
             {'handle': 'connector.gh.actions.run', 'summary': 'Inspect one Actions run and identify the attempt being observed.'},
             {'handle': 'connector.gh.actions.run.jobs', 'summary': 'Inspect jobs for an explicitly identified run attempt.'},
         ]},
