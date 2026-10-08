@@ -15,8 +15,8 @@ _PLACEHOLDER_PATTERN = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 CONNECTOR_FEATURE_HUMAN = declare_human({
     "title": "Connectors",
-    "goal": "Choose a published operation when it expresses the intended external-system work.",
-    "summary": "Published operations for observing or changing external systems.",
+    "goal": "Choose a published operation when it expresses the intended system or current-run work.",
+    "summary": "Published operations for observing or changing systems, or for narrowly scoped current-run work.",
     "sections": [],
 })
 
@@ -24,7 +24,7 @@ CONNECTOR_HUMAN: JSONObject = {
     "feature_clusters": {
         "connectors": {
             **human_mapping(CONNECTOR_FEATURE_HUMAN),
-            "summary": "Published operations for observing or changing external systems.",
+            "summary": "Published operations for observing or changing systems, or for narrowly scoped current-run work.",
             "use_when": ["A published operation expresses the product intent directly."],
             "avoid_when": ["A missing semantic capability is being hidden in local automation."],
         },

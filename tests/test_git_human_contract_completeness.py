@@ -11,7 +11,7 @@ def _git_operations():
 
 def test_all_git_operations_name_inputs_results_and_material_boundaries():
     operations = _git_operations()
-    assert len(operations) == 27
+    assert len(operations) == 28
     for operation in operations:
         sections = {section["heading"]: " ".join(section.get("items", ())) for section in operation["human"]["sections"]}
         assert {"Use when", "What to provide", "Result and boundary", "Do not use for"} <= set(sections), operation["name"]

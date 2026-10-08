@@ -1,0 +1,98 @@
+version: 0
+workflow: release-request
+inputs:
+  repository:
+    description: GitHub repository that owns both the local origin tags and the release workflow.
+  tag:
+    description: Exact unused release tag, for example v1.2.3.
+  release_ref:
+    description: Branch ref supplying release.yml; it is also resolved locally to the exact release commit.
+    default: main
+state_needs:
+  common_state: {}
+let:
+  saved_request_id: state.common_state[inputs.repository].release.request_id | catch(["runtime.value.state_missing"], null)
+blocks:
+- guards:
+  - git.repo.exists
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.tag | is_string
+  - inputs.tag | trim | ne("")
+  - inputs.release_ref | is_string
+  - inputs.release_ref | trim | ne("")
+  - saved_request_id == null
+- steps:
+  - name: Inspect origin push destination
+    uses: git.remote
+    with:
+      remote: "origin"
+    register: origin
+  - name: Require the GitHub release repository as origin
+    gate:
+      all:
+        - step.origin.outputs.exists == true
+        - step.origin.outputs.push_urls | length | eq(1)
+        - step.origin.outputs.mirror == false
+        - any:
+            - step.origin.outputs.push_urls | first | lower | eq(format("https://github.com/{}", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("https://github.com/{}.git", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("git@github.com:{}", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("git@github.com:{}.git", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("ssh://git@github.com/{}", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("ssh://git@github.com:{}.git", inputs.repository | lower))
+  - name: Refresh remote tags
+    uses: git.sync.fetch-tags
+    with:
+      remote: "origin"
+    register: fetched_tags
+  - name: Inspect requested release tag
+    uses: git.tag
+    with:
+      name: inputs.tag
+    register: existing_tag
+  - name: Require an unused release tag
+    gate: step.existing_tag.outputs.exists == false
+  - name: Resolve the release commit
+    uses: git.ref
+    with:
+      ref: inputs.release_ref
+    register: release_commit
+  - name: Require a resolved release commit
+    gate:
+      all:
+        - step.release_commit.outputs.exists == true
+        - step.release_commit.outputs.oid | is_string
+        - step.release_commit.outputs.oid | trim | ne("")
+  - name: Generate release request identity
+    uses: runtime.uuid.generate
+    register: request_id
+  - name: Save release intent before dispatch
+    state_set:
+      state.common_state[inputs.repository].release:
+        request_id: step.request_id.outputs.uuid
+        tag: inputs.tag
+        expected_sha: step.release_commit.outputs.oid
+        workflow: release.yml
+        workflow_ref: inputs.release_ref
+  - name: Dispatch the GitHub release workflow
+    uses: gh.actions.dispatch
+    with:
+      repository: inputs.repository
+      workflow: release.yml
+      ref: inputs.release_ref
+      request_id: step.request_id.outputs.uuid
+      inputs:
+        tag: inputs.tag
+        expected_sha: step.release_commit.outputs.oid
+    register: dispatch
+  - name: Require an accepted release dispatch
+    gate: step.dispatch.outputs.submission == "submitted"
+  - name: Publish release request
+    publish:
+      summary: "GitHub release workflow requested; reconcile the saved request without dispatching again"
+      request_id: step.request_id.outputs.uuid
+      tag: inputs.tag
+      expected_sha: step.release_commit.outputs.oid
+      run_id: step.dispatch.outputs.run_id
+      url: step.dispatch.outputs.url

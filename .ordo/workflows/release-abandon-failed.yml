@@ -1,0 +1,68 @@
+version: 0
+workflow: release-abandon-failed
+inputs:
+  repository:
+    description: GitHub repository that owns the saved release request.
+  tag:
+    description: Exact release tag that identifies the saved request.
+  confirm_abandon:
+    description: Type ABANDON_FAILED_RELEASE to discard a terminal unsuccessful release request.
+    allowed_values: [ABANDON_FAILED_RELEASE]
+state_needs:
+  common_state: {}
+let:
+  request_id: state.common_state[inputs.repository].release.request_id | catch(["runtime.value.state_missing"], null)
+  saved_tag: state.common_state[inputs.repository].release.tag | catch(["runtime.value.state_missing"], null)
+  workflow: state.common_state[inputs.repository].release.workflow | catch(["runtime.value.state_missing"], null)
+  workflow_ref: state.common_state[inputs.repository].release.workflow_ref | catch(["runtime.value.state_missing"], null)
+blocks:
+- guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.tag | is_string
+  - inputs.tag | trim | ne("")
+  - inputs.confirm_abandon == "ABANDON_FAILED_RELEASE"
+  - request_id != null
+  - saved_tag == inputs.tag
+  - workflow == "release.yml"
+  - workflow_ref != null
+- steps:
+  - name: Search correlated release runs
+    if: request_id != null
+    uses: gh.actions.run.search
+    with:
+      repository: inputs.repository
+      workflow: workflow
+      event: "workflow_dispatch"
+      ref: workflow_ref
+      request_id: request_id
+    register: runs
+  - name: Require one correlated release run
+    gate:
+      all:
+        - step.runs.outputs.complete == true
+        - step.runs.outputs.count == 1
+  - name: Select the correlated release run
+    value: step.runs.outputs.items | first
+    register: selected
+  - name: Re-observe the release run
+    uses: gh.actions.run
+    with:
+      repository: inputs.repository
+      run_id: step.selected.outputs.value.run_id
+      attempt: step.selected.outputs.value.run_attempt
+    register: observed
+  - name: Require a terminal unsuccessful release
+    gate:
+      all:
+        - step.observed.outputs.status == "completed"
+        - step.observed.outputs.conclusion != "success"
+  - name: Publish abandoned release request
+    publish:
+      summary: "Terminal unsuccessful release request abandoned; no remote run, tag, or release was removed"
+      request_id: request_id
+      tag: inputs.tag
+      run_id: step.observed.outputs.run_id
+      url: step.observed.outputs.url
+  - name: Clear terminal unsuccessful release request
+    state_delete: state.common_state[inputs.repository].release

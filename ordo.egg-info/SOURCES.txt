@@ -32,6 +32,7 @@ connectors/gh/_repository.py
 connectors/gh/bootstrap.py
 connectors/gh/actions/__init__.py
 connectors/gh/actions/_shared.py
+connectors/gh/actions/dispatch.py
 connectors/gh/actions/repo_actions_permissions_set.py
 connectors/gh/actions/issue/__init__.py
 connectors/gh/actions/issue/close.py
@@ -69,6 +70,7 @@ connectors/gh/probes/repo_actions_permissions.py
 connectors/gh/probes/actions/__init__.py
 connectors/gh/probes/actions/run/__init__.py
 connectors/gh/probes/actions/run/jobs.py
+connectors/gh/probes/actions/run/search.py
 connectors/gh/probes/issue/__init__.py
 connectors/gh/probes/issue/comments/__init__.py
 connectors/gh/probes/pr/__init__.py
@@ -114,6 +116,7 @@ connectors/git/actions/integrate/rebase_onto.py
 connectors/git/actions/sync/__init__.py
 connectors/git/actions/sync/_shared.py
 connectors/git/actions/sync/fetch.py
+connectors/git/actions/sync/fetch_tags.py
 connectors/git/actions/sync/push.py
 connectors/git/probes/__init__.py
 connectors/git/probes/branch.py
@@ -135,6 +138,8 @@ connectors/runtime/bootstrap.py
 connectors/runtime/actions/__init__.py
 connectors/runtime/actions/profile/__init__.py
 connectors/runtime/actions/profile/use.py
+connectors/runtime/actions/uuid/__init__.py
+connectors/runtime/actions/uuid/generate.py
 connectors/shell/__init__.py
 connectors/shell/bootstrap.py
 connectors/shell/actions/__init__.py
@@ -276,10 +281,12 @@ tests/test_fs_connector.py
 tests/test_fs_file_descriptor_safety.py
 tests/test_fs_file_mode_safety.py
 tests/test_fs_gh_contract_help.py
+tests/test_gh_actions_dispatch.py
 tests/test_gh_actions_help.py
 tests/test_gh_actions_modes.py
 tests/test_gh_actions_run.py
 tests/test_gh_actions_run_jobs.py
+tests/test_gh_actions_run_search.py
 tests/test_gh_actions_snippets.py
 tests/test_gh_human_contract_completeness.py
 tests/test_gh_operation_help_remediation.py
@@ -303,6 +310,7 @@ tests/test_git_remote.py
 tests/test_git_remote_help.py
 tests/test_git_remote_modes.py
 tests/test_git_remote_snippets.py
+tests/test_git_sync_fetch_tags.py
 tests/test_git_sync_remote_safety.py
 tests/test_git_upstream_mode_parity.py
 tests/test_git_upstream_remote_resolution.py
@@ -387,6 +395,7 @@ tests/test_runtime_state_execution.py
 tests/test_runtime_state_integration.py
 tests/test_runtime_state_paths.py
 tests/test_runtime_state_storage.py
+tests/test_runtime_uuid_generate.py
 tests/test_runtime_value_resolution.py
 tests/test_sdk_help_snippets.py
 tests/test_sdk_probe_dependencies.py

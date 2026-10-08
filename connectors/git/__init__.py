@@ -58,6 +58,7 @@ FAMILY_HUMAN = declare_human({
         ]},
         {"heading": "Synchronize and integrate", "references": [
             {"handle": "connector.git.sync.fetch", "summary": "Fetch updated remote references."},
+            {"handle": "connector.git.sync.fetch-tags", "summary": "Fetch only remote tags without updating branches."},
             {"handle": "connector.git.sync.push", "summary": "Push the selected local publication."},
             {"handle": "connector.git.integrate.merge", "summary": "Integrate with a merge commit."},
             {"handle": "connector.git.integrate.merge_ff_only", "summary": "Integrate only when a fast-forward is possible."},

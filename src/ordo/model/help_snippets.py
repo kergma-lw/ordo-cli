@@ -150,7 +150,28 @@ blocks:
       removed_service: step.removed.outputs.changed'''
 
 
+_RUNTIME_UUID_GENERATE_WORKFLOW = '''version: 0
+workflow: generate-request-id
+blocks:
+- steps:
+  - name: generate-request-id
+    uses: runtime.uuid.generate
+    register: request_id
+  - name: publish-request-id
+    publish:
+      request_id: step.request_id.outputs.uuid'''
+
+
 HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
+    "connector.runtime.uuid.generate": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [{
+            "name": "runtime_uuid_generate_for_later_step", "kind": "positive", "form": "workflow_fragment",
+            "summary": "Generate and register one UUID, then pass its explicit output to later workflow work. This checked example verifies the workflow shape, not random-number generation.",
+            "yaml": _RUNTIME_UUID_GENERATE_WORKFLOW,
+            "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.runtime.uuid.generate", "expected_status": "ok"},
+        }],
+    },
     "connector.compose.project": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [{
@@ -4456,7 +4477,8 @@ inputs:
 
 
 GH_ACTIONS_TARGETS = ("connector.gh.actions.run", "connector.gh.actions.run.jobs",
-                      "connector.gh.pr.checks", "connector.gh")
+                       "connector.gh.pr.checks", "connector.gh")
+GH_ACTIONS_DISPATCH_TARGETS = ("connector.gh.actions.dispatch",)
 for _actions_handle in GH_ACTIONS_TARGETS:
     _entry = HELP_SNIPPET_REGISTRY.setdefault(_actions_handle, {"canonical_examples": []})
     _entry["snippet_coverage"] = "runner_verified"
@@ -4475,6 +4497,48 @@ for _actions_handle in GH_ACTIONS_TARGETS:
                              "insertion_mode": "workflow_fragment", "target": _actions_handle,
                              "expected_status": "execution_error" if _case in {"null-suite", "no-run"} else "ok"},
         })
+
+
+
+GH_ACTIONS_DISPATCH_WORKFLOW = """version: 0
+workflow: dispatch-actions
+inputs:
+  repository: {}
+  workflow: {}
+  ref: {}
+  request_id: {}
+blocks:
+  - steps:
+      - name: dispatch-workflow
+        uses: gh.actions.dispatch
+        with:
+          repository: inputs.repository
+          workflow: inputs.workflow
+          ref: inputs.ref
+          request_id: inputs.request_id
+          inputs:
+            dry_run: true
+        register: dispatched
+      - name: require-submission
+        gate: step.dispatched.outputs.submission | eq(\"submitted\")
+      - name: publish-dispatch
+        publish:
+          run_id: step.dispatched.outputs.run_id
+          url: step.dispatched.outputs.url
+"""
+
+
+HELP_SNIPPET_REGISTRY["connector.gh.actions.dispatch"] = {
+    "snippet_coverage": "runner_verified",
+    "canonical_examples": [{
+        "name": "gh_actions_dispatch", "kind": "positive", "form": "workflow_fragment",
+        "summary": "Submit one manually dispatched deployment workflow for main with an explicit dry-run input. The published run identity identifies the accepted request, but does not establish completion or success.",
+        "yaml": GH_ACTIONS_DISPATCH_WORKFLOW,
+        "verification": {"kind": "runner_verified", "world": "gh-actions-dispatch",
+                         "insertion_mode": "workflow_fragment", "target": "connector.gh.actions.dispatch",
+                         "expected_status": "ok"},
+    }],
+}
 
 
 def _load_excerpt_text(

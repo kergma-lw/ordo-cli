@@ -130,7 +130,7 @@ def api_url(value, path):
     return parsed
 
 
-def pagination_links(headers, *, path, page, last_page):
+def pagination_links(headers, *, path, page, last_page, filters=None):
     relations = {}
     for header in headers:
         for entry in header.split(","):
@@ -142,7 +142,9 @@ def pagination_links(headers, *, path, page, last_page):
                 raise ValueError("Duplicate pagination relation")
             parsed = api_url(url, path)
             query = parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
-            if set(query) != {"page", "per_page"} or query["per_page"] != ["100"] or len(query["page"]) != 1:
+            expected_filters = {} if filters is None else filters
+            if (set(query) != {"page", "per_page", *expected_filters} or query["per_page"] != ["100"]
+                    or len(query["page"]) != 1 or any(query[key] != [value] for key, value in expected_filters.items())):
                 raise ValueError("Unexpected pagination query")
             number = query["page"][0]
             if re.fullmatch(r"[1-9][0-9]*", number) is None:

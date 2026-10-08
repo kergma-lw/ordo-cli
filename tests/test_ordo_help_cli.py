@@ -1431,8 +1431,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 56)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 78)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 80)
         self.assertEqual(handles["connector.git.remote"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.runtime.uuid.generate"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.actions.run"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.actions.run.jobs"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
@@ -1985,12 +1986,13 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_text_describe_connector_runtime_group_is_teaching_ready(self) -> None:
         family = self.run_help("describe", "connector.runtime")
         profile_use = self.run_help("describe", "connector.runtime.profile.use")
+        uuid_generate = self.run_help("describe", "connector.runtime.uuid.generate")
 
         self.assertEqual(family.returncode, 0)
-        self.assertIn("Published runtime connector family for legacy execution-context actions", family.stdout)
+        self.assertIn("Published runtime connector family for current-run operations", family.stdout)
         self.assertIn("workflow.step.profile_switch", family.stdout)
         self.assertIn("do not use for:", family.stdout)
-        self.assertIn("No checked family-level example", family.stdout)
+        self.assertIn("connector.runtime.uuid.generate", family.stdout)
 
         self.assertEqual(profile_use.returncode, 0)
         self.assertIn("Legacy runtime action for switching later execution in the current run to another declared profile.", profile_use.stdout)
@@ -1999,6 +2001,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Preferred workflow-native step surface", profile_use.stdout)
         self.assertIn("workflow.step.profile_switch", profile_use.stdout)
         self.assertIn('runtime.profile.use with inputs {"profile": "frontend"}', profile_use.stdout)
+
+        self.assertEqual(uuid_generate.returncode, 0)
+        self.assertIn("Generate execution-local UUID", uuid_generate.stdout)
+        self.assertIn("No inputs", uuid_generate.stdout)
+        self.assertIn("UUID version 4", uuid_generate.stdout)
 
     def test_text_describe_workflow_profile_switch_group_is_teaching_ready(self) -> None:
         field_result = self.run_help("describe", "workflow.step.profile_switch")

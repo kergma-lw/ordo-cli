@@ -236,6 +236,9 @@ class OperationTest(unittest.TestCase):
         )
         sync_fetch = registry.get_operation("git.sync.fetch")
         self.assertEqual(sync_fetch.failure_modes, ("remote_not_found", "fetch_blocked"))
+        sync_fetch_tags = registry.get_operation("git.sync.fetch-tags")
+        self.assertEqual(sync_fetch_tags.failure_modes, ("remote_not_found", "fetch_tags_blocked"))
+        self.assertEqual(sync_fetch_tags.invalidates_observations, ("git.tag", "git.tags"))
         sync_push = registry.get_operation("git.sync.push")
         self.assertEqual(
             sync_push.failure_modes,
@@ -264,6 +267,7 @@ class OperationTest(unittest.TestCase):
             "git.integrate.rebase_onto",
             "git.integrate.cherry_pick",
             "git.sync.fetch",
+            "git.sync.fetch-tags",
             "git.sync.push",
         }
 

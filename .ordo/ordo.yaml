@@ -155,6 +155,35 @@ workflows:
     description: Run isolated secret, Python, dependency vulnerability lookup, shell, and publication-inventory checks through one audit workflow
     category: verify
     when: Use scanner=all or select one scanner; all and pip-audit include dependency vulnerability lookup. Success never authorizes publication.
+  release-request:
+    file: workflows/release-request.yml
+    description: Request one versioned release through the GitHub release workflow
+    category: Release
+    when: Use after the release commit is on the chosen branch; this submits one GitHub release run and never creates a tag locally.
+    with:
+      tag:
+      release_ref?:
+    state_bindings:
+      common_state: common_state
+  release-reconcile:
+    file: workflows/release-reconcile.yml
+    description: Reconcile one requested release without submitting another one
+    category: Release
+    when: Use after release-request to observe the saved GitHub run and confirm its tag before clearing the saved request.
+    with:
+      tag:
+    state_bindings:
+      common_state: common_state
+  release-abandon-failed:
+    file: workflows/release-abandon-failed.yml
+    description: Abandon one terminal unsuccessful release request
+    category: Release
+    when: Use only after reconcile confirms the saved GitHub release run has completed unsuccessfully; it never cancels a remote run or removes a tag.
+    with:
+      tag:
+      confirm_abandon:
+    state_bindings:
+      common_state: common_state
   stories-backlog:
     file: workflows/stories-backlog.yml
     description: Show Story issues that are in Backlog in the project

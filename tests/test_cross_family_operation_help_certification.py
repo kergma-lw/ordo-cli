@@ -30,8 +30,8 @@ def test_non_github_input_guides_label_every_reader_input():
         "fs.file",
     ]
 
-    # The stated families name 18 Git operations and eight other operations.
-    assert len(references) == 26
+    # The stated families name 19 Git operations and eight other operations.
+    assert len(references) == 27
     for reference in references:
         operation, sections = _operation(reference)
         provide = sections["What to provide"]

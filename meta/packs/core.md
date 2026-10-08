@@ -416,7 +416,7 @@ SSRF or authentication bypass.
 
 ## Role and boundary
 
-- `gh.actions.run` and `gh.actions.run.jobs` are read-only probes for one Actions run attempt and its jobs. `gh.actions` is a namespace segment, not an executable operation.
+- `gh.actions.run`, `gh.actions.run.jobs`, and `gh.actions.run.search` are read-only probes for one Actions run attempt, its jobs, and a bounded correlated workflow-run collection respectively. `gh.actions` is a namespace segment, not an executable operation.
 - These probes expose GitHub API observations, not a tested-SHA attestation, immutable event snapshot, required-job selection, trusted-producer decision, or merge approval policy. PR head/base SHAs reported by the API do not prove the worker checkout.
 - They do not trigger, rerun, cancel, poll, download logs, or mutate runs. Multiple API reads are non-atomic even when an attempt is pinned and retrieval is complete.
 
@@ -426,6 +426,7 @@ SSRF or authentication bypass.
 - The GitHub connector must be bootstrapped with an available, authenticated `gh` CLI and access to the requested repository. These observations target `github.com` and its official API; they do not grant access or configure authentication.
 - `gh.actions.run` requires exactly one non-null positive integer selector: `run_id` or `check_suite_id`. Optional positive integer `attempt` selects an exact attempt. Omitted or null `attempt` reads the latest observed attempt number and then retrieves that numbered attempt; it does not promise the newest attempt at return time.
 - `gh.actions.run.jobs` requires positive integer `run_id` and explicit positive integer `attempt`. Booleans are not integer identifiers. Jobs must never silently choose the latest attempt.
+- `gh.actions.run.search` requires a workflow ID or file name, exact event and ref strings, and a nonempty request ID. It lists only that workflow's runs under exact GitHub event/ref filters, then retains runs whose complete `display_title` equals the request ID. It returns all matches and never selects one.
 
 ## Association and identity
 
@@ -450,6 +451,30 @@ SSRF or authentication bypass.
 - Shared connector bootstrap failures remain distinct from operation-local failure modes. Raw transport evidence and reason diagnostics support investigation, not workflow policy inference.
 - Publish both probes through operation metadata, `features`, search, and `describe`, with neighboring checks/family guidance and canonical verified examples. Describe readiness includes inputs, outputs, failures, bootstrap, read-only boundaries, completeness, and non-atomicity.
 - All runtime modes (`check`, `review`, `plan`, `run`, `explain`, `next`) retain their existing probe semantics; these additions require no new scheduling, policy, or execution-mode behavior. Runtime modes that observe probes receive the same contract and failures.
+
+<!-- source: requirements/connector/gh-actions-dispatch.md -->
+
+# GitHub Actions dispatch and correlation requirements
+
+## Dispatch action
+
+- `gh.actions.dispatch` submits exactly one manual GitHub Actions workflow-dispatch request for one resolved repository, workflow file or numeric ID, ref, named inputs, and nonempty caller-provided `request_id`.
+- A submitted dispatch confirms only that GitHub accepted the request. It does not establish a run identity unless GitHub returns one, completion, a tested checkout, or release approval.
+- A refused request is distinct from an unknown submission result. Unknown submission must not be retried automatically because GitHub may already have accepted it.
+- The action injects `request_id` as a workflow input. The caller must not duplicate it among ordinary named inputs.
+- Dispatch is one effectful leaf action. It does not search, wait, poll, rerun, cancel, or interpret the resulting workflow.
+
+## Run search probe
+
+- `gh.actions.run.search` is a read-only probe over one repository workflow. It requires exact event, ref, and request ID inputs and returns every complete matching run collection.
+- A workflow that is intended to be found through this probe must set its complete run name to the supplied request ID. Zero and multiple matches are successful observations and remain workflow-owned admission cases; the probe never chooses one.
+- The correlation is an observation convention, not an atomic dispatch-to-run guarantee. A delayed run can appear after a zero-match observation.
+- Search completion means all accessible result pages under the documented bound were read consistently. It does not attest workflow checkout, job success, or future collection stability.
+
+## Release composition boundary
+
+- A workflow may save a generated request ID and intended release facts before dispatch, then reconcile later through exact run search and one numbered run observation.
+- The workflow, not either connector operation, owns cardinality gates, retry prohibition, terminal-state policy, tag verification, and any release authorization.
 
 <!-- source: requirements/connector/gh-pr-list.md -->
 
@@ -675,6 +700,40 @@ Use mocked GitHub responses for connector scenarios and the bounded fixture exec
 - Discovery examples should show both:
   - one simple membership scan;
   - one filtered scan.
+
+<!-- source: requirements/connector/git-sync-fetch-tags.md -->
+
+# Git tag-only fetch requirements
+
+- `git.sync.fetch-tags` fetches only `refs/tags/*` from one configured remote into local tag refs.
+- It does not update branches, merge work, prune retained local tags, force-move a conflicting local tag, or publish any ref.
+- A successful fetch refreshes local tag observations for later workflow gates. It is not an atomic guarantee that a remote tag cannot appear after the fetch.
+- A workflow that creates a release remotely must treat its own final tag-creation check as authoritative; a local preflight fetch is only an early diagnostic.
+
+<!-- source: requirements/connector/runtime-uuid.md -->
+
+# Runtime UUID generation
+
+## Contract
+
+- `runtime.uuid.generate` is an action with no inputs and one `uuid: string` output.
+- Each execution produces one canonical lowercase UUID version 4 using the platform's cryptographically secure random source.
+- The generated value is execution-local until a later step passes it to another operation or persists it explicitly.
+- Repeating the action produces a new value. The action offers probabilistic identifier uniqueness, not a reservation or atomic uniqueness guarantee in a remote system.
+- The operation is not for credentials, authentication secrets, timestamps, or values that must survive another workflow run without explicit state storage.
+
+## Runtime modes
+
+- `check`, `review`, `plan`, `explain`, and `next` represent the step as an effectful future action and never generate a UUID.
+- `run` generates the UUID only when the action step is reached, then makes it available through the registered step output.
+- A workflow that needs stable reuse across runs must write the registered output to declared state and later read that state explicitly.
+
+## Verification criteria
+
+1. The published operation is an action with no inputs and `uuid: string` output.
+2. Generated values parse as UUID version 4, use canonical lowercase text, and separate executions do not reuse a value.
+3. A later step can consume the registered UUID output during one run.
+4. Public help describes output scope, repeat behavior, remote-system uniqueness limits, and explicit state persistence.
 
 <!-- source: requirements/local-expressions/core.md -->
 
