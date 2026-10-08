@@ -1804,6 +1804,8 @@ class OperationTest(unittest.TestCase):
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
                 self._completed(returncode=0, stdout="2222222222222222222222222222222222222222\n", stderr=""),
                 self._completed(returncode=0, stdout="tag\n", stderr=""),
+                self._completed(returncode=0, stdout="3333333333333333333333333333333333333333\n", stderr=""),
+                self._completed(returncode=0, stdout="commit\n", stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)
@@ -1817,6 +1819,8 @@ class OperationTest(unittest.TestCase):
                 "exists": True,
                 "oid": "2222222222222222222222222222222222222222",
                 "annotated": True,
+                "target_oid": "3333333333333333333333333333333333333333",
+                "target_type": "commit",
                 "repository_root": "/tmp/demo-repo",
             },
         )
@@ -1845,6 +1849,8 @@ class OperationTest(unittest.TestCase):
         self.assertFalse(result.outputs["exists"])
         self.assertIsNone(result.outputs["oid"])
         self.assertIsNone(result.outputs["annotated"])
+        self.assertIsNone(result.outputs["target_oid"])
+        self.assertIsNone(result.outputs["target_type"])
 
     def test_git_tags_probe_returns_filtered_inventory_and_latest(self) -> None:
         workflow = Workflow(

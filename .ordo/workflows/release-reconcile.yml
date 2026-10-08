@@ -86,22 +86,14 @@ blocks:
     with:
       name: inputs.tag
     register: released_tag
-  - name: Resolve the released tag commit
-    if: step.runs.outputs.count == 1 and step.observed.outputs.conclusion == "success"
-    uses: git.ref
-    with:
-      ref:
-        format: "refs/tags/{}^{{commit}}"
-        args: [inputs.tag]
-    register: released_commit
   - name: Require the expected annotated release tag
     if: step.runs.outputs.count == 1 and step.observed.outputs.conclusion == "success"
     gate:
       all:
         - step.released_tag.outputs.exists == true
         - step.released_tag.outputs.annotated == true
-        - step.released_commit.outputs.exists == true
-        - step.released_commit.outputs.oid == expected_sha
+        - step.released_tag.outputs.target_type == "commit"
+        - step.released_tag.outputs.target_oid == expected_sha
   - name: Publish confirmed release
     if: step.runs.outputs.count == 1 and step.observed.outputs.conclusion == "success"
     publish:

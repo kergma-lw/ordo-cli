@@ -9,6 +9,7 @@ sources = [
   "requirements/connector/core.md",
   "requirements/connector/fs-file.md",
   "requirements/connector/git-remote.md",
+  "requirements/connector/git-tag.md",
   "requirements/connector/gh-repository-identity.md",
   "requirements/connector/gh-pr.md",
   "requirements/connector/gh-actions-run.md",

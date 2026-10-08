@@ -1821,7 +1821,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_tag_probe_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Inspect one exact Git tag before branching on its existence or publishing its ref and object identity.",
+                "summary": "Inspect one exact Git tag before branching on its existence or publishing its stored and peeled target identities.",
                 "source_example": "git-tag-inspection",
                 "source_excerpt": {
                     "path": "examples/samples/git-tag-inspection.yaml",
