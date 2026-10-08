@@ -73,13 +73,13 @@ blocks:
         request_id: step.request_id.outputs.uuid
         tag: inputs.tag
         expected_sha: step.release_commit.outputs.oid
-        workflow: release.yml
+        workflow: "release.yml"
         workflow_ref: inputs.release_ref
   - name: Dispatch the GitHub release workflow
     uses: gh.actions.dispatch
     with:
       repository: inputs.repository
-      workflow: release.yml
+      workflow: "release.yml"
       ref: inputs.release_ref
       request_id: step.request_id.outputs.uuid
       inputs:
