@@ -9769,7 +9769,7 @@ Plain `warnings` is present only when a required workflow declaration has `cover
 
 ### Describe readiness checks
 
-The five handles below were run successfully through the public `ordo-help describe <handle>` and `ordo-help describe <handle> --json` commands for this warning addition. Commands used the project virtual environment and `PYTHONPATH=/home/ww/projects/ordo/src` because the installed entrypoint otherwise failed to import `ordo`. A prefix `--json` attempt rendered text; the suffix forms above were rerun and confirmed to emit JSON.
+The five handles below were run successfully through the public `ordo-help describe <handle>` and `ordo-help describe <handle> --json` commands for this warning addition. Commands used the project virtual environment and `PYTHONPATH=src` because the installed entrypoint otherwise failed to import `ordo`. A prefix `--json` attempt rendered text; the suffix forms above were rerun and confirmed to emit JSON.
 
 | Handle | Checklist review for the warning addition |
 | --- | --- |

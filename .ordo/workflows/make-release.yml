@@ -1,5 +1,5 @@
 version: 0
-workflow: release-request
+workflow: make-release
 inputs:
   repository:
     description: GitHub repository that owns both the local origin tags and the release workflow.
@@ -90,7 +90,7 @@ blocks:
     gate: step.dispatch.outputs.submission == "submitted"
   - name: Publish release request
     publish:
-      summary: "GitHub release workflow requested; reconcile the saved request without dispatching again"
+      summary: "GitHub release workflow requested; use release-finalize to observe the saved request without dispatching again"
       request_id: step.request_id.outputs.uuid
       tag: inputs.tag
       expected_sha: step.release_commit.outputs.oid

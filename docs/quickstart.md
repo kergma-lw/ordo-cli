@@ -5,7 +5,7 @@ This quickstart shows the shortest useful path through the current Ordo v0 surfa
 ## 1. Use the project virtualenv
 
 ```bash
-/home/ww/projects/ordo/.venv/bin/python -V
+.venv/bin/python -V
 ```
 
 All examples below assume you run Python with `PYTHONPATH=src` from the repository root.
