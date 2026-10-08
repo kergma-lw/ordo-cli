@@ -492,8 +492,7 @@ related creator/local-user block span, not the global workflow list. Cross-conte
 readers retain their anchors and evidence. Conditional/unknown address matches,
 alternatives, cycles and delete/rewrite order remain explicit, never mandatory paths.
 
-Targeted verification commands (project .venv, with
-`PYTHONPATH=/home/ww/projects/ordo/src`):
+Targeted verification commands (project `.venv`, with `PYTHONPATH=src`):
 
 - `python -m pytest tests/test_graph_roles.py tests/test_static_graph.py tests/test_graph_profiles.py tests/test_graph_parameters.py tests/test_graph_display_order.py -q`:
   **109 passed**. Covers N states/M mixed roles, alias identity, multi-key/field
@@ -565,7 +564,7 @@ graph-bundle scaffold; JSON retains the full source. A negative test changes tha
 expected text and confirms verification rejects it. The five technical graph
 bundles remain registered on `state`. No snippet harness or graph mode was changed.
 
-Validation used the approved .venv and `PYTHONPATH=/home/ww/projects/ordo/src`:
+Validation used the approved `.venv` and `PYTHONPATH=src`:
 
 - `python -m pytest tests/test_graph_help.py tests/test_ordo_help_cli.py -k 'graph_mode_help or cli_example_displays or overview_json_matches_golden or features_json_matches_golden or command_line_json_matches_golden or text_describe_command_line_ordo_playbook_is_teaching_ready' -q`:
   four golden/describe checks and the mode-help test passed. The new example
@@ -642,8 +641,7 @@ catch is independent of parent choice. `uses: name?` does not modify `+field?`.
 Unknown optionality gets no speculative question mark and never erases a source.
 Unknown source identities and incomplete structure retain explicit notes.
 
-Approved targeted verification used the local `.venv` with
-`PYTHONPATH=/home/ww/projects/ordo/src`:
+Approved targeted verification used the local `.venv` with `PYTHONPATH=src`:
 
 - Graph role placement, roles, display order, static graph, parameters, profiles,
   help, plus actual-file and role write-order tests: **251 passed, 79 subtests
@@ -715,8 +713,7 @@ the full occurrence owns descendants; reference leaves cannot duplicate a subtre
 Canonical ancestry checks and visited-aware iterative rendering keep traversal
 finite. One reference per source vertex bounds the display without path expansion.
 
-Targeted tests used `.venv/bin/python` with
-`PYTHONPATH=/home/ww/projects/ordo/src`:
+Targeted tests used `.venv/bin/python` with `PYTHONPATH=src`:
 
 - Eight graph modules, including `test_graph_display_references.py`: **136 passed**
   in 3.01 seconds. Coverage includes distinct sources, repeated read-site dedup,

@@ -60,6 +60,12 @@ When a workflow covers the task, use it instead of reproducing its checks manual
 - Scan current tracked worktree files with pinned Gitleaks and sanitized output → `ordo-playbook run audit-secrets-tree`
 - Run isolated secret, Python, dependency vulnerability lookup, shell, and publication-inventory checks through one audit workflow → `ordo-playbook run audit-publication`
 
+### Release
+
+- Make one versioned release through the GitHub release workflow → `ordo-playbook run make-release --input tag=<tag> [--input release_ref=<release-ref>]`
+- Finalize one requested release without submitting another one → `ordo-playbook run release-finalize --input tag=<tag>`
+- Abandon one terminal unsuccessful release → `ordo-playbook run release-abandon --input tag=<tag> --input confirm_abandon=<ABANDON_FAILED_RELEASE>`
+
 ### create
 
 - Create a new Story issue with a Tasks section → `ordo-playbook run create-story --input title=<title> --input body=<body>`

@@ -1,5 +1,5 @@
 version: 0
-workflow: release-reconcile
+workflow: release-finalize
 inputs:
   repository:
     description: GitHub repository that owns the saved release request.
@@ -70,7 +70,7 @@ blocks:
       status: step.observed.outputs.status
       conclusion: step.observed.outputs.conclusion
       url: step.observed.outputs.url
-      recommendation: "Run release-reconcile again while the run is pending; use release-abandon-failed only after GitHub reports a terminal unsuccessful result"
+      recommendation: "Run release-finalize again while the run is pending; use release-abandon only after GitHub reports a terminal unsuccessful result"
   - name: Require a completed successful release run
     if: step.runs.outputs.count == 1 and step.observed.outputs.conclusion == "success"
     gate: step.observed.outputs.status == "completed"
