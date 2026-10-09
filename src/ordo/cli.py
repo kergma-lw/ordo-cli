@@ -7,11 +7,11 @@ import json
 import re
 import sys
 
-from ordo import assess_workflow_readiness, check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
+from ordo import assess_workflow_readiness, check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow_outline, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
 from ordo.agent_instructions import AgentInstructionsError, render_agent_instructions, update_agent_instructions
 from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
-from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows, review_playbook_static
+from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, assemble_playbook_workflow, inspect_playbook_workflow, list_playbook_workflows, review_playbook_static
 from ordo.runtime.human_messages import render_gate_failure_message, render_guard_failure_message
 from ordo.runtime.nexting import build_next_candidate, classify_missing_input_kind_for_workflow, rank_next_candidates
 
@@ -41,16 +41,15 @@ Examples:
 
 EXPLAIN_MODE_HELP = """usage: ordo-playbook [options] explain WORKFLOW
 
-Explain why the selected workflow can or cannot be run right now.
+Show the selected workflow's assembled static outline.
 
 Default output is intended to be concise:
-  - overall status
-  - whether execution is allowed
-  - active blockers
+  - pre-run phase and workflow body
+  - guards, conditions, gates, loops, and folded workflow calls
+  - structural invocation diagnostics
 
 Examples:
   ordo-playbook explain set-active-task
-  ordo-playbook --profile backend --input issue_number=42 explain set-active-task
   ordo-playbook explain close-task --json
 """
 
@@ -252,7 +251,7 @@ def main() -> int:
             "  review   review authoring-quality findings without making changes\n"
             "  check    check whether the workflow can be run now, without making changes\n"
             "  plan     show what the workflow would do, without making changes\n"
-            "  explain  explain why the workflow can or cannot be run right now\n"
+            "  explain  show a static assembled workflow outline\n"
             "  run      run the workflow and do the real work\n"
             "  next     suggest which workflow should run next\n"
             "  graph    show how workflows connect through persistent state"
@@ -308,6 +307,9 @@ def main() -> int:
         args.workflow = None
     else:
         args.workflow = _resolve_execution_workflow_name(args, parser=parser)
+
+    if args.mode == "explain":
+        return _run_static_explain_mode(args)
 
     had_previous_provider = True
     try:
@@ -381,8 +383,6 @@ def main() -> int:
             )
         )
 
-        if args.mode == "explain" and not args.json:
-            payload = _summarize_explain_payload(payload)
         if args.mode == "plan" and not args.json:
             payload = _summarize_plan_payload(payload)
         if args.mode == "check" and not args.json:
@@ -559,13 +559,23 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
             profile_working_directories=profile_working_directories,
             step_reporter=_stderr_step_progress_reporter() if progress_steps else None,
         )
-    explained = assess_workflow_readiness(
-        workflow,
-        profile=profile,
-        available_profiles=available_profiles,
-        profile_working_directories=profile_working_directories,
-    )
-    return explained
+    return explain_workflow_outline(workflow)
+
+
+def _run_static_explain_mode(args) -> int:
+    """Render an outline from static assembly without runtime activation."""
+
+    try:
+        assembly = assemble_playbook_workflow(workflow_name=args.workflow, playbook_path=args.playbook_file)
+    except PlaybookError as exc:
+        return _emit_error(exc, as_json=args.json, requested_mode="explain", requested_workflow=args.workflow)
+    payload = _summarize_explain_payload(_public_runtime_payload("explain", explain_workflow_outline(assembly.workflow)))
+    if args.json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print(_render_explain_text(payload))
+    return 0
 
 
 def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
@@ -1291,49 +1301,178 @@ def _collect_activation_input_names(diagnostics: list[dict[str, object]], *, cod
 
 def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:
     outputs = payload.get("outputs")
-    if not isinstance(outputs, dict):
-        outputs = {}
-    explanation = outputs.get("explanation")
-    if not isinstance(explanation, dict):
-        explanation = {}
-
-    summary = {
-        "mode": payload.get("mode"),
-        "status": payload.get("status"),
-        "workflow": payload.get("workflow"),
-        "playbook": payload.get("playbook"),
-        "profile": payload.get("profile"),
-        "active_profile": payload.get("active_profile"),
-        "working_directory": payload.get("working_directory"),
-        "allowed": explanation.get("allowed", outputs.get("execution_allowed")),
-        "category": explanation.get("category", outputs.get("reason_category")),
-        "why": explanation.get("why"),
-        "failed_guard": payload.get("failed_guard"),
-        "blockers": explanation.get("blockers", outputs.get("blockers", [])),
+    outline = outputs.get("outline") if isinstance(outputs, dict) else None
+    return {
+        "mode": "explain",
+        "outline": outline if isinstance(outline, dict) else {},
         "diagnostics": payload.get("diagnostics", []),
     }
 
-    nested_gate_blockers = explanation.get("nested_gate_blockers")
-    if isinstance(nested_gate_blockers, list) and nested_gate_blockers:
-        first = nested_gate_blockers[0]
-        if isinstance(first, dict):
-            item_value = first.get("expanded_item")
-            if isinstance(item_value, str):
-                summary["item"] = item_value
-            gate_reports = first.get("gate_reports")
-            if isinstance(gate_reports, list) and gate_reports and isinstance(gate_reports[0], dict):
-                failed = gate_reports[0].get("failed_causes")
-                if not isinstance(failed, list):
-                    failed = gate_reports[0].get("failed")
-                if isinstance(failed, list):
-                    failed_conditions = [
-                        item.get("rendered") or item.get("expression")
-                        for item in failed
-                        if isinstance(item, dict) and isinstance(item.get("rendered") or item.get("expression"), str)
-                    ]
-                    if failed_conditions:
-                        summary["failed_conditions"] = failed_conditions
-    return summary
+
+def _render_explain_text(payload: dict[str, object]) -> str:
+    """Render the static outline without turning it into a JSON dump."""
+
+    outline = payload.get("outline")
+    if not isinstance(outline, dict):
+        return "explain"
+    workflow = outline.get("workflow")
+    lines = [f"workflow: {workflow}" if isinstance(workflow, str) else "workflow"]
+    phases = outline.get("phases")
+    if isinstance(phases, list):
+        for phase in phases:
+            if not isinstance(phase, dict):
+                continue
+            kind = phase.get("kind")
+            if not isinstance(kind, str):
+                continue
+            lines.append(f"{kind}:")
+            items = phase.get("items")
+            if isinstance(items, list):
+                _render_outline_items(lines, items, indent="  ")
+    diagnostics = payload.get("diagnostics")
+    if isinstance(diagnostics, list):
+        for diagnostic in diagnostics:
+            if isinstance(diagnostic, dict) and isinstance(diagnostic.get("message"), str):
+                lines.append(f"diagnostic: {diagnostic['message']}")
+    return "\n".join(lines)
+
+
+def _render_outline_items(lines: list[str], items: list[object], *, indent: str) -> None:
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        kind = item.get("kind")
+        if kind == "guards":
+            guards = item.get("items")
+            if isinstance(guards, list):
+                _render_outline_guards(lines, guards, indent=indent)
+            continue
+        if kind == "steps":
+            lines.append(f"{indent}steps:")
+            nested = item.get("items")
+            if isinstance(nested, list):
+                _render_outline_items(lines, nested, indent=indent + "  ")
+            continue
+        label = item.get("label")
+        rendered_kind = kind if isinstance(kind, str) else "item"
+        if rendered_kind == "run":
+            rendered_label = f"Run: {label}" if isinstance(label, str) else "Run"
+        else:
+            rendered_label = label if isinstance(label, str) else rendered_kind
+        register = item.get("register")
+        if isinstance(register, str) and register:
+            rendered_label = f"{rendered_label} ({register})"
+        controls = item.get("controls")
+        item_indent = indent
+        has_controls = False
+        has_gate = isinstance(controls, list) and any(
+            isinstance(control, dict) and control.get("kind") == "gate" for control in controls
+        )
+        if has_gate and lines and lines[-1]:
+            lines.append("")
+        if isinstance(controls, list):
+            for control in controls:
+                if not isinstance(control, dict):
+                    continue
+                control_kind = control.get("kind")
+                expression = control.get("expression")
+                if not isinstance(control_kind, str) or not isinstance(expression, str):
+                    continue
+                has_controls = True
+                item_indent = _render_outline_control(lines, kind=control_kind, expression=expression, indent=item_indent)
+        if has_controls:
+            lines.append(f"{item_indent}{rendered_label}")
+        else:
+            lines.append(f"{item_indent}- {rendered_label}")
+        if has_gate:
+            lines.append("")
+
+
+def _render_outline_control(lines: list[str], *, kind: str, expression: str, indent: str) -> str:
+    """Render one symbolic control without exposing its serialized structure."""
+
+    try:
+        structured = json.loads(expression)
+    except json.JSONDecodeError:
+        structured = None
+    if isinstance(structured, dict) and len(structured) == 1:
+        operator, terms = next(iter(structured.items()))
+        if operator in {"all", "any"} and isinstance(terms, list):
+            label = "gate (must pass to continue)" if kind == "gate" else kind
+            lines.append(f"{indent}{label}: {'all of' if operator == 'all' else 'one of'}")
+            for term in terms:
+                lines.append(f"{indent}  - {_render_outline_condition_term(term)}")
+            return indent + "  "
+    label = "gate (must pass to continue)" if kind == "gate" else kind
+    lines.append(f"{indent}{label}: {_display_outline_expression(expression)}")
+    return indent + "  "
+
+
+def _render_outline_condition_term(term: object) -> str:
+    if isinstance(term, str):
+        return _display_outline_expression(term)
+    return json.dumps(term, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+
+def _display_outline_expression(expression: str) -> str:
+    """Hide the redundant step namespace in human outline text only."""
+
+    rendered: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(expression):
+        character = expression[index]
+        if quote is not None:
+            rendered.append(character)
+            if character == "\\" and index + 1 < len(expression):
+                index += 1
+                rendered.append(expression[index])
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"'}:
+            quote = character
+            rendered.append(character)
+            index += 1
+            continue
+        if expression.startswith("step.", index) and (index == 0 or not (expression[index - 1].isalnum() or expression[index - 1] == "_")):
+            register_start = index + len("step.")
+            register_end = register_start
+            while register_end < len(expression) and (expression[register_end].isalnum() or expression[register_end] == "_"):
+                register_end += 1
+            if register_end > register_start and expression.startswith(".outputs.", register_end):
+                rendered.append(expression[register_start:register_end])
+                rendered.append(".")
+                index = register_end + len(".outputs.")
+                continue
+            index = register_start
+            continue
+        rendered.append(character)
+        index += 1
+    return "".join(rendered)
+
+
+def _render_outline_guards(lines: list[str], guards: list[object], *, indent: str) -> None:
+    """Render one all-required barrier compactly without losing its expressions."""
+
+    expressions = [
+        guard.get("expression") if isinstance(guard, dict) and isinstance(guard.get("expression"), str) else "condition"
+        for guard in guards
+    ]
+    lines.append(f"{indent}requires all:")
+    line_prefix = indent + "  "
+    line = line_prefix
+    for expression in expressions:
+        separator = "" if line == line_prefix else ", "
+        candidate = f"{line}{separator}{expression}"
+        if line != line_prefix and len(candidate) > 100:
+            lines.append(f"{line},")
+            line = f"{line_prefix}{expression}"
+        else:
+            line = candidate
+    if line != line_prefix:
+        lines.append(line)
 
 
 def _summarize_next_payload(payload: dict[str, object]) -> dict[str, object]:

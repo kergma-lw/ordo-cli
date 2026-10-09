@@ -5,7 +5,7 @@
 - The runtime must support at least `review`, `check`, `plan`, `execute`, `explain`, and a non-effectful `next` decision surface.
 - The runtime must return structured results, not only raw stdout/stderr.
 - `plan` must describe what would be checked and executed, including known blockers.
-- `explain` must return runtime reasoning in a structured form, not merely debug logs or traceback text.
+- `explain` must return a deterministic static outline of the assembled workflow in structured form, not merely debug logs or traceback text.
 - The runtime must distinguish at least validation failure, resolution failure, guard failure, execution failure, and success.
 - Structured results must be usable by both a human reviewer and an automated agent without log scraping.
 - Runtime diagnostics should prefer normalized categories and structured fields over ad hoc human prose.
@@ -39,7 +39,16 @@
 - The runtime must distinguish profile-supplied surplus context from explicit user-supplied unknown inputs.
 - Default `review` and `check` outputs must not surface ordinary expected profile-surplus context as user-facing diagnostics.
 
-## Explainability
+## Explain outline
+
+- `explain` is a static orientation surface, not a readiness decision, plan, simulator, or source inspector.
+- It must show playbook-owned `pre_run` before the workflow body, include-expanded guards and authored steps in order, authored symbolic guard/`if`/gate/loop expressions without evaluating them, and folded nested `run` boundaries.
+- It must not expose include provenance, source paths, bindings, return values, operation arguments, registers, or `let` bindings.
+- It must not run actions, connector probes or bootstrap, state reads, runtime activation or input validation, expression evaluation, branch selection, or loop expansion.
+- Its JSON and text views must carry the same outline model. Structural invalidity or an unavailable referenced invocation may be reported as structural diagnostics.
+- Readiness assessment remains available to `next` through `assess_workflow_readiness`; `check`, `review`, `plan`, `run`, `next`, and `graph` retain their existing semantics.
+
+## Runtime readiness reasoning
 
 - The system must be able to answer "why is this workflow blocked?" without requiring execution of business steps.
 - The system must be able to answer "what would happen if this workflow executed now?" in a machine-readable plan/result shape.
@@ -49,7 +58,7 @@
   - execution attempted and failed.
 - When a step is intentionally skipped because its `if` condition evaluated to `false`, runtime outputs should preserve that reason in machine-usable form.
 - When a step `if` condition cannot be evaluated, the runtime must fail execution rather than silently treating the condition as `false`.
-- `explain` output should include useful next actions when the runtime can infer them safely.
+- `assess_workflow_readiness` may include useful next actions when the runtime can infer them safely; it remains an internal readiness surface for consumers such as `next`.
 - The explanation surface must remain stable enough for agent tooling to rely on status codes and categories.
 - If the product later adds bounded `for_each` on `run`, `check`, `plan`, and `explain` must preserve statically knowable fan-out facts such as whole-step eligibility, exact cardinality when knowable, and explicit unknown-cardinality state when not knowable before execution.
 - If bounded `for_each` is later added on `run`, the runtime must preserve the difference between a fan-out step blocked before expansion, a fan-out step statically expanded with known item count, and a fan-out step whose item count remains runtime-only.

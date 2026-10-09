@@ -2934,7 +2934,7 @@ class PlaybookActivationTest(unittest.TestCase):
             outputs={},
         )
 
-        for mode in ("review", "check", "plan", "explain"):
+        for mode in ("review", "check", "plan"):
             with self.subTest(mode=mode):
                 with patch("sys.argv", ["ordo-playbook", mode, "inspect-issue"]):
                     with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
@@ -2947,6 +2947,27 @@ class PlaybookActivationTest(unittest.TestCase):
                 self.assertEqual(exit_code, 0)
                 self.assertEqual(activate_mock.call_args.kwargs["workflow_name"], "inspect-issue")
                 self.assertEqual(run_mode_mock.call_args.args[0], mode)
+
+        outline_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            outputs={"outline": {"workflow": "inspect-issue", "phases": [{"kind": "body", "items": []}]}},
+        )
+        assembly = SimpleNamespace(workflow=object())
+        with patch("sys.argv", ["ordo-playbook", "explain", "inspect-issue"]):
+            with (
+                patch("ordo.cli.assemble_playbook_workflow", return_value=assembly) as assemble_mock,
+                patch("ordo.cli.explain_workflow_outline", return_value=outline_result),
+                patch("ordo.cli.activate_playbook", side_effect=AssertionError("explain must not activate")),
+            ):
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    exit_code = cli_main()
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(assemble_mock.call_args.kwargs["workflow_name"], "inspect-issue")
+        self.assertIn("workflow: inspect-issue", stdout.getvalue())
+        self.assertNotIn('"outline"', stdout.getvalue())
 
     def test_cli_next_accepts_no_workflow_name(self) -> None:
         entry = SimpleNamespace(

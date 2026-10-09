@@ -124,17 +124,12 @@ def test_readiness_enriches_one_observation_without_executing(state, category, a
     assert result.outputs["next_actions"][0]["action"] == action
 
 
-def test_cli_explain_dispatches_readiness_with_full_profile_context(tmp_path):
-    workflow = Workflow(version=0, workflow="cli-readiness")
-    profile = Profile(name="fixture")
-    profiles = {"fixture": profile}
-    directories = {"fixture": tmp_path}
-    with patch.object(cli, "assess_workflow_readiness", return_value=sentinel.explanation) as assess:
-        result = cli._run_mode("explain", workflow, profile, profiles, directories)
+def test_cli_explain_dispatches_static_outline_without_readiness():
+    workflow = Workflow(version=0, workflow="static-outline")
+    with patch.object(cli, "explain_workflow_outline", return_value=sentinel.explanation) as outline:
+        result = cli._run_mode("explain", workflow, Profile(name="fixture"))
     assert result is sentinel.explanation
-    assess.assert_called_once_with(
-        workflow, profile=profile, available_profiles=profiles, profile_working_directories=directories,
-    )
+    outline.assert_called_once_with(workflow)
 
 
 @pytest.mark.parametrize("relaxed", [False, True], ids=["normal-next", "relaxed-next"])

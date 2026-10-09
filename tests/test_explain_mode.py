@@ -1,17 +1,130 @@
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, assess_workflow_readiness, load_workflow_text
+from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow_outline, assess_workflow_readiness, load_workflow_file, load_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class ExplainModeTest(unittest.TestCase):
+    def test_static_outline_is_symbolic_and_requires_no_runtime_context(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: outline
+inputs:
+  required_value: {}
+let:
+  hidden: inputs.required_value
+blocks:
+  - guards:
+      - inputs.required_value != ""
+  - steps:
+      - name: First conditional
+        value: ${inputs.required_value}
+        if: ${inputs.required_value}
+      - name: Admission boundary
+        gate: inputs.required_value != ""
+      - name: Repeat work
+        run: child.yml
+        for_each: ${inputs.items}
+      - name: Second conditional
+        value: ok
+        if: ${inputs.other}
+"""
+        )
+        result = explain_workflow_outline(workflow)
+        outline = result.outputs["outline"]
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(outline["phases"][0]["kind"], "body")
+        items = outline["phases"][0]["items"]
+        self.assertEqual(items[0], {"kind": "guards", "items": [{"kind": "guard", "expression": 'inputs.required_value != ""'}]})
+        steps = items[1]["items"]
+        self.assertEqual(steps[0], {"kind": "step", "label": "First conditional", "controls": [{"kind": "if", "expression": "${inputs.required_value}"}]})
+        self.assertEqual(steps[1], {"kind": "step", "label": "Admission boundary", "controls": [{"kind": "gate", "expression": 'inputs.required_value != ""'}]})
+        self.assertEqual(steps[2], {"kind": "run", "label": "Repeat work", "controls": [{"kind": "loop", "expression": "${inputs.items}"}]})
+        self.assertEqual(steps[3], {"kind": "step", "label": "Second conditional", "controls": [{"kind": "if", "expression": "${inputs.other}"}]})
+        self.assertNotIn("hidden", str(outline))
+
+    def test_static_outline_redacts_state_paths_without_evaluating_controls(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="outline",
+            guards=(Guard(expr="state.active.path == 'ready'"),),
+            steps=(Step(name="Conditional", value="ok", if_="${state.active.path}"),),
+        )
+        outline = explain_workflow_outline(workflow).outputs["outline"]
+        rendered = str(outline)
+        self.assertIn("<state expression>", rendered)
+        self.assertNotIn("state.active.path", rendered)
+
+    def test_static_outline_keeps_step_register_without_exposing_step_details(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="outline",
+            steps=(Step(name="Load context", value="ok", register="context"),),
+        )
+
+        item = explain_workflow_outline(workflow).outputs["outline"]["phases"][0]["items"][0]["items"][0]
+
+        self.assertEqual(item, {"kind": "step", "label": "Load context", "register": "context"})
+
+    def test_static_outline_expands_include_and_keeps_pre_run_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "fragment.yml").write_text("blocks:\n  - steps:\n      - name: Included step\n        value: ok\n", encoding="utf-8")
+            (root / "main.yml").write_text("version: 0\nworkflow: outline\nblocks:\n  - include: fragment.yml\n", encoding="utf-8")
+            workflow = load_workflow_file(root / "main.yml")
+            pre_run = Step(name="pre_run[0]", run="bootstrap.yml", resolved_run_path=str(root / "fragment.yml"), run_origin="playbook_pre_run")
+            workflow = Workflow(version=0, workflow=workflow.workflow, blocks=(StepBlock(steps=(pre_run,)), *workflow.blocks))
+            outline = explain_workflow_outline(workflow).outputs["outline"]
+        self.assertEqual([phase["kind"] for phase in outline["phases"]], ["pre_run", "body"])
+        self.assertEqual(outline["phases"][1]["items"][0]["items"][0]["label"], "Included step")
+
+    def test_static_outline_merges_adjacent_guard_barriers(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="outline",
+            blocks=(
+                GuardBlock(guards=(Guard(expr="inputs.first"),)),
+                GuardBlock(guards=(Guard(expr="inputs.second"),)),
+                StepBlock(steps=(Step(name="Continue", value="ok"),)),
+            ),
+        )
+
+        items = explain_workflow_outline(workflow).outputs["outline"]["phases"][0]["items"]
+
+        self.assertEqual(items[0]["kind"], "guards")
+        self.assertEqual([item["expression"] for item in items[0]["items"]], ["inputs.first", "inputs.second"])
+        self.assertEqual(items[1]["kind"], "steps")
+
+    def test_static_outline_reports_unavailable_run_and_is_deterministic(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="outline",
+            steps=(Step(name="Invoke child", run="child.yml", resolved_run_path="/missing/child.yml"),),
+        )
+        first = explain_workflow_outline(workflow).to_contract()
+        second = explain_workflow_outline(workflow).to_contract()
+        self.assertEqual(first, second)
+        self.assertEqual(first["diagnostics"][0]["code"], "explain.run.unavailable")
+        self.assertEqual(first["outputs"]["outline"]["phases"][0]["items"][0]["items"][0]["structural_status"], "unavailable")
+
+    def test_static_outline_does_not_enter_runtime_readiness_or_execution(self) -> None:
+        workflow = Workflow(version=0, workflow="outline", steps=(Step(name="Action", operation=OperationRef("shell.command")),))
+        with (
+            patch("ordo.runtime.explaining.plan_workflow", side_effect=AssertionError("planning must not run")),
+            patch("ordo.runtime.explaining.execute_workflow", side_effect=AssertionError("execution must not run")),
+        ):
+            result = explain_workflow_outline(workflow)
+        self.assertEqual(result.status, RuntimeStatus.OK)
+
     def test_explain_reports_guard_block_reason_and_next_action(self) -> None:
         workflow = Workflow(
             version=0,

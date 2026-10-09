@@ -130,7 +130,7 @@
         },
         {
           "name": "explain <workflow>",
-          "summary": "explain why the workflow can or cannot be run right now"
+          "summary": "show a static assembled workflow outline without runtime observations"
         },
         {
           "name": "run <workflow>",
@@ -186,7 +186,7 @@
         "Show how workflows connect through persistent state. Use ordo-playbook graph to explore related workflows, where they write shared data, and where that data is removed. No active task is required.",
         "Read +field as a write, −field as a deletion, and ? as a conditional change. A write need not be the first write; −context removes the selected context.",
         "Shared context: writers → readers, not execution order. A free reader root is marked (data use; alternative sources) because it uses data without mutating the context. This shows shared data, not a mandatory sequence: guards and check determine applicability, and alternative ends are not sequential steps. Playbook order helps arrange workflows when their relationships leave a choice. Writers and deletions can also be branches. When sources already form a chain, the deepest source is the parent; also reads from keeps other sources visible. Distinct data from incomparable sources is shown under each source: the first source in display order holds the full occurrence, and ↔ (reference) leaves show the same operation without repeating its subtree. Alternative writers of the same data stay together. reads from: name? marks known conditional or fallback data use, separately from +field?. Fallback reads still count as data use. A missing graph edge does not prove independence in external systems.",
-        "Graph does not read saved state, run probes, or recommend what to do next. Use workflows show <workflow> for inputs, check <workflow> to check whether it can run, explain <workflow> to understand why, and next for a recommendation in the current environment.",
+        "Graph does not read saved state, run probes, or recommend what to do next. Use workflows show <workflow> for inputs, explain <workflow> for a static outline, check <workflow> for readiness, and next for a recommendation in the current environment.",
         "parameter stands for a key that has not been selected; the relationship applies to a matching context instance. Use graph --json for detailed dependencies, conditions, and unresolved relationships. Technical reference: docs/static-graph.md and meta/model/runtime/graph-v1.md.",
         "↔ marks the same workflow: state/kind identifies another role; (reference) is a leaf sighting, not another execution. A deletion appears near the related data's users; this does not require running every reader before deleting the data.",
         "You need to discover which named workflows the current playbook publishes before choosing one.",

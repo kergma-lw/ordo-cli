@@ -11,7 +11,7 @@ import yaml
 from ordo.cli import main
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
-from ordo.playbook import PlaybookError, activate_playbook
+from ordo.playbook import PlaybookError, activate_playbook, assemble_playbook_workflow
 from ordo.runtime.reviewing import review_workflow
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -208,12 +208,40 @@ class InputAuthoringReviewTest(unittest.TestCase):
 
     def test_other_modes_do_not_emit_review_findings_on_activation_failure(self):
         self.write_playbook({"value": {}})
-        for mode in ("check", "plan", "run", "explain"):
+        for mode in ("check", "plan", "run"):
             with self.subTest(mode=mode):
                 status, payload = self.invoke(mode)
                 self.assertEqual(status, 1)
                 self.assertNotIn("outputs", payload)
                 self.assertEqual({item["code"] for item in payload["diagnostics"]}, {"playbook.workflow.input_missing"})
+
+        status, payload = self.invoke("explain")
+        self.assertEqual(status, 0)
+        self.assertEqual(payload["mode"], "explain")
+        self.assertEqual(payload["outline"]["workflow"], "sample")
+        self.assertEqual(payload["diagnostics"], [])
+
+    def test_explain_does_not_activate_the_playbook(self):
+        self.write_playbook({"value": {}})
+        with (
+            patch("ordo.cli.activate_playbook", side_effect=AssertionError("explain must not activate")),
+            patch("ordo.cli.configure_standard_runtime", side_effect=AssertionError("explain must not configure connectors")),
+        ):
+            status, payload = self.invoke("explain")
+        self.assertEqual(status, 0)
+        self.assertEqual(payload["outline"]["workflow"], "sample")
+
+    def test_static_assembly_avoids_runtime_activation_helpers(self):
+        self.write_playbook({"value": {}})
+        forbidden = AssertionError("static assembly entered a runtime helper")
+        with (
+            patch("ordo.playbook._load_launch_profile", side_effect=forbidden),
+            patch("ordo.playbook._apply_input_overrides", side_effect=forbidden),
+            patch("ordo.playbook._resolve_working_directory", side_effect=forbidden),
+            patch("ordo.playbook._resolve_workflow_state_paths", side_effect=forbidden),
+        ):
+            assembly = assemble_playbook_workflow(workflow_name="sample", playbook_path=self.playbook)
+        self.assertEqual(assembly.workflow.workflow, "sample")
 
     def test_other_modes_do_not_publish_advisories_after_successful_activation(self):
         self.write_playbook({"value": {"required": False}})

@@ -54,6 +54,7 @@ These actions are navigation surfaces over the public topic model rather than ad
 - `capabilities` exposes supported, unsupported, and planned surface states.
 - `model` aggregates the main authoring contracts over workflows, profiles, playbooks, and runtime state.
 - `command-line` exposes the public launch-command surface, stable flag semantics, the distinct roles of `ordo-playbook check` and `ordo-playbook review`, the broad no-argument `ordo-playbook next` continuation question, the top-level `ordo-playbook graph` topology surface, `ordo-playbook agent-instructions` for showing compact repository guidance only after a clean static review and its guarded `--write` update, and the normalized external-failure payload fields surfaced by `run --json` when runtime has that context.
+- `command-line` must describe `ordo-playbook explain <workflow>` as a static assembled-workflow outline. It shows the `pre_run` phase, body order, symbolic control markers, and folded nested calls without probes, state reads, activation checks, expression evaluation, or action execution. Direct callers to `check` for readiness and `next` for readiness-based recommendations.
 - `operations` exposes the public connector operation catalog.
 - `examples` exposes verified repository examples intended as public authoring references.
 - `snippet-coverage` exposes which describable handles do and do not publish canonical verified snippets.
