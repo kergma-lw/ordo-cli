@@ -2,11 +2,11 @@
 
 A workflow needs to confirm one specific tag such as v1.2.3 before branching on release presence or publishing tag metadata.
 
-Check one named Git tag and report whether it exists, which ref it occupies, and whether the stored object is an annotated tag object or a lightweight commit ref.
+Check one named Git tag and report whether it exists, which ref it occupies, and whether the stored object is an annotated tag object or a lightweight commit ref, including the peeled target identity.
 
 ## Use when
 
-- Later logic needs the single-tag existence result plus the raw tag ref and object identity, not a broader tag inventory.
+- Later logic needs the single-tag existence result plus the raw tag ref, stored object identity, and peeled target identity, not a broader tag inventory.
 
 ## Do not use for
 
@@ -19,7 +19,7 @@ Check one named Git tag and report whether it exists, which ref it occupies, and
 
 ## Result and boundary
 
-- Returns name, ref, exists, oid, annotated, and repository_root. A missing tag succeeds with exists=false and unknown object facts; an invalid name or unreadable repository has no partial result.
+- Returns name, ref, exists, oid, annotated, target_oid, target_type, and repository_root. A missing tag succeeds with exists=false and unknown object facts; an invalid name or unreadable repository has no partial result.
 
 ## Related references
 
@@ -39,7 +39,7 @@ Use `ordo-help operation git.tag --json` when you need the exact machine-readabl
 
 ### git_tag_probe_step
 
-Inspect one exact Git tag before branching on its existence or publishing its ref and object identity.
+Inspect one exact Git tag before branching on its existence or publishing its stored and peeled target identities.
 
 ```yaml
       - name: Inspect exact tag

@@ -6,6 +6,28 @@ Workflows, routine implementations, and configured executable helpers are truste
 code. Run only code and configuration you trust. Ordo is not a sandbox for
 untrusted workflows and normally operates with the invoking user's permissions.
 
+Treat a pull request's workflow files, routine registry, `.ordo/scripts/`,
+connector configuration, and generated agent instructions as code changes. Do
+not run `check`, named `review`, `plan`, `explain`, `next`, or `run` for
+unreviewed foreign pull-request content with maintainer tokens, SSH keys, cloud
+credentials, or other production secrets available.
+
+A probe is an operation classified as observational, not an isolation boundary.
+It may start local programs, authenticate to services, read external data,
+create tool caches or locks, and expose returned data in results or logs. Only
+action steps are withheld by the analysis modes.
+
+Routines and shell commands inherit the invoking process environment. Routine
+standard output and standard error are retained in private temporary files, and
+portions may appear in command output. Do not pass secrets as workflow inputs or
+emit them from helpers; review and delete retained artifacts before sharing
+diagnostics.
+
+Workflow inputs and connector results are data in normal operation arguments,
+but `shell.command` deliberately passes its command text to Bash. Keep command
+text author-controlled; never construct it from issue text, pull-request
+content, file names, or other untrusted values.
+
 Intentional command execution is part of the tool's purpose. Unexpected execution
 of values meant to remain data, credential disclosure, and violations of an
 operation's documented observation or execution boundaries can be security defects.

@@ -76,6 +76,6 @@ blocks:
       - name: Publish summary
         publish:
           tag_exists: step.exact_tag.outputs.exists
-          release_tag_count: step.release_tags.outputs.count
-          summary: "Git tag workflow prepared"
+          tag_target_oid: step.exact_tag.outputs.target_oid
+          tag_target_type: step.exact_tag.outputs.target_type
 ```

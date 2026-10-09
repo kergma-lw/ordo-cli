@@ -25,6 +25,8 @@ A new ritual can combine existing observations and actions. Before running an ac
 
 Ordo is not a replacement for a general orchestration platform, a CI service, or a general-purpose programming language in YAML. It is not intended to automate every process out of the box.
 
+Before running a workflow, review the workflow, its referenced routines, and executable helpers as trusted code. `check`, named `review`, `plan`, `explain`, and `next` can run probes and their bootstrap commands; `run` can also execute actions. These modes are not a sandbox and can access the invoking user's environment and credentials.
+
 The project is still early-stage. Check the currently supported capabilities, limits, and examples before adopting it in a project.
 
 ## What it looks like
@@ -67,7 +69,7 @@ GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-play
 GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml run inspect-git-worktree-inventory
 ```
 
-The example only reads local Git state. Its result reports the current checkout path, the number of linked worktrees, and uncommitted paths. `GIT_OPTIONAL_LOCKS=0` prevents Git from taking optional locks while inspecting the checkout.
+The example only reads local Git state. Its result reports the current checkout path, the number of linked worktrees, and uncommitted paths. The example asks Git not to take optional locks while it inspects the checkout. This narrows one Git-specific risk; it does not make Git probes or workflow execution isolated.
 
 For further authoring references, browse `./ordo-help examples`. More substantial project rituals live in [`.ordo/workflows`](.ordo/workflows).
 

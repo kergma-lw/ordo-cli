@@ -78,7 +78,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
         )
 
     command = ctx.command(
-        ["git", "status", "--porcelain"],
+        ["git", "--no-optional-locks", "status", "--porcelain"],
         failures={
             "os_error": "probe_failed",
             "nonzero": "probe_failed",

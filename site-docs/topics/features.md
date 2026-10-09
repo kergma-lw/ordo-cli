@@ -147,7 +147,7 @@ Short workflow-local reads, checks, comparisons, and transformations.
 
 ### Connectors
 
-Published operations for observing or changing external systems.
+Published operations for observing or changing systems, or for narrowly scoped current-run work.
 
 
 
