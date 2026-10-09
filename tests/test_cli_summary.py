@@ -4,6 +4,7 @@ from ordo.cli import (
     _summarize_activation_error_payload,
     _compact_value,
     _limit_items,
+    _render_explain_text,
     _summarize_check_payload,
     _summarize_explain_payload,
     _summarize_review_payload,
@@ -269,72 +270,47 @@ class CliSummaryTest(unittest.TestCase):
         self.assertIn("fan_out item = mobile", summary["observed_facts"])
         self.assertIn("active_profile = mobile", summary["observed_facts"])
 
-    def test_explain_summary_surfaces_nested_gate_item_and_failed_conditions(self) -> None:
+    def test_explain_summary_projects_only_the_static_outline(self) -> None:
         payload = {
             "mode": "explain",
-            "status": "ok",
-            "workflow": "story-to-ready",
-            "playbook": "/tmp/.ordo/ordo.yaml",
-            "profile": "meta",
-            "failed_guard": None,
-            "diagnostics": [],
+            "diagnostics": [{"code": "explain.run.unavailable"}],
             "outputs": {
-                "explanation": {
-                    "allowed": False,
-                    "category": "gate",
-                    "why": "Nested gate failed for fan-out item 'kergma-lw/checklist-mobile#1': step.linked_project_issue.outputs.status | eq(\"Ready\")",
-                    "blockers": ["Validate linked task readiness"],
-                    "nested_gate_blockers": [
-                        {
-                            "expanded_item": "kergma-lw/checklist-mobile#1",
-                            "gate_reports": [
-                                {
-                                    "failed": [
-                                        {
-                                            "expression": 'step.linked_project_issue.outputs.status | eq("Ready")'
-                                        }
-                                    ]
-                                }
-                            ],
-                        }
-                    ],
-                }
+                "outline": {
+                    "workflow": "story-to-ready",
+                    "phases": [{"kind": "body", "items": [{"kind": "steps", "items": [{"kind": "step", "label": "Prepare", "controls": ["gate"]}]}]}],
+                },
             },
         }
 
         summary = _summarize_explain_payload(payload)
 
-        self.assertEqual(summary["item"], "kergma-lw/checklist-mobile#1")
-        self.assertEqual(summary["failed_conditions"], ['step.linked_project_issue.outputs.status | eq("Ready")'])
+        self.assertEqual(summary["mode"], "explain")
+        self.assertEqual(summary["outline"], payload["outputs"]["outline"])
+        self.assertEqual(summary["diagnostics"], payload["diagnostics"])
+        self.assertNotIn("allowed", summary)
+        self.assertNotIn("failed_conditions", summary)
 
-    def test_explain_summary_prefers_structural_failed_causes(self) -> None:
-        payload = {
-            "mode": "explain",
-            "status": "ok",
-            "workflow": "story-to-ready",
-            "playbook": "/tmp/.ordo/ordo.yaml",
-            "profile": "meta",
-            "failed_guard": None,
-            "diagnostics": [],
-            "outputs": {
-                "explanation": {
-                    "allowed": False,
-                    "category": "gate",
-                    "why": "Nested gate failed",
-                    "blockers": ["Validate linked task readiness"],
-                    "nested_gate_blockers": [
+    def test_explain_text_renders_structured_gate_without_json(self) -> None:
+        rendered = _render_explain_text(
+            {
+                "outline": {
+                    "workflow": "demo",
+                    "phases": [
                         {
-                            "expanded_item": "kergma-lw/checklist-mobile#1",
-                            "gate_reports": [
+                            "kind": "body",
+                            "items": [
                                 {
-                                    "failed_causes": [
+                                    "kind": "steps",
+                                    "items": [
                                         {
-                                            "rendered": 'any(step.linked_project_issue.outputs.type | eq("Task"), step.linked_project_issue.outputs.type | eq("Bug"))'
-                                        }
-                                    ],
-                                    "failed": [
-                                        {
-                                            "expression": 'step.linked_project_issue.outputs.type | eq("Bug")'
+                                            "kind": "step",
+                                            "label": "Publish",
+                                            "controls": [
+                                                {
+                                                    "kind": "gate",
+                                                    "expression": '{"all":["prepared","approved"]}',
+                                                }
+                                            ],
                                         }
                                     ],
                                 }
@@ -342,15 +318,80 @@ class CliSummaryTest(unittest.TestCase):
                         }
                     ],
                 }
-            },
-        }
-
-        summary = _summarize_explain_payload(payload)
-
-        self.assertEqual(
-            summary["failed_conditions"],
-            ['any(step.linked_project_issue.outputs.type | eq("Task"), step.linked_project_issue.outputs.type | eq("Bug"))'],
+            }
         )
+
+        self.assertIn("gate (must pass to continue): all of\n      - prepared\n      - approved\n      Publish", rendered)
+        self.assertNotIn('{"all"', rendered)
+
+    def test_explain_text_wraps_guard_barrier_as_all_required(self) -> None:
+        rendered = _render_explain_text(
+            {
+                "outline": {
+                    "workflow": "demo",
+                    "phases": [
+                        {
+                            "kind": "body",
+                            "items": [
+                                {
+                                    "kind": "guards",
+                                    "items": [
+                                        {"kind": "guard", "expression": "first"},
+                                        {"kind": "guard", "expression": "second"},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertIn("requires all:\n    first, second", rendered)
+
+    def test_explain_text_shows_step_register_in_parentheses(self) -> None:
+        rendered = _render_explain_text(
+            {
+                "outline": {
+                    "workflow": "demo",
+                    "phases": [
+                        {"kind": "body", "items": [{"kind": "steps", "items": [{"kind": "step", "label": "Load", "register": "loaded"}]}]}
+                    ],
+                }
+            }
+        )
+
+        self.assertIn("- Load (loaded)", rendered)
+
+    def test_explain_text_elides_step_namespace_without_changing_string_literals(self) -> None:
+        rendered = _render_explain_text(
+            {
+                "outline": {
+                    "workflow": "demo",
+                    "phases": [
+                        {
+                            "kind": "body",
+                            "items": [
+                                {
+                                    "kind": "steps",
+                                    "items": [
+                                        {
+                                            "kind": "step",
+                                            "label": "Use result",
+                                            "controls": [
+                                                {"kind": "if", "expression": 'step.loaded.outputs.value != "step.literal"'}
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertIn('if: loaded.value != "step.literal"', rendered)
 
     def test_run_summary_surfaces_on_fail_context_from_diagnostic_details(self) -> None:
         payload = {

@@ -14,7 +14,7 @@ from pathlib import Path
 from ordo import (
     check_workflow,
     execute_workflow,
-    assess_workflow_readiness,
+    explain_workflow_outline,
     load_profile_file,
     load_workflow_file,
     plan_workflow,
@@ -26,13 +26,12 @@ profile = load_profile_file(Path("profiles/backend-default.yaml"))
 check_result = check_workflow(workflow, profile=profile)
 plan_result = plan_workflow(workflow, profile=profile)
 execute_result = execute_workflow(workflow, profile=profile)
-explain_result = assess_workflow_readiness(workflow, profile=profile)
+outline_result = explain_workflow_outline(workflow)
 ```
 
-`assess_workflow_readiness` is the canonical Python API, exported by both `ordo`
-and `ordo.runtime`. The old Python name `explain_workflow` has been removed;
-there is no compatibility alias. The CLI mode `explain` and result mode
-`Mode.EXPLAIN` are unchanged.
+`explain_workflow_outline` is the static outline API, exported by both `ordo` and
+`ordo.runtime`. `assess_workflow_readiness` remains available for readiness-based
+consumers such as `next`; it is not the public `explain` command contract.
 
 ## DESCRIPTION
 
@@ -161,12 +160,16 @@ Blocked-before-execution remains distinct from execution failure.
 
 ### `explain`
 
-Returns structured reasoning about:
+Returns a deterministic static outline of the assembled workflow:
 
-- why execution is blocked or allowed;
-- which category of problem occurred;
-- which blockers are active;
-- what the next safe action is, when inferable.
+- `pre_run` before the workflow body;
+- symbolic guards, named steps, `if`, gates, and loops in authored order;
+- folded nested workflow invocation boundaries.
+
+It expands includes but hides source provenance, bindings, returns, operation
+arguments, values, and registers. It does not run probes or actions, read state,
+validate runtime inputs, evaluate expressions, or select conditional branches or
+loop iterations. Structural unavailable-invocation diagnostics may be shown.
 
 ## RESULT SHAPE
 

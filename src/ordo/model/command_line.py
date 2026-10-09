@@ -29,7 +29,7 @@ COMMAND_LINE_HUMAN = declare_human({
                 "`ordo-playbook review <workflow>` reports workflow-quality issues for one activated workflow. It runs the same contextual checks as check, including probes; it does not execute action steps.",
                 "`ordo-playbook plan <workflow>` shows the work the workflow would perform. It runs the same contextual checks as check, including probes; it does not execute action steps.",
                 "`ordo-playbook run <workflow>` performs the workflow's real work and reports its result.",
-                "`ordo-playbook explain <workflow>` explains why the workflow can or cannot run now. It runs the same contextual checks as check, including probes; it does not execute action steps.",
+                "`ordo-playbook explain <workflow>` shows a compact static outline of the assembled workflow, including symbolic guards and step controls. It does not run probes, read state, validate runtime inputs, or execute action steps.",
                 "After adding or changing a workflow, run both `check` and `review`: readiness and workflow quality are separate questions.",
             ],
         },

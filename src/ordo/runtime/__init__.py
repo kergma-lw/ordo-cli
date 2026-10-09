@@ -2,7 +2,7 @@
 
 from .checking import check_workflow
 from .executing import execute_workflow
-from .explaining import assess_workflow_readiness, explain_execution_result, explain_runtime_result
+from .explaining import assess_workflow_readiness, explain_execution_result, explain_runtime_result, explain_workflow_outline
 from .local_expression_contexts import (
     LocalExpressionContext,
     LocalExpressionContextFamily,
@@ -50,6 +50,7 @@ __all__ = [
     "execute_workflow",
     "explain_execution_result",
     "explain_runtime_result",
+    "explain_workflow_outline",
     "assess_workflow_readiness",
     "parse_condition_local_expression",
     "parse_embedded_local_expression",

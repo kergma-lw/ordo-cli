@@ -159,41 +159,22 @@ Use `plan` when you want to know:
 
 ## 7. Run `explain`
 
-The Python API is `assess_workflow_readiness`, available from `ordo` and
-`ordo.runtime`. The old Python name `explain_workflow` has been removed without a
-compatibility alias. The CLI mode `explain` and result mode `Mode.EXPLAIN` are unchanged.
-
-Blocked example:
-
-`examples/samples/blocked-main-branch.yaml`
-
 ```bash
-PYTHONPATH=src .venv/bin/python - <<'PY'
-from pathlib import Path
-from ordo import assess_workflow_readiness, load_workflow_file
-from ordo.model.runtime import OperationResult
-
-workflow = load_workflow_file(Path("examples/samples/blocked-main-branch.yaml"))
-
-def probe(resolved_guard, _workflow):
-    if resolved_guard.reference == "git.branch":
-        return OperationResult(status="ok", observations={"value": "main"})
-    return OperationResult(status="ok")
-
-result = assess_workflow_readiness(
-    workflow,
-    guard_probe=probe,
-)
-
-print(result.to_contract())
-PY
+ordo-playbook explain set-active-task
+ordo-playbook explain set-active-task --json
 ```
 
-Use `explain` when you want structured reasoning for:
+Use `explain` when you want a compact static outline of:
 
-- why execution is blocked or allowed;
-- what category of problem occurred;
-- what the next safe action is.
+- the separate `pre_run` phase and workflow body;
+- authored symbolic guards, conditions, gates, loops, and named steps in order;
+- folded nested workflow calls and structural invocation diagnostics.
+
+It expands includes but does not reveal source provenance, bindings, operation
+arguments, values, or registers. It does not run probes, read state, validate
+runtime inputs, evaluate expressions, or select branches or loop iterations.
+Use `check` to determine readiness now and `next` for a readiness-based
+recommendation.
 
 ## 8. Run `execute`
 

@@ -77,6 +77,15 @@ class ActivatedPlaybook:
 
 
 @dataclass(frozen=True, slots=True)
+class StaticPlaybookAssembly:
+    """Assembled workflow structure without launch-time runtime context."""
+
+    playbook_path: Path
+    workflow_name: str
+    workflow: Workflow
+
+
+@dataclass(frozen=True, slots=True)
 class ActivationInputAnalysis:
     """Activation-time view of workflow-relevant and surplus inputs."""
 
@@ -681,6 +690,59 @@ def activate_playbook(
         raise PlaybookError(exc.diagnostics, tuple(review_findings)) from exc
 
 
+def assemble_playbook_workflow(
+    *,
+    workflow_name: str,
+    playbook_path: str | Path | None = None,
+    cwd: str | Path | None = None,
+) -> StaticPlaybookAssembly:
+    """Assemble one workflow for static inspection without runtime activation.
+
+    This deliberately ignores profiles, entry input bindings, connector context,
+    state-path resolution, and working-directory selection. It only preserves
+    authored structure needed to render an outline.
+    """
+
+    path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
+    payload = _load_playbook_document(path)
+    playbook_dir = path.parent
+    workflows = _require_mapping(payload, "workflows", playbook_path=path)
+    workflow_entry = workflows.get(workflow_name)
+    if not isinstance(workflow_entry, dict):
+        raise _playbook_error(
+            "playbook.workflow.missing",
+            f"Workflow '{workflow_name}' is not declared in the playbook",
+            path=("workflows", workflow_name),
+            details={"playbook": str(path), "workflow": workflow_name},
+        )
+    _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
+    workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
+    workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
+    raw_workflow = _load_workflow_payload(workflow_path, launch_dir=playbook_dir)
+    validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
+    if not validation_report.ok:
+        raise PlaybookError(validation_report.diagnostics)
+    compiled = _compile_workflow_payload(
+        raw_workflow,
+        workflow_name=workflow_name,
+        workflow_entry=workflow_entry,
+        playbook_payload=payload,
+        playbook_dir=playbook_dir,
+        playbook_path=path,
+    )
+    try:
+        workflow = load_workflow_payload(compiled, source=str(workflow_path.resolve()), launch_dir=playbook_dir)
+    except LoadError as exc:
+        raise PlaybookError(exc.diagnostics) from exc
+    workflow = _prepend_pre_run_workflows(
+        workflow,
+        playbook_payload=payload,
+        playbook_dir=playbook_dir,
+        playbook_path=path,
+    )
+    return StaticPlaybookAssembly(playbook_path=path, workflow_name=workflow_name, workflow=workflow)
+
+
 def _activate_playbook(
     *,
     workflow_name: str,
@@ -840,7 +902,6 @@ def _activate_playbook(
         working_directory=working_directory,
         input_analysis=input_analysis,
     )
-
     return ActivatedPlaybook(
         playbook_path=path,
         workflow_name=workflow_name,

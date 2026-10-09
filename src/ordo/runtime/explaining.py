@@ -2,15 +2,126 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import Guard, GuardBlock, RunBlock, Step, StepBlock, Workflow
 
 from .executing import execute_workflow
 from .planning import plan_workflow
 from .providers import ConnectorProvider, GuardProbe, StepExecutor
+
+
+def explain_workflow_outline(workflow: Workflow) -> RuntimeResult:
+    """Return a static outline of an already assembled workflow.
+
+    This intentionally does not validate, resolve, activate, or observe the
+    workflow.  It is an orientation surface, not a readiness decision.
+    """
+
+    diagnostics: list[Diagnostic] = []
+    pre_run: list[dict[str, object]] = []
+    body: list[dict[str, object]] = []
+    for block_index, block in enumerate(workflow.blocks):
+        target = pre_run if _is_pre_run_block(block) else body
+        outlined_block = _outline_block(block, block_index, diagnostics)
+        if target and target[-1].get("kind") == "guards" and outlined_block.get("kind") == "guards":
+            previous_items = target[-1].get("items")
+            current_items = outlined_block.get("items")
+            if isinstance(previous_items, list) and isinstance(current_items, list):
+                previous_items.extend(current_items)
+                continue
+        target.append(outlined_block)
+
+    outline: dict[str, object] = {"workflow": workflow.workflow, "phases": []}
+    if pre_run:
+        outline["phases"].append({"kind": "pre_run", "items": pre_run})
+    outline["phases"].append({"kind": "body", "items": body})
+    return RuntimeResult(
+        mode=Mode.EXPLAIN,
+        status=RuntimeStatus.RESOLUTION_ERROR if diagnostics else RuntimeStatus.OK,
+        diagnostics=tuple(diagnostics),
+        outputs={"outline": outline},
+    )
+
+
+def _is_pre_run_block(block: GuardBlock | StepBlock | RunBlock) -> bool:
+    return isinstance(block, StepBlock) and bool(block.steps) and all(step.run_origin == "playbook_pre_run" for step in block.steps)
+
+
+def _outline_block(
+    block: GuardBlock | StepBlock | RunBlock,
+    block_index: int,
+    diagnostics: list[Diagnostic],
+) -> dict[str, object]:
+    if isinstance(block, GuardBlock):
+        return {"kind": "guards", "items": [_outline_guard(guard) for guard in block.guards]}
+    if isinstance(block, RunBlock):
+        item = {"kind": "run", "label": "workflow invocation"}
+        if block.if_ is not None:
+            item["controls"] = [{"kind": "if", "expression": _symbolic_expression(block.if_)}]
+        _append_unavailable_run_diagnostic(item, block.run, block.resolved_path, ("blocks", str(block_index)), diagnostics)
+        return item
+    return {"kind": "steps", "items": [_outline_step(step, block_index, step_index, diagnostics) for step_index, step in enumerate(block.steps)]}
+
+
+def _outline_step(step: Step, block_index: int, step_index: int, diagnostics: list[Diagnostic]) -> dict[str, object]:
+    item: dict[str, object] = {"kind": "run" if step.run is not None else "step", "label": step.name}
+    if step.register is not None:
+        item["register"] = step.register
+    controls: list[dict[str, str]] = []
+    if step.if_ is not None:
+        controls.append({"kind": "if", "expression": _symbolic_expression(step.if_)})
+    if step.gate is not None:
+        controls.append({"kind": "gate", "expression": _symbolic_expression(step.gate)})
+    if step.for_each is not None:
+        controls.append({"kind": "loop", "expression": _symbolic_expression(step.for_each)})
+    if controls:
+        item["controls"] = controls
+    if step.run is not None:
+        _append_unavailable_run_diagnostic(item, step.run, step.resolved_run_path, ("blocks", str(block_index), "steps", str(step_index)), diagnostics)
+    return item
+
+
+def _outline_guard(guard: Guard) -> dict[str, str]:
+    expression = guard.operation.uses if guard.operation is not None else guard.expr or "<guard>"
+    return {"kind": "guard", "expression": _symbolic_expression(expression)}
+
+
+def _symbolic_expression(value: object) -> str:
+    """Keep authored control text symbolic without exposing a state path."""
+
+    if isinstance(value, str):
+        rendered = value
+    else:
+        rendered = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    if "state." in rendered or "state[" in rendered:
+        return "<state expression>"
+    return rendered
+
+
+def _append_unavailable_run_diagnostic(
+    item: dict[str, object],
+    run: str,
+    resolved_path: str | None,
+    path: tuple[str, ...],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if resolved_path is None or Path(resolved_path).exists():
+        return
+    item["structural_status"] = "unavailable"
+    diagnostics.append(
+        Diagnostic(
+            code="explain.run.unavailable",
+            level="error",
+            message="A referenced workflow invocation is unavailable",
+            path=path,
+            details={},
+        )
+    )
 
 
 def assess_workflow_readiness(

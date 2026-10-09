@@ -770,7 +770,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "Use ordo-playbook graph to see how workflows connect through persistent state, where shared data is written, and where it is removed. No active task is required.",
             "Shared context: writers → readers, not execution order. Free alternative reader roots are marked (data use; alternative sources). Read +field as writes, −field as deletes, and ? as a conditional change. Distinct data sources can show the same operation on several branches: ↔ (reference) leaves never repeat its subtree or execution. Alternative writers of the same data are not expanded. also reads from keeps extra sources visible; reads from: name? marks conditional/fallback data use separately from +field?. Guards and check determine applicability; alternative ends are not sequential steps.",
             "parameter stands for a key that has not been selected; relationships apply to a matching context instance. Graph does not read saved state or run probes. A missing edge does not prove independence in external systems. Use graph --json for dependencies, conditions, and unresolved relationships.",
-            "After exploring graph, use workflows show <workflow> for inputs, check or explain <workflow> for readiness, and next for a recommendation in the current environment. See docs/static-graph.md for the technical reference.",
+            "After exploring graph, use workflows show <workflow> for inputs, explain <workflow> for a static outline, check <workflow> for readiness, and next for a recommendation in the current environment. See docs/static-graph.md for the technical reference.",
             "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
             "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
             "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
@@ -1040,7 +1040,7 @@ GRAPH_SOURCE_PLACEMENT = (
 
 GRAPH_CONTEXT_GUIDANCE = (
     "Graph does not read saved state, run probes, or recommend what to do next. Use workflows show <workflow> "
-    "for inputs, check <workflow> to check whether it can run, explain <workflow> to understand why, "
+    "for inputs, explain <workflow> for a static outline, check <workflow> for readiness, "
     "and next for a recommendation in the current environment."
 )
 
@@ -1642,7 +1642,7 @@ def build_command_line_response() -> JSONObject:
                     {"name": "review <workflow>", "summary": "review workflow-quality findings without making changes"},
                     {"name": "check <workflow>", "summary": "check whether the workflow can be run now, without making changes"},
                     {"name": "plan <workflow>", "summary": "show what the workflow would do, without making changes"},
-                    {"name": "explain <workflow>", "summary": "explain why the workflow can or cannot be run right now"},
+                    {"name": "explain <workflow>", "summary": "show a static assembled workflow outline without runtime observations"},
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
                     {"name": "next", "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"},
                     {"name": "graph", "summary": "Show how workflows connect through persistent state."},
