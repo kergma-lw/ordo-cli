@@ -8,7 +8,7 @@ from .human import HumanDeclaration, declare_human
 COMMAND_LINE_HUMAN = declare_human({
     "title": "Command-line reference",
     "goal": "Choose the public command that lets you inspect, validate, plan, or carry out workflow work.",
-    "summary": "Start by listing workflows, then use a non-changing mode before running a workflow that makes changes.",
+    "summary": "Start by listing workflows, then inspect the workflow and its trust boundary before invoking a mode that can run probes or commands.",
     "sections": [
         {
             "heading": "Main entrypoint",
@@ -16,7 +16,7 @@ COMMAND_LINE_HUMAN = declare_human({
             "items": [
                 "`ordo-playbook workflows list` lists the workflows available in this project.",
                 "`ordo-playbook workflows show <workflow>` shows what a named workflow needs before you run it.",
-                "`ordo-playbook next` suggests the most useful workflow to consider next in the current context.",
+                "`ordo-playbook next` suggests the most useful workflow to consider next in the current context. It evaluates candidate workflows with contextual readiness checks and can run their probes, but does not execute action steps.",
                 "`ordo-playbook graph` shows how published workflows share persistent data. Run it to see which workflows write, read, or remove that data; the result shows relationships, not a required run order. No active task is required.",
                 "`ordo-playbook agent-instructions` reviews the whole playbook, then shows the compact Ordo-managed section for repository agent instructions when it is clean. Add `--write` only when you want it to update the repository AGENTS.md file.",
             ],
@@ -24,12 +24,12 @@ COMMAND_LINE_HUMAN = declare_human({
         {
             "heading": "Choose a mode",
             "items": [
-                "`ordo-playbook check <workflow>` answers whether the workflow can run now without changing anything.",
+                "`ordo-playbook check <workflow>` answers whether the workflow can run now. It evaluates relevant probes and read-only preflight steps, so it can invoke local tools and external services; it does not execute action steps.",
                 "`ordo-playbook review` checks every declared workflow using authored playbook material only. It does not resolve caller inputs, read current state, or run probes. Missing input descriptions and missing input sources block dependent generation; style recommendations remain advisory. The report separately counts pipe-style recommendations so they remain visible.",
-                "`ordo-playbook review <workflow>` reports workflow-quality issues for one workflow in its current context without changing anything.",
-                "`ordo-playbook plan <workflow>` shows the work the workflow would perform without changing anything.",
+                "`ordo-playbook review <workflow>` reports workflow-quality issues for one activated workflow. It runs the same contextual checks as check, including probes; it does not execute action steps.",
+                "`ordo-playbook plan <workflow>` shows the work the workflow would perform. It runs the same contextual checks as check, including probes; it does not execute action steps.",
                 "`ordo-playbook run <workflow>` performs the workflow's real work and reports its result.",
-                "`ordo-playbook explain <workflow>` explains why the workflow can or cannot run now.",
+                "`ordo-playbook explain <workflow>` explains why the workflow can or cannot run now. It runs the same contextual checks as check, including probes; it does not execute action steps.",
                 "After adding or changing a workflow, run both `check` and `review`: readiness and workflow quality are separate questions.",
             ],
         },

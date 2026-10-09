@@ -84,6 +84,8 @@ class AgentInstructionsTest(unittest.TestCase):
         self.assertIn("Advance the item → `ordo-playbook run lifecycle`", section)
         self.assertIn("### Operating rules", section)
         self.assertIn("Use `ordo-playbook workflows list` as the default discovery surface.", section)
+        self.assertIn("can run probes and connector bootstrap commands", section)
+        self.assertIn("without maintainer credentials when inspecting a foreign pull request", section)
         self.assertIn("Use a direct command or temporary legacy bypass only when the user explicitly asks for or approves it.", section)
 
     def test_render_uses_allowed_values_from_detailed_input_contracts(self) -> None:

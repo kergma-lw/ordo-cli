@@ -314,6 +314,7 @@ tests/test_git_sync_fetch_tags.py
 tests/test_git_sync_remote_safety.py
 tests/test_git_upstream_mode_parity.py
 tests/test_git_upstream_remote_resolution.py
+tests/test_git_worktree_probe.py
 tests/test_github_repository_safety.py
 tests/test_golden_outputs.py
 tests/test_graph_display_order.py

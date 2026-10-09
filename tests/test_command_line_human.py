@@ -76,6 +76,15 @@ def test_command_line_human_preserves_caller_and_readiness_boundaries():
     assert "readiness and workflow quality are separate questions" in text
 
 
+def test_command_line_human_explains_the_analysis_mode_trust_boundary():
+    text = help_cli.render_command_line_text(help_cli.build_command_line_response())
+
+    assert "inspect the workflow and its trust boundary" in text
+    assert "can invoke local tools and external services" in text
+    assert "including probes; it does not execute action steps" in text
+    assert "candidate workflows with contextual readiness checks and can run their probes" in text
+
+
 def test_command_line_human_is_owned_outside_the_renderers():
     payload = help_cli.build_command_line_response()
 

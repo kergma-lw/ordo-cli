@@ -40,7 +40,7 @@ def render_agent_instructions(*, playbook_path: str | Path | None = None) -> tup
         "",
         "- Discover workflow entries → `ordo-playbook workflows list`",
         "- Inspect one workflow contract → `ordo-playbook workflows show <workflow>`",
-        "- Review, check, plan, or explain without making changes → `ordo-playbook <mode> <workflow>`",
+        "- Check, named review, plan, explain, and next can run probes and connector bootstrap commands. Use them only for trusted repository content and without maintainer credentials when inspecting a foreign pull request.",
         "- Execute a workflow → `ordo-playbook run <workflow>`",
         "- Suggest the next workflow → `ordo-playbook next`",
         "- Show workflow connections → `ordo-playbook graph`",

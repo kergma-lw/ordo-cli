@@ -1,6 +1,6 @@
 # Operation reference
 
-Generated operation pages for 69 published operations.
+Generated operation pages for 73 published operations.
 
 - [Operation catalog](../topics/operations.md)
 
@@ -24,8 +24,10 @@ Operations in the `fs` namespace.
 
 Operations for reading and changing GitHub state.
 
+- [gh.actions.dispatch](gh/actions-dispatch.md)
 - [gh.actions.run](gh/actions-run.md)
 - [gh.actions.run.jobs](gh/actions-run-jobs.md)
+- [gh.actions.run.search](gh/actions-run-search.md)
 - [gh.issue](gh/issue.md)
 - [gh.issue.body.append](gh/issue-body-append.md)
 - [gh.issue.body.replace](gh/issue-body-replace.md)
@@ -84,6 +86,7 @@ Operations for reading and changing local Git state.
 - [git.stash](git/stash.md)
 - [git.state](git/state.md)
 - [git.sync.fetch](git/sync-fetch.md)
+- [git.sync.fetch-tags](git/sync-fetch-tags.md)
 - [git.sync.push](git/sync-push.md)
 - [git.tag](git/tag.md)
 - [git.tags](git/tags.md)
@@ -96,6 +99,7 @@ Operations for reading and changing local Git state.
 Runtime compatibility and execution-context operations.
 
 - [runtime.profile.use](runtime/profile-use.md)
+- [runtime.uuid.generate](runtime/uuid-generate.md)
 
 ## shell
 

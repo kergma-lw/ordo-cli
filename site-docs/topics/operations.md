@@ -29,6 +29,7 @@ Use `ordo-help operation <namespace.operation>` to read the focused CLI referenc
 Runtime compatibility and execution-context operations.
 
 - [runtime.profile.use (action)](../operations/runtime/profile-use.md)
+- [runtime.uuid.generate (action)](../operations/runtime/uuid-generate.md)
 
 ### git
 
@@ -55,6 +56,7 @@ Operations for reading and changing local Git state.
 - [git.stash (probe)](../operations/git/stash.md)
 - [git.state (probe)](../operations/git/state.md)
 - [git.sync.fetch (action)](../operations/git/sync-fetch.md)
+- [git.sync.fetch-tags (action)](../operations/git/sync-fetch-tags.md)
 - [git.sync.push (action)](../operations/git/sync-push.md)
 - [git.tag (probe)](../operations/git/tag.md)
 - [git.tags (probe)](../operations/git/tags.md)
@@ -76,8 +78,10 @@ Operations in the `compose` namespace.
 
 Operations for reading and changing GitHub state.
 
+- [gh.actions.dispatch (action)](../operations/gh/actions-dispatch.md)
 - [gh.actions.run (probe)](../operations/gh/actions-run.md)
 - [gh.actions.run.jobs (probe)](../operations/gh/actions-run-jobs.md)
+- [gh.actions.run.search (probe)](../operations/gh/actions-run-search.md)
 - [gh.issue (probe)](../operations/gh/issue.md)
 - [gh.issue.body.append (action)](../operations/gh/issue-body-append.md)
 - [gh.issue.body.replace (action)](../operations/gh/issue-body-replace.md)
