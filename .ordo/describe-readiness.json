@@ -16,6 +16,9 @@
     "command-line.ordo-playbook.flag.json": {
       "describe_readiness": "ready"
     },
+    "command-line.ordo-playbook.flag.version": {
+      "describe_readiness": "ready"
+    },
     "command-line.ordo-playbook.flag.profile": {
       "describe_readiness": "ready"
     },

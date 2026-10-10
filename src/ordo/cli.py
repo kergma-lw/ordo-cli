@@ -14,6 +14,7 @@ from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, assemble_playbook_workflow, inspect_playbook_workflow, list_playbook_workflows, review_playbook_static
 from ordo.runtime.human_messages import render_gate_failure_message, render_guard_failure_message
 from ordo.runtime.nexting import build_next_candidate, classify_missing_input_kind_for_workflow, rank_next_candidates
+from ordo.version import distribution_version
 
 
 WORKFLOWS_HELP = """usage: ordo-playbook workflows <list|show>
@@ -257,6 +258,7 @@ def main() -> int:
             "  graph    show how workflows connect through persistent state"
         ),
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {distribution_version()}")
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
     parser.add_argument("--profile", help="active profile name for this run")
     parser.add_argument(
