@@ -3,6 +3,7 @@
 .opencode/
 __pycache__/
 *.py[cod]
+*.egg-info/
 build/
 dist/
 .ordo/repo.json

@@ -1,4 +1,0 @@
-[console_scripts]
-ordo-help = ordo.help_cli:main
-ordo-human-help-audit = ordo.human_help_audit:main
-ordo-playbook = ordo.cli:main

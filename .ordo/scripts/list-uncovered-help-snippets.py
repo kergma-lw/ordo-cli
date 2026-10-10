@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import subprocess
 import sys
 
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
 def main() -> int:
     result = subprocess.run(
-        ["ordo-help", "snippet-coverage", "--json"],
+        [str(REPOSITORY_ROOT / "ordo-help"), "snippet-coverage", "--json"],
         check=False,
         capture_output=True,
         text=True,

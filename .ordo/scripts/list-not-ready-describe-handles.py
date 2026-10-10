@@ -9,6 +9,7 @@ import sys
 
 
 READINESS_PATH = Path(__file__).resolve().parents[1] / "describe-readiness.json"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load_readiness_registry() -> dict[str, dict[str, object]]:
@@ -30,7 +31,7 @@ def _load_readiness_registry() -> dict[str, dict[str, object]]:
 def main() -> int:
     readiness_registry = _load_readiness_registry()
     result = subprocess.run(
-        ["ordo-help", "snippet-coverage", "--json"],
+        [str(REPOSITORY_ROOT / "ordo-help"), "snippet-coverage", "--json"],
         check=False,
         capture_output=True,
         text=True,
