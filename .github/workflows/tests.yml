@@ -13,18 +13,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
       - name: Install test dependencies
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install 'pytest>=8,<9' 'PyYAML>=6,<7' 'shellcheck-py==0.11.0.1'
+          .venv/bin/python -m pip install \
+            'pytest>=8,<9' 'PyYAML>=6,<7' 'shellcheck-py==0.11.0.1' \
+            'bandit==1.9.4' 'semgrep==1.176.1'
           # Match the scanner integration contract, not the runner's system ShellCheck.
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           # Project routine tests invoke the checked-in ordo-help launcher.
@@ -59,11 +61,30 @@ jobs:
                       f"| {counts['tests']} | {passed} | {counts['failures']} "
                       f"| {counts['errors']} | {counts['skipped']} |\n\n"
                   )
-                  summary.write("Optional scanner integration tests may be skipped when their tools are not installed.\n")
+                  if counts["skipped"]:
+                      summary.write("Skipped tests are not accepted by this workflow.\n")
+
+      - name: Reject skipped tests
+        if: always()
+        shell: python
+        run: |
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          report = Path("test-results/pytest.xml")
+          if not report.is_file():
+              sys.exit("No test report was produced.")
+          skipped = sum(
+              int(suite.get("skipped", "0"))
+              for suite in ET.parse(report).getroot().iter("testsuite")
+          )
+          if skipped:
+              sys.exit(f"Skipped tests are not allowed: {skipped}")
 
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results
           path: test-results/pytest.xml
