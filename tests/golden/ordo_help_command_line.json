@@ -46,7 +46,8 @@
         "ordo-playbook --profile review plan inspect-issue",
         "ordo-playbook --input enabled=true plan inspect-issue",
         "ordo-playbook --input-file body=./prompt.md plan inspect-issue",
-        "ordo-playbook --progress-steps run inspect-issue"
+        "ordo-playbook --progress-steps run inspect-issue",
+        "ordo-playbook --version"
       ],
       "flags": [
         {
@@ -90,6 +91,12 @@
           "name": "--json",
           "required": false,
           "summary": "Emit the full JSON payload, including detailed diagnostics"
+        },
+        {
+          "effect": "print_version",
+          "name": "--version",
+          "required": false,
+          "summary": "Print the installed Ordo version and exit"
         }
       ],
       "input_override_precedence": [
@@ -112,6 +119,7 @@
         "command-line.ordo-playbook.flag.input",
         "command-line.ordo-playbook.flag.input_file",
         "command-line.ordo-playbook.flag.progress_steps",
+        "command-line.ordo-playbook.flag.version",
         "playbook.workflows.file",
         "workflow-rules.paired_check_review_passes"
       ],
@@ -181,7 +189,7 @@
       },
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
       "review_findings_surface": "Plain review includes all available findings in order under top_findings, with compact details, including when review_status is unavailable; --json retains full finding details.",
-      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
+      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] [--version] <command>",
       "use_when": [
         "Show how workflows connect through persistent state. Use ordo-playbook graph to explore related workflows, where they write shared data, and where that data is removed. No active task is required.",
         "Read +field as a write, −field as a deletion, and ? as a conditional change. A write need not be the first write; −context removes the selected context.",

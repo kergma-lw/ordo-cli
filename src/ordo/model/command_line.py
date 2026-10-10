@@ -50,6 +50,7 @@ COMMAND_LINE_HUMAN = declare_human({
                 "`--input-file KEY=PATH` supplies one input from a file; repeat it for more inputs.",
                 "`--progress-steps` prints each step name as a run begins it.",
                 "`--json` returns machine-readable output when another tool needs to consume the result.",
+                "`--version` prints the installed Ordo version.",
             ],
         },
         {
@@ -162,6 +163,13 @@ COMMAND_LINE_FOCUSED_DESCRIBE_HUMAN: dict[str, HumanDeclaration] = {
             "command-line.ordo-playbook: Parent command surface for ordo-playbook",
             "overview: Public discovery overview that teaches the main JSON-capable help surfaces",
         ],
+    ),
+    "command-line.ordo-playbook.flag.version": _focused_command_line_human(
+        title="command-line.ordo-playbook.flag.version",
+        summary="Print the installed Ordo version and exit.",
+        use_when=["You need to confirm which installed Ordo release supplies the command."],
+        do_not_use_for=["Inspecting the current playbook or selecting a workflow; this command does not load a playbook."],
+        nearest_surfaces=["command-line.ordo-playbook: Parent command surface for ordo-playbook"],
     ),
     "command-line.ordo-playbook.flag.progress_steps": _focused_command_line_human(
         title="command-line.ordo-playbook.flag.progress_steps",

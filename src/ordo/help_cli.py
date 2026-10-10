@@ -62,6 +62,7 @@ from ordo.runtime.authoring_human import (
     workflow_rules_human,
 )
 from ordo.runtime.capabilities import CAPABILITY_FOCUSED_DESCRIBE_HUMANS, capabilities_human
+from ordo.version import distribution_version
 
 
 PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
@@ -1585,6 +1586,7 @@ def build_command_line_response() -> JSONObject:
         {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},
         {"name": "--progress-steps", "required": False, "effect": "emit_run_step_progress_to_stderr", "summary": "During run, emit each step name to stderr right before execution"},
         {"name": "--json", "required": False, "effect": "emit_json", "summary": "Emit the full JSON payload, including detailed diagnostics"},
+        {"name": "--version", "required": False, "effect": "print_version", "summary": "Print the installed Ordo version and exit"},
     ]
     return {
         "document_kind": "command_line",
@@ -1633,7 +1635,7 @@ def build_command_line_response() -> JSONObject:
                         "summary": "Why check and review are complementary authoring passes rather than substitutes",
                     },
                 ],
-                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
+                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] [--version] <command>",
                 "discovery_commands": [
                     {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
                     {"name": "workflows show <workflow>", "summary": "show one workflow entry: plain inputs expose caller slots with top-level warnings only for required declarations missing source coverage; --json retains the unchanged full declaration contract"},
@@ -1710,12 +1712,14 @@ def build_command_line_response() -> JSONObject:
                     "ordo-playbook --input enabled=true plan inspect-issue",
                     "ordo-playbook --input-file body=./prompt.md plan inspect-issue",
                     "ordo-playbook --progress-steps run inspect-issue",
+                    "ordo-playbook --version",
                 ],
                 "inspect_next": [
                     "command-line.ordo-playbook.flag.profile",
                     "command-line.ordo-playbook.flag.input",
                     "command-line.ordo-playbook.flag.input_file",
                     "command-line.ordo-playbook.flag.progress_steps",
+                    "command-line.ordo-playbook.flag.version",
                     "playbook.workflows.file",
                     "workflow-rules.paired_check_review_passes",
                 ],
@@ -7924,6 +7928,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the ordo-help CLI."""
 
     parser = argparse.ArgumentParser(prog="ordo-help", add_help=False)
+    parser.add_argument("--version", action="version", version=f"%(prog)s {distribution_version()}")
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("-h", "--help", action="store_true", dest="show_help")
     subparsers = parser.add_subparsers(dest="command")
