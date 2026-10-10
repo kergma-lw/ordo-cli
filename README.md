@@ -29,6 +29,16 @@ Before running a workflow, review the workflow, its referenced routines, and exe
 
 The project is still early-stage. Check the currently supported capabilities, limits, and examples before adopting it in a project.
 
+## Install
+
+Install a released version with [pipx](https://pipx.pypa.io/) on Python 3.12 or later:
+
+```bash
+pipx install "https://github.com/kergma-lw/ordo-cli/releases/download/vX.Y.Z/ordo-X.Y.Z-py3-none-any.whl"
+```
+
+Replace `X.Y.Z` with the version in the [GitHub Release](https://github.com/kergma-lw/ordo-cli/releases). This installs the `ordo-playbook` and `ordo-help` commands. For a virtual-environment installation, release selection, dependencies, and contributor setup, see [INSTALL.md](INSTALL.md).
+
 ## What it looks like
 
 This small workflow reads a GitHub issue only when the worktree is clean:
@@ -53,20 +63,17 @@ blocks:
 
 The clean-worktree check is evaluated before the issue lookup. If it blocks the workflow, analysis modes report the reason instead of attempting the next step anyway.
 
-## Examples
+## Examples from a checkout
 
-Try the read-only local Git example from a fresh clone. It needs Python 3.12 or later and Git:
+To work with the included examples from a source checkout, first follow the contributor setup in [INSTALL.md](INSTALL.md). The example needs Git:
 
 ```bash
-/usr/bin/python3.12 -m venv .venv
-.venv/bin/python -m pip install -e .
-
-./ordo-help examples
-./ordo-help describe examples.git-worktree-inventory
-./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml review inspect-git-worktree-inventory
-GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml check inspect-git-worktree-inventory
-GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml plan inspect-git-worktree-inventory
-GIT_OPTIONAL_LOCKS=0 ./ordo-playbook --file examples/git-worktree-inventory-playbook.yaml run inspect-git-worktree-inventory
+ordo-help examples
+ordo-help describe examples.git-worktree-inventory
+ordo-playbook --file examples/git-worktree-inventory-playbook.yaml review inspect-git-worktree-inventory
+GIT_OPTIONAL_LOCKS=0 ordo-playbook --file examples/git-worktree-inventory-playbook.yaml check inspect-git-worktree-inventory
+GIT_OPTIONAL_LOCKS=0 ordo-playbook --file examples/git-worktree-inventory-playbook.yaml plan inspect-git-worktree-inventory
+GIT_OPTIONAL_LOCKS=0 ordo-playbook --file examples/git-worktree-inventory-playbook.yaml run inspect-git-worktree-inventory
 ```
 
 The example only reads local Git state. Its result reports the current checkout path, the number of linked worktrees, and uncommitted paths. The example asks Git not to take optional locks while it inspects the checkout. This narrows one Git-specific risk; it does not make Git probes or workflow execution isolated.

@@ -1,4 +1,50 @@
-# Local Git safety hooks
+# Install Ordo
+
+The supported user installation channel is a versioned wheel attached to a
+[GitHub Release](https://github.com/kergma-lw/ordo-cli/releases). Ordo supports
+Python 3.12 or later. Its Python dependencies, including PyYAML, are installed
+from the wheel metadata.
+
+Choose a release version and substitute the same value for both `X.Y.Z`
+occurrences below:
+
+```sh
+pipx install "https://github.com/kergma-lw/ordo-cli/releases/download/vX.Y.Z/ordo-X.Y.Z-py3-none-any.whl"
+```
+
+`pipx` creates and manages an isolated environment, then makes
+`ordo-playbook` and `ordo-help` available on your command path. Verify the
+installation with:
+
+```sh
+ordo-playbook --help
+ordo-help --help
+```
+
+If you do not use `pipx`, install the same wheel into an environment you
+manage:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install "https://github.com/kergma-lw/ordo-cli/releases/download/vX.Y.Z/ordo-X.Y.Z-py3-none-any.whl"
+.venv/bin/ordo-playbook --help
+.venv/bin/ordo-help --help
+```
+
+Release tags use `vX.Y.Z`; the wheel version and filename omit the `v` prefix.
+For example, release tag `v0.1.0` supplies `ordo-0.1.0-py3-none-any.whl`.
+
+## Contributor setup
+
+A source checkout and editable install are for contributing to Ordo, not for
+adopting it in another project:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -e .
+```
+
+## Local Git safety hooks
 
 To enable the repository's safety hooks, run these commands from the repository
 root after cloning:
