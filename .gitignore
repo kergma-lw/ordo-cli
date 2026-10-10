@@ -3,6 +3,8 @@
 .opencode/
 __pycache__/
 *.py[cod]
+build/
+dist/
 .ordo/repo.json
 .ordo.json
 *.swp
